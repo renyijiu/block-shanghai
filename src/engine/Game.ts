@@ -7,11 +7,16 @@ import type { CityPackage } from './city.ts'
 import { DevCamera } from './DevCamera.ts'
 import { CollisionWorld } from './geo/CollisionWorld.ts'
 import { createProjection, type Projection } from './geo/projection.ts'
+import type { InteractPoint } from './world/interact.ts'
+import { InteractRegistry } from './world/interact.ts'
+import { MetroSystem } from './metro/MetroSystem.ts'
+import type { Route } from './metro/network.ts'
+import { GameClock } from './state/clock.ts'
 import { ChunkManager } from './world/ChunkManager.ts'
 import { CHUNK_SIZE } from './world/chunks.ts'
 import { DistrictIndex } from './world/districts.ts'
 import { defaultQuality, QUALITY_PRESETS, type QualityLevel } from './quality.ts'
-import { loadSave, writeSave } from './state/save.ts'
+import { loadSave, NEW_GAME, writeSave } from './state/save.ts'
 import { createWorldMaterials, type WorldMaterials } from './world/materials.ts'
 import { walkable } from './world/queries.ts'
 import { WorldData } from './world/WorldData.ts'
@@ -40,6 +45,17 @@ export interface GameStats {
   view: ViewMode
   /** 所在区 id；市界外为 null */
   district: string | null
+  /** 游戏时刻“08:30” */
+  time: string
+  money: number
+  /** 附近可交互的点（地铁口）：提示文字和按钮文字 */
+  prompt: { label: string; action: string } | null
+}
+
+/** 快速到达的结果，给界面提示用 */
+export interface TravelResult {
+  ok: boolean
+  message: string
 }
 
 export class Game {
@@ -59,7 +75,18 @@ export class Game {
   devCamera: DevCamera | null = null
   districts: DistrictIndex | null = null
   world: WorldData | null = null
-  readonly stats: GameStats = { fps: 0, drawCalls: 0, triangles: 0, chunks: 0, pending: 0, buildAvg: 0, buildMax: 0, x: 0, z: 0, mode: 'player', view: 'third', district: null }
+  readonly stats: GameStats = { fps: 0, drawCalls: 0, triangles: 0, chunks: 0, pending: 0, buildAvg: 0, buildMax: 0, x: 0, z: 0, mode: 'player', view: 'third', district: null, time: '', money: 0, prompt: null }
+  readonly clock = new GameClock()
+  readonly interact = new InteractRegistry()
+  metro: MetroSystem | null = null
+  money = NEW_GAME.money
+  readonly metroStats = { rides: 0, visited: new Set<string>() }
+  /** 附近的交互点 */
+  prompt: InteractPoint | null = null
+  /** 按 E / 点按钮触发交互时调用（界面打开地铁面板） */
+  onInteract: ((p: InteractPoint) => void) | null = null
+  /** 乘车中：加载焦点已经移到目的地，暂停玩家的物理和交互 */
+  private traveling = false
   private readonly ro: ResizeObserver
   private readonly materials: WorldMaterials
   private readonly ground: THREE.Mesh
@@ -125,12 +152,13 @@ export class Game {
   async init(onProgress?: (text: string) => void): Promise<RenderBackend> {
     await this.renderer.init()
     onProgress?.('加载地图数据…')
-    const world = await WorldData.load(this.city.data, (d, t) => onProgress?.(`加载地图数据 ${d}/${t}`))
+    const [world, metro] = await Promise.all([WorldData.load(this.city.data, (d, t) => onProgress?.(`加载地图数据 ${d}/${t}`)), MetroSystem.load(this.city.data.metro)])
     if (this.disposed) return this.backend
     this.world = world
+    this.metro = metro
     this.districts = new DistrictIndex(world.districts)
     this.chunks = new ChunkManager(
-      { data: world, materials: this.materials, buildings: this.city.buildings, districts: this.districts, collision: this.collision, proj: this.proj },
+      { data: world, materials: this.materials, buildings: this.city.buildings, districts: this.districts, collision: this.collision, proj: this.proj, metro: metro.data, interact: this.interact },
       { radius: QUALITY_PRESETS[this.quality].viewDistance, budgetMs: 6 }
     )
     this.scene.add(this.chunks.root)
@@ -166,7 +194,13 @@ export class Game {
       focus = start?.length === 2 ? { x: start[0]!, z: start[1]! } : save ? { x: save.player.x, z: save.player.z } : { x, z }
       this.scene.add(this.player.model)
       this.rig.yaw = -Math.PI / 2 // 面朝东（外滩方向）
-      if (save) Object.assign(this.rig, save.camera)
+      if (save) {
+        Object.assign(this.rig, save.camera)
+        this.clock.seconds = save.time
+        this.money = save.money
+        this.metroStats.rides = save.metro.rides
+        this.metroStats.visited = new Set(save.metro.visited)
+      }
       this.route = (params.get('walk') ?? '')
         .split(';')
         .filter(Boolean)
@@ -204,6 +238,43 @@ export class Game {
     this.resize()
   }
 
+  /**
+   * 快速到达（地铁第 1 层，docs/04 第 5 节）：扣票价，按路线的真实运行分钟推进时钟（另加进出站各 2 分钟），
+   * 记到访车站，然后在目的站的一个出口出站。onProgress 用于加载界面
+   */
+  async fastTravel(route: Route, onProgress?: (text: string) => void): Promise<TravelResult> {
+    const metro = this.metro
+    if (!metro || !this.playerWorld || !this.chunks) return { ok: false, message: '地铁还没准备好' }
+    if (this.money < route.fare) return { ok: false, message: `余额不足：票价 ${route.fare} 元，钱包里只有 ${this.money} 元` }
+    const stations = metro.data.stations
+    const dest = stations[route.to]!
+    this.money -= route.fare
+    this.clock.addMinutes(route.minutes + 4)
+    this.metroStats.rides++
+    // 进站、出站、换乘的车站都算到访（docs/04 第 8 节）
+    for (const l of route.legs) {
+      this.metroStats.visited.add(stations[l.from]!.id)
+      this.metroStats.visited.add(stations[l.to]!.id)
+    }
+    // 出口：编号最小的那个；没有出入口数据就在车站中心
+    const exits = dest.exits.map((i) => metro.data.entrances[i]!).sort((a, b) => a.ref.localeCompare(b.ref, 'zh', { numeric: true }))
+    const exit = exits[0]
+    const [x, z] = exit ? exit.pos : dest.pos
+    // 先把玩家（也就是分块加载的焦点）挪到目的地：否则渲染循环还按旧位置加载分块，和预建互相卸载、永远建不完
+    this.traveling = true
+    this.player.pos.set(x, 0, z)
+    try {
+      await this.chunks.prebuild(x, z, (d, t) => onProgress?.(`前往 ${dest.name}站 ${d}/${t}`))
+      this.player.spawn(x, z, this.playerWorld)
+      this.player.model.position.copy(this.player.pos)
+    } finally {
+      this.traveling = false
+    }
+    this.saveNow()
+    const exitName = exit?.ref ? ` ${exit.ref} 号口` : ''
+    return { ok: true, message: `到达 ${dest.name}站${exitName} · 用时 ${Math.round(route.minutes)} 分钟 · ${route.fare} 元` }
+  }
+
   /** 立即存档（玩家模式且不是测试参数时） */
   saveNow() {
     if (!this.persist || this.devCamera || !this.world) return
@@ -213,7 +284,10 @@ export class Game {
       city: this.city.config.id,
       player: { x: p.x, y: p.y, z: p.z, facing: this.player.facing },
       camera: { yaw: r.yaw, pitch: r.pitch, distance: r.distance, mode: r.mode },
-      settings: { quality: this.quality }
+      settings: { quality: this.quality },
+      time: this.clock.seconds,
+      money: this.money,
+      metro: { rides: this.metroStats.rides, visited: [...this.metroStats.visited] }
     })
   }
 
@@ -240,6 +314,7 @@ export class Game {
   private frame(now: number) {
     const dt = Math.min(0.1, (now - this.last) / 1000)
     this.last = now
+    this.clock.tick(dt)
     const f = this.devCamera ? this.updateDev(dt) : this.updatePlayer(dt, now)
     this.chunks?.update(f.x, f.z)
     // 地面平面按分块对齐跟随
@@ -268,13 +343,15 @@ export class Game {
 
   private updatePlayer(dt: number, now: number) {
     const world = this.playerWorld
-    if (!world) return this.player.pos
+    if (!world || this.traveling) return this.player.pos
     const a = this.input.axes()
     const { fx, fz, rx, rz } = this.rig.basis()
     let move = { dx: fx * a.y + rx * a.x, dz: fz * a.y + rz * a.x, run: this.input.running }
     if (this.autopilot.active) move = this.steer(now)
     this.player.update(dt, { ...move, jump: this.input.consumeJump() }, world)
     this.rig.update(this.camera, this.player, this.input, world)
+    this.prompt = this.interact.nearest(this.player.pos.x, this.player.pos.z)
+    if (this.input.consumeInteract() && this.prompt) this.onInteract?.(this.prompt)
     return this.player.pos
   }
 
@@ -333,7 +410,10 @@ export class Game {
       x: Math.round(f.x),
       z: Math.round(f.z),
       view: this.rig.mode,
-      district: this.districts?.at(f.x, f.z)?.id ?? null
+      district: this.districts?.at(f.x, f.z)?.id ?? null,
+      time: this.clock.format(),
+      money: this.money,
+      prompt: this.prompt ? { label: this.prompt.label, action: this.prompt.action } : null
     })
     this.frames = 0
     this.statsAt = now

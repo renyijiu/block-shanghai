@@ -4,6 +4,7 @@ import Stats from 'stats-gl'
 import { PLAYER } from './actors/Player.ts'
 import type { Game } from './Game.ts'
 import { QUALITY_ORDER, type QualityLevel } from './quality.ts'
+import { saveKey } from './state/save.ts'
 
 export async function attachDebug(game: Game) {
   const stats = new Stats({ trackGPU: true, horizontal: false })
@@ -28,7 +29,7 @@ export async function attachDebug(game: Game) {
   const actions = {
     save: () => game.saveNow(),
     clear: () => {
-      localStorage.removeItem('block-shanghai:save:v1')
+      localStorage.removeItem(saveKey())
       location.reload()
     }
   }

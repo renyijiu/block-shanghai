@@ -5,14 +5,18 @@ import * as THREE from 'three/webgpu'
 import { Builder } from '../build/Builder.ts'
 import { chunkSeed, mulberry32, pick } from '../build/random.ts'
 import type { CityBuildings, Place } from '../city.ts'
+import type { MetroData } from '../metro/data.ts'
+import { buildEntrance, buildVent, entranceFootprint } from '../metro/structures.ts'
 import type { Box, CollisionWorld } from '../geo/CollisionWorld.ts'
 import type { Projection } from '../geo/projection.ts'
 import { CHUNK_SIZE, chunkKey } from './chunks.ts'
 import { buildAreas, buildElevated, buildGroundRoads, type GeometryData } from './chunkMesh.ts'
-import type { RoadPiece } from './data.ts'
+import type { RoadInfo, RoadPiece } from './data.ts'
 import type { DistrictIndex } from './districts.ts'
-import { findLots, streetTreeSpots, type LotInputs } from './lots.ts'
+import type { InteractPoint, InteractRegistry } from './interact.ts'
+import { blockedByRoad, findLots, overlapsObstacle, streetTreeSpots, type Lot, type LotInputs } from './lots.ts'
 import { WORLD_COLORS, type WorldMaterials } from './materials.ts'
+import { isWater } from './queries.ts'
 import type { WorldData } from './WorldData.ts'
 
 /** 生成分块需要的外部依赖 */
@@ -23,7 +27,12 @@ export interface ChunkContext {
   districts: DistrictIndex
   collision: CollisionWorld
   proj: Projection
+  metro: MetroData | null
+  interact: InteractRegistry
 }
+
+/** 地铁高架、地面轨道在地块避让里当作一条 9 格宽的路 */
+const METRO_CORRIDOR: RoadInfo = { name: '', class: 'secondary', width: 9, level: 0, bridge: false }
 
 export interface ChunkManagerOptions {
   /** 加载半径（格），一般等于视距 */
@@ -161,13 +170,29 @@ export class ChunkManager {
 
   /** 地块上盖房子、路边种树（城市包决定风格和树种） */
   private buildCity(cx: number, cz: number, own: RoadPiece[]) {
-    const { buildings, data } = this.ctx
+    const { buildings, data, metro } = this.ctx
+    const key = chunkKey(cx, cz)
     const roadsNear: RoadPiece[] = []
-    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) roadsNear.push(...(data.roads.chunks[chunkKey(cx + dx, cz + dz)] ?? []))
-    const src = data.chunk(chunkKey(cx, cz))
-    const inputs: LotInputs = { roads: roadsNear, roadInfo: data.roads.roads, water: src.water, parks: src.parks }
+    const roadInfo = [...data.roads.roads, METRO_CORRIDOR]
+    const obstacles: Lot[] = []
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dz = -1; dz <= 1; dz++) {
+        const k = chunkKey(cx + dx, cz + dz)
+        roadsNear.push(...(data.roads.chunks[k] ?? []))
+        // 地上的地铁轨道（高架、地面段、坡道）也要避让
+        for (const [, pts] of metro?.chunks[k]?.tracks ?? []) if (pts.some((v, i) => i % 3 === 2 && v > 0.5)) roadsNear.push([roadInfo.length - 1, pts])
+        for (const e of metro?.chunks[k]?.entrances ?? []) {
+          const f = entranceFootprint(metro!, e)
+          obstacles.push({ x0: f.x0 - 1, z0: f.z0 - 1, x1: f.x1 + 1, z1: f.z1 + 1 })
+        }
+      }
+    }
+    const src = data.chunk(key)
+    const inputs: LotInputs = { roads: roadsNear, roadInfo, water: src.water, parks: src.parks, obstacles }
     const b = new Builder()
     const rng = mulberry32(chunkSeed(cx, cz))
+    const points: InteractPoint[] = []
+    if (metro) this.buildMetroSurface(b, cx, cz, inputs, points)
     // 位置信息（所在区、经纬度）按 24 格网格缓存：同一格里的地块和树共用，省掉大量点在多边形内的判断
     const places = new Map<string, Place>()
     const placeAt = (x: number, z: number) => {
@@ -184,7 +209,42 @@ export class ChunkManager {
       const species = mix && pick(mix, rng)
       if (species) buildings.trees[species]?.(b, t.x, t.z, rng)
     }
+    this.ctx.interact.add(key, points)
     return b.build()
+  }
+
+  /** 地铁口（带交互点）、地下站的风亭；风亭的位置也加进避让，后面盖房子时让开 */
+  private buildMetroSurface(b: Builder, cx: number, cz: number, inputs: LotInputs, points: InteractPoint[]) {
+    const metro = this.ctx.metro!
+    const mc = metro.chunks[chunkKey(cx, cz)]
+    if (!mc) return
+    for (const e of mc.entrances) {
+      const ent = metro.entrances[e]!
+      const st = metro.stations[ent.station]!
+      buildEntrance(b, entranceFootprint(metro, e))
+      const exit = ent.ref ? `${ent.ref} 号口` : '出入口'
+      points.push({ x: ent.pos[0], z: ent.pos[1], r: 5, label: `${st.name}站 · ${exit}`, action: '进站', kind: 'metro', station: ent.station, entrance: e })
+    }
+    for (const si of mc.stations) {
+      const st = metro.stations[si]!
+      // 风亭只建在站点所在的分块，且只给全地下的车站
+      if (Math.floor(st.pos[0] / CHUNK_SIZE) !== cx || Math.floor(st.pos[1] / CHUNK_SIZE) !== cz) continue
+      if (st.platforms.some((p) => p.structure !== 'tunnel')) continue
+      const rng = mulberry32(chunkSeed(cx, cz) ^ Math.imul(si, 2654435761))
+      let placed = 0
+      for (let k = 0; k < 8 && placed < 2; k++) {
+        const a = rng() * Math.PI * 2
+        const d = 14 + rng() * 18
+        const x = st.pos[0] + Math.cos(a) * d
+        const z = st.pos[1] + Math.sin(a) * d
+        const r = { x0: x - 1.5, z0: z - 1, x1: x + 1.5, z1: z + 1 }
+        if (Math.floor(x / CHUNK_SIZE) !== cx || Math.floor(z / CHUNK_SIZE) !== cz) continue
+        if (overlapsObstacle(r, inputs) || blockedByRoad(r, inputs, 1) || isWater(this.ctx.data, x, z)) continue
+        buildVent(b, r)
+        inputs.obstacles!.push({ x0: r.x0 - 1, z0: r.z0 - 1, x1: r.x1 + 1, z1: r.z1 + 1 })
+        placed++
+      }
+    }
   }
 
   private placeAt(x: number, z: number): Place {
@@ -196,6 +256,7 @@ export class ChunkManager {
 
   private unload(c: Chunk) {
     this.ctx.collision.removeOwner(c.key)
+    this.ctx.interact.removeOwner(c.key)
     for (const o of c.group.children) if (o instanceof THREE.Mesh) o.geometry.dispose()
     c.group.removeFromParent()
     this.loaded.delete(c.key)

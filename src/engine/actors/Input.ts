@@ -9,6 +9,7 @@ export class Input {
   private zoomDelta = 0
   private jumpQueued = false
   private viewQueued = false
+  private interactQueued = false
   /** 触屏的奔跑开关 */
   runToggle = false
   /** 打开大地图等面板时暂停移动输入 */
@@ -33,6 +34,7 @@ export class Input {
     if (e.type === 'keydown') {
       if (e.code === 'Space' && !e.repeat) this.jumpQueued = true
       if (e.code === 'KeyV' && !e.repeat) this.viewQueued = true
+      if (e.code === 'KeyE' && !e.repeat) this.interactQueued = true
       this.keys.add(e.code)
     } else this.keys.delete(e.code)
   }
@@ -73,9 +75,10 @@ export class Input {
     this.lookY += dy
   }
 
-  press(action: 'jump' | 'view') {
+  press(action: 'jump' | 'view' | 'interact') {
     if (action === 'jump') this.jumpQueued = true
-    else this.viewQueued = true
+    else if (action === 'view') this.viewQueued = true
+    else this.interactQueued = true
   }
 
   // ---------------------------------------------------------------- 读取
@@ -115,6 +118,12 @@ export class Input {
     const j = this.jumpQueued && this.enabled
     this.jumpQueued = false
     return j
+  }
+
+  consumeInteract() {
+    const v = this.interactQueued && this.enabled
+    this.interactQueued = false
+    return v
   }
 
   consumeView() {

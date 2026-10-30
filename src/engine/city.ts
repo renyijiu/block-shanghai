@@ -64,7 +64,8 @@ export interface CityBuildings {
 /** 城市包：配置 + 烘焙数据的地址 + 出生点 + 程序化建筑（docs/02 第 4 节） */
 export interface CityPackage {
   config: CityConfig
-  data: WorldDataUrls
+  /** 烘焙数据的地址：地图图层 + 地铁 */
+  data: WorldDataUrls & { metro: string }
   /** 第一个是默认出生点 */
   spawns: SpawnPoint[]
   buildings: CityBuildings

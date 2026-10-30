@@ -4,30 +4,46 @@
     <div class="title">{{ config.name }}<span v-if="!touch"> · {{ config.nameEn }}</span></div>
     <div v-if="loading">{{ loading }}</div>
     <template v-else>
+      <div class="status">🕘 {{ stats.time }} · ¥{{ stats.money }}</div>
       <div>{{ backend }} · {{ stats.fps }} fps<span v-if="!touch"> · {{ stats.drawCalls }} 次绘制 · {{ (stats.triangles / 1000).toFixed(0) }}k 三角形</span></div>
       <div v-if="!touch">分块：{{ stats.chunks }}（待建 {{ stats.pending }}）· 位置：{{ stats.x }}, {{ stats.z }} 格</div>
-      <div v-if="!touch" class="hint">{{ stats.mode === 'dev' ? 'WASD 移动 · Q/E 升降 · Shift 加速 · 拖动旋转 · 滚轮缩放' : 'WASD 移动 · Shift 奔跑 · 空格跳 · 拖动转视角 · 滚轮远近 · V 切换视角 · M 地图' }}</div>
+      <div v-if="!touch" class="hint">{{ stats.mode === 'dev' ? 'WASD 移动 · Q/E 升降 · Shift 加速 · 拖动旋转 · 滚轮缩放' : 'WASD 移动 · Shift 奔跑 · 空格跳 · 拖动转视角 · 滚轮远近 · V 切换视角 · M 地图 · E 交互' }}</div>
     </template>
   </div>
   <template v-if="game && !loading && stats.mode === 'player'">
-    <MiniMap v-if="!mapOpen" :game="game" :size="mapSize" @open="mapOpen = true" />
-    <button v-if="!mapOpen" class="quality" :style="{ top: `calc(max(12px, env(safe-area-inset-top)) + ${mapSize + 10}px)` }" title="切换画质" @click="cycleQuality">
-      画质 {{ QUALITY_PRESETS[quality].label }}
-    </button>
-    <TouchControls v-if="touch && !mapOpen" :input="game.input" />
+    <template v-if="!panelOpen">
+      <MiniMap :game="game" :size="mapSize" @open="mapOpen = true" />
+      <div class="side" :style="{ top: `calc(max(12px, env(safe-area-inset-top)) + ${mapSize + 10}px)` }">
+        <button title="地铁线路图" @click="openMetro(null)">🚇 地铁</button>
+        <button title="切换画质" @click="cycleQuality">画质 {{ QUALITY_PRESETS[quality].label }}</button>
+      </div>
+      <TouchControls v-if="touch" :input="game.input" :action="stats.prompt?.action ?? null" />
+      <div v-if="stats.prompt" class="prompt">
+        <b v-if="!touch">E</b> {{ stats.prompt.action }} · {{ stats.prompt.label }}
+      </div>
+    </template>
     <DistrictToast :name="toast.name" :theme="toast.theme" />
     <BigMap v-if="mapOpen" :game="game" :title="config.name" :here="districtName" @close="mapOpen = false" />
+    <MetroPanel v-if="metroPanel" :game="game" :initial-from="metroPanel.from" :in-station="metroPanel.inStation" @close="metroPanel = null" @travel="travel" />
+    <Transition name="fade">
+      <div v-if="travelText" class="travel">{{ travelText }}</div>
+    </Transition>
+    <Transition name="fade">
+      <div v-if="notice" class="notice">{{ notice }}</div>
+    </Transition>
   </template>
-  <div v-if="!mapOpen" class="credit">© OpenStreetMap contributors</div>
+  <div v-if="!panelOpen" class="credit">© OpenStreetMap contributors</div>
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import BigMap from './components/BigMap.vue'
 import DistrictToast from './components/DistrictToast.vue'
+import MetroPanel from './components/MetroPanel.vue'
 import MiniMap from './components/MiniMap.vue'
 import TouchControls from './components/TouchControls.vue'
 import { Game, type GameStats } from './engine/Game.ts'
+import type { Route } from './engine/metro/network.ts'
 import { QUALITY_ORDER, QUALITY_PRESETS, type QualityLevel } from './engine/quality.ts'
 import { CITIES, DEFAULT_CITY } from './cities/index.ts'
 
@@ -36,13 +52,49 @@ const config = city.config
 const container = ref<HTMLDivElement | null>(null)
 const backend = ref('')
 const loading = ref('初始化渲染器…')
-const stats = reactive<GameStats>({ fps: 0, drawCalls: 0, triangles: 0, chunks: 0, pending: 0, buildAvg: 0, buildMax: 0, x: 0, z: 0, mode: 'player', view: 'third', district: null })
+const stats = reactive<GameStats>({ fps: 0, drawCalls: 0, triangles: 0, chunks: 0, pending: 0, buildAvg: 0, buildMax: 0, x: 0, z: 0, mode: 'player', view: 'third', district: null, time: '', money: 0, prompt: null })
 // 触屏设备显示摇杆和按钮
 const touch = matchMedia('(pointer: coarse)').matches
 const game = shallowRef<Game | null>(null)
 let timer = 0
 const mapOpen = ref(false)
 const mapSize = touch ? 112 : 160
+// 地铁面板：from 是起点站；inStation 表示从地铁口进站打开的，才能乘车
+const metroPanel = ref<{ from: number | null; inStation: boolean } | null>(null)
+const panelOpen = computed(() => mapOpen.value || !!metroPanel.value)
+const travelText = ref('')
+const notice = ref('')
+let noticeTimer = 0
+
+function openMetro(from: number | null, inStation = false) {
+  const g = game.value
+  if (!g?.metro) return
+  metroPanel.value = { from: from ?? g.metro.nearestStation(g.player.pos.x, g.player.pos.z), inStation }
+}
+
+function showNotice(text: string) {
+  notice.value = text
+  clearTimeout(noticeTimer)
+  noticeTimer = window.setTimeout(() => (notice.value = ''), 4000)
+}
+
+// 快速到达：关面板 → 淡出 → 推进时钟、扣票价、在目的站出口出站 → 淡入（docs/04 第 5 节）
+async function travel(route: Route) {
+  const g = game.value
+  if (!g) return
+  metroPanel.value = null
+  travelText.value = '乘坐地铁…'
+  try {
+    const r = await g.fastTravel(route, (t) => (travelText.value = t))
+    showNotice(r.message)
+  } catch (e) {
+    showNotice('乘车出错：' + (e instanceof Error ? e.message : String(e)))
+    console.error(e)
+  } finally {
+    travelText.value = ''
+  }
+  Object.assign(stats, g.stats, { time: g.clock.format(), money: g.money })
+}
 
 // 画质：低 → 中 → 高 循环，切换后立即存档
 const quality = ref<QualityLevel>('mid')
@@ -67,14 +119,21 @@ watch(
   }
 )
 
-// 地图打开时暂停移动；M 开关地图，Esc 关闭
-watch(mapOpen, (open) => {
-  if (game.value) game.value.input.enabled = !open
+// 地图、地铁面板打开时暂停移动；M 开关地图，Esc 关闭面板
+watch([panelOpen, travelText], ([open, traveling]) => {
+  if (game.value) game.value.input.enabled = !open && !traveling
 })
 function onKey(e: KeyboardEvent) {
   if (loading.value || stats.mode !== 'player') return
-  if (e.code === 'KeyM' && !e.repeat) mapOpen.value = !mapOpen.value
-  else if (e.code === 'Escape') mapOpen.value = false
+  if (e.target instanceof HTMLInputElement) {
+    if (e.code === 'Escape') metroPanel.value = null
+    return
+  }
+  if (e.code === 'KeyM' && !e.repeat && !metroPanel.value) mapOpen.value = !mapOpen.value
+  else if (e.code === 'Escape') {
+    mapOpen.value = false
+    metroPanel.value = null
+  }
 }
 addEventListener('keydown', onKey)
 
@@ -86,6 +145,10 @@ onMounted(async () => {
     backend.value = await g.init((text) => (loading.value = text))
     quality.value = g.quality
     loading.value = ''
+    // 走到地铁口按 E（或点“进站”）打开地铁面板，起点是这个站
+    g.onInteract = (p) => {
+      if (p.kind === 'metro') openMetro(p.station, true)
+    }
     g.start()
     // 引擎状态按 5 Hz 同步到界面（docs/07 第 5 节）
     timer = window.setInterval(() => Object.assign(stats, g.stats), 200)
@@ -94,7 +157,15 @@ onMounted(async () => {
     Object.assign(window, {
       __ready: true,
       __probe: () => ({ backend: backend.value, ...g.stats, player: [+p.x.toFixed(1), +p.y.toFixed(2), +p.z.toFixed(1)], autopilot: g.autopilot, toast: toast.name }),
-      __openMap: () => (mapOpen.value = true)
+      __openMap: () => (mapOpen.value = true),
+      __openMetro: (from: number | null, inStation: boolean) => openMetro(from, inStation),
+      __travel: async (from: string, to: string, mode: 'fastest' | 'fewest' = 'fastest') => {
+        const m = g.metro!
+        const idx = (n: string) => m.data.stations.findIndex((s) => s.name === n)
+        const route = m.plan(idx(from), idx(to), mode)
+        if (route) await travel(route)
+        return notice.value
+      }
     })
   } catch (e) {
     loading.value = '初始化失败：' + (e instanceof Error ? e.message : String(e))
@@ -105,6 +176,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   removeEventListener('keydown', onKey)
   clearInterval(timer)
+  clearTimeout(noticeTimer)
   game.value?.dispose()
   game.value = null
 })
@@ -149,9 +221,20 @@ onBeforeUnmount(() => {
   font-size: 14px;
 }
 
-.quality {
+.status {
+  font-weight: 700;
+}
+
+.side {
   position: fixed;
   right: max(12px, env(safe-area-inset-right));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.side button {
   padding: 5px 12px;
   border: none;
   border-radius: 14px;
@@ -160,6 +243,65 @@ onBeforeUnmount(() => {
   font-size: 12px;
   font-family: inherit;
   cursor: pointer;
+}
+
+.prompt {
+  position: fixed;
+  left: 50%;
+  bottom: max(110px, calc(env(safe-area-inset-bottom) + 110px));
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font-size: 14px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.prompt b {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: #fff;
+  color: #000;
+}
+
+.travel {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: #111;
+  color: #fff;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notice {
+  position: fixed;
+  left: 50%;
+  top: 30%;
+  transform: translateX(-50%);
+  padding: 10px 18px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  font-size: 15px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.5s;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 
 .credit {

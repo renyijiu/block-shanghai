@@ -16,6 +16,8 @@ export interface LotInputs {
   roadInfo: RoadInfo[]
   water: AreaPiece[]
   parks: AreaPiece[]
+  /** 其他要避开的矩形（地铁口、风亭、高架车站） */
+  obstacles?: Lot[]
   /** 道路线段的网格索引，第一次查询时建立 */
   index?: SegmentIndex
 }
@@ -111,6 +113,10 @@ export function blockedByRoad(r: Lot, inp: LotInputs, clearance = ROAD_CLEARANCE
   return false
 }
 
+export function overlapsObstacle(r: Lot, inp: LotInputs) {
+  return (inp.obstacles ?? []).some((o) => o.x1 > r.x0 && o.x0 < r.x1 && o.z1 > r.z0 && o.z0 < r.z1)
+}
+
 /** 分块 (cx, cz) 里可以盖房子的地块 */
 export function findLots(cx: number, cz: number, chunkSize: number, inp: LotInputs): Lot[] {
   const lots: Lot[] = []
@@ -131,6 +137,7 @@ export function findLots(cx: number, cz: number, chunkSize: number, inp: LotInpu
         [lot.x1, lot.z1]
       ]
       if (samples.some(([x, z]) => inAreas(x, z, inp.water) || inAreas(x, z, inp.parks))) continue
+      if (overlapsObstacle(lot, inp)) continue
       if (blockedByRoad(lot, inp)) continue
       lots.push(lot)
     }
@@ -172,6 +179,6 @@ export function streetTreeSpots(own: RoadPiece[], inp: LotInputs, spacing: numbe
   return spots.filter(({ x, z }) => {
     const r = { x0: x - 0.6, z0: z - 0.6, x1: x + 0.6, z1: z + 0.6 }
     // 树离任何路面至少 0.4 格
-    return !inAreas(x, z, inp.water) && !inAreas(x, z, inp.parks) && !blockedByRoad(r, inp, 0.4)
+    return !inAreas(x, z, inp.water) && !inAreas(x, z, inp.parks) && !overlapsObstacle(r, inp) && !blockedByRoad(r, inp, 0.4)
   })
 }

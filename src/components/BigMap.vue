@@ -2,7 +2,7 @@
   <div class="bigmap">
     <canvas
       ref="canvas"
-      @wheel.prevent="onWheel"
+      @wheel="onWheel"
       @pointerdown="onDown"
       @pointermove="onMove"
       @pointerup="onUp"
@@ -23,6 +23,7 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import type { Game } from '../engine/Game.ts'
 import { drawMap, toScreen, type MapView } from '../engine/map/drawMap.ts'
+import { usePanZoom } from './usePanZoom.ts'
 
 const props = defineProps<{ game: Game; title: string; here: string | null }>()
 const emit = defineEmits<{ close: [] }>()
@@ -30,56 +31,15 @@ const canvas = ref<HTMLCanvasElement | null>(null)
 const config = props.game.city.config
 const districtColors = Object.fromEntries(Object.entries(config.districts).map(([id, d]) => [id, d.color]))
 const view = { x: 0, z: 0, scale: 0.25 }
-const pointers = new Map<number, { x: number; y: number }>()
 let dirty = true
 let raf = 0
 let last = 0
+const { zoom, onWheel, onDown, onMove, onUp } = usePanZoom(view, { min: 0.03, max: 4, onChange: () => (dirty = true) })
 
 function center() {
   view.x = props.game.player.pos.x
   view.z = props.game.player.pos.z
   dirty = true
-}
-
-function zoom(k: number, cx = innerWidth / 2, cy = innerHeight / 2) {
-  // 以 (cx, cy) 为中心缩放
-  const wx = view.x + (cx - innerWidth / 2) / view.scale
-  const wz = view.z + (cy - innerHeight / 2) / view.scale
-  view.scale = Math.min(4, Math.max(0.03, view.scale * k))
-  view.x = wx - (cx - innerWidth / 2) / view.scale
-  view.z = wz - (cy - innerHeight / 2) / view.scale
-  dirty = true
-}
-
-function onWheel(e: WheelEvent) {
-  zoom(Math.exp(-e.deltaY * 0.002), e.clientX, e.clientY)
-}
-
-function onDown(e: PointerEvent) {
-  ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
-}
-
-function onMove(e: PointerEvent) {
-  const prev = pointers.get(e.pointerId)
-  if (!prev) return
-  if (pointers.size === 2) {
-    // 双指缩放
-    const [a, b] = [...pointers.values()]
-    const before = Math.hypot(a!.x - b!.x, a!.y - b!.y)
-    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
-    const [c, d] = [...pointers.values()]
-    zoom(Math.hypot(c!.x - d!.x, c!.y - d!.y) / before, (c!.x + d!.x) / 2, (c!.y + d!.y) / 2)
-    return
-  }
-  view.x -= (e.clientX - prev.x) / view.scale
-  view.z -= (e.clientY - prev.y) / view.scale
-  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
-  dirty = true
-}
-
-function onUp(e: PointerEvent) {
-  pointers.delete(e.pointerId)
 }
 
 function frame(now: number) {
