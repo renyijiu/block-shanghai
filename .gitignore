@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.local
+.DS_Store
+
+# OSM 原始下载缓存（可随时重新拉取，不入库）
+tools/.cache/
