@@ -10,7 +10,10 @@
     </template>
   </div>
   <template v-if="game && !loading && stats.mode === 'player'">
-    <MiniMap v-if="!mapOpen" :game="game" :size="touch ? 112 : 160" @open="mapOpen = true" />
+    <MiniMap v-if="!mapOpen" :game="game" :size="mapSize" @open="mapOpen = true" />
+    <button v-if="!mapOpen" class="quality" :style="{ top: `calc(max(12px, env(safe-area-inset-top)) + ${mapSize + 10}px)` }" title="切换画质" @click="cycleQuality">
+      画质 {{ QUALITY_PRESETS[quality].label }}
+    </button>
     <TouchControls v-if="touch && !mapOpen" :input="game.input" />
     <DistrictToast :name="toast.name" :theme="toast.theme" />
     <BigMap v-if="mapOpen" :game="game" :title="config.name" :here="districtName" @close="mapOpen = false" />
@@ -25,6 +28,7 @@ import DistrictToast from './components/DistrictToast.vue'
 import MiniMap from './components/MiniMap.vue'
 import TouchControls from './components/TouchControls.vue'
 import { Game, type GameStats } from './engine/Game.ts'
+import { QUALITY_ORDER, QUALITY_PRESETS, type QualityLevel } from './engine/quality.ts'
 import { CITIES, DEFAULT_CITY } from './cities/index.ts'
 
 const city = CITIES[DEFAULT_CITY]
@@ -38,6 +42,18 @@ const touch = matchMedia('(pointer: coarse)').matches
 const game = shallowRef<Game | null>(null)
 let timer = 0
 const mapOpen = ref(false)
+const mapSize = touch ? 112 : 160
+
+// 画质：低 → 中 → 高 循环，切换后立即存档
+const quality = ref<QualityLevel>('mid')
+function cycleQuality() {
+  const g = game.value
+  if (!g) return
+  const next = QUALITY_ORDER[(QUALITY_ORDER.indexOf(quality.value) + 1) % QUALITY_ORDER.length]!
+  g.setQuality(next)
+  g.saveNow()
+  quality.value = next
+}
 
 // 区名：进入新的区时弹出提示（docs/06 P1 验收）
 type DistrictId = keyof typeof config.districts
@@ -68,6 +84,7 @@ onMounted(async () => {
   game.value = g
   try {
     backend.value = await g.init((text) => (loading.value = text))
+    quality.value = g.quality
     loading.value = ''
     g.start()
     // 引擎状态按 5 Hz 同步到界面（docs/07 第 5 节）
@@ -130,6 +147,19 @@ onBeforeUnmount(() => {
 
 .hud.compact .title {
   font-size: 14px;
+}
+
+.quality {
+  position: fixed;
+  right: max(12px, env(safe-area-inset-right));
+  padding: 5px 12px;
+  border: none;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
 }
 
 .credit {

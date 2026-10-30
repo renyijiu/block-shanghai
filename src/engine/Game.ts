@@ -10,6 +10,8 @@ import { createProjection, type Projection } from './geo/projection.ts'
 import { ChunkManager } from './world/ChunkManager.ts'
 import { CHUNK_SIZE } from './world/chunks.ts'
 import { DistrictIndex } from './world/districts.ts'
+import { defaultQuality, QUALITY_PRESETS, type QualityLevel } from './quality.ts'
+import { loadSave, writeSave } from './state/save.ts'
 import { createWorldMaterials, type WorldMaterials } from './world/materials.ts'
 import { walkable } from './world/queries.ts'
 import { WorldData } from './world/WorldData.ts'
@@ -19,12 +21,8 @@ export { CHUNK_SIZE }
 export type RenderBackend = 'WebGPU' | 'WebGL 2'
 
 const SKY = 0x9cc4e4
-
-/** 画质相关参数（阶段 6 做成低 / 中 / 高三档） */
-export const QUALITY = {
-  viewDistance: 1050,
-  reflection: false
-}
+/** 自动存档间隔（毫秒） */
+const AUTOSAVE_MS = 10_000
 
 export interface GameStats {
   fps: number
@@ -50,11 +48,14 @@ export class Game {
   readonly proj: Projection
   readonly renderer: THREE.WebGPURenderer
   readonly scene = new THREE.Scene()
-  readonly camera = new THREE.PerspectiveCamera(60, 1, 0.3, QUALITY.viewDistance * 1.3)
+  readonly camera = new THREE.PerspectiveCamera(60, 1, 0.3, 1500)
   readonly collision = new CollisionWorld()
   readonly input: Input
   readonly player = new Player()
   readonly rig = new CameraRig()
+  quality: QualityLevel = defaultQuality()
+  /** 每帧渲染之后调用（调试面板的帧率统计用） */
+  afterRender: (() => void) | null = null
   devCamera: DevCamera | null = null
   districts: DistrictIndex | null = null
   world: WorldData | null = null
@@ -75,6 +76,13 @@ export class Game {
   /** 自动跑的进度，供截图脚本读取 */
   readonly autopilot = { active: false, done: false, stuck: false, waypoint: 0 }
   private stuckCheck = { t: 0, x: 0, z: 0 }
+  /** 是否读写存档：测试参数（cam / walk / start）下不读不写，保证结果可复现 */
+  private persist = false
+  private savedAt = 0
+  private readonly onHide = () => {
+    if (document.visibilityState === 'hidden') this.saveNow()
+  }
+  private readonly onPageHide = () => this.saveNow()
   private detour = { until: 0, side: 1, t: 0, x: 0, z: 0 }
 
   constructor(container: HTMLElement, city: CityPackage) {
@@ -90,15 +98,15 @@ export class Game {
     container.appendChild(this.renderer.domElement)
 
     this.scene.background = new THREE.Color(SKY)
-    this.scene.fog = new THREE.Fog(SKY, QUALITY.viewDistance * 0.55, QUALITY.viewDistance)
+    this.scene.fog = new THREE.Fog(SKY, 500, 1000)
     this.scene.add(new THREE.HemisphereLight(0xe4f0ff, 0x8a8170, 1.5))
     const sun = new THREE.DirectionalLight(0xfff4e0, 1.6)
     sun.position.set(-400, 900, 500)
     this.scene.add(sun)
 
     this.materials = createWorldMaterials()
-    // 地面：跟着焦点移动的大平面，各图层贴在它上面
-    const size = QUALITY.viewDistance * 2 + CHUNK_SIZE * 4
+    // 地面：跟着焦点移动的大平面，各图层贴在它上面；按最高画质的视距准备
+    const size = QUALITY_PRESETS.high.viewDistance * 2 + CHUNK_SIZE * 4
     this.ground = new THREE.Mesh(new THREE.PlaneGeometry(size, size), this.materials.ground)
     this.ground.rotation.x = -Math.PI / 2
     this.scene.add(this.ground)
@@ -123,7 +131,7 @@ export class Game {
     this.districts = new DistrictIndex(world.districts)
     this.chunks = new ChunkManager(
       { data: world, materials: this.materials, buildings: this.city.buildings, districts: this.districts, collision: this.collision, proj: this.proj },
-      { radius: QUALITY.viewDistance, budgetMs: 6 }
+      { radius: QUALITY_PRESETS[this.quality].viewDistance, budgetMs: 6 }
     )
     this.scene.add(this.chunks.root)
     this.playerWorld = {
@@ -132,7 +140,11 @@ export class Game {
     }
 
     const params = new URLSearchParams(location.search)
-    if (QUALITY.reflection || params.get('reflect') === '1') this.materials.setReflection(true, this.scene)
+    this.persist = !['cam', 'walk', 'start'].some((k) => params.has(k))
+    const save = this.persist ? loadSave(localStorage, this.city.config.id) : null
+    const q = params.get('quality')
+    this.setQuality(q === 'low' || q === 'mid' || q === 'high' ? q : (save?.settings.quality ?? this.quality))
+    if (params.get('reflect') === '1') this.materials.setReflection(true, this.scene)
     const spawn = this.city.spawns[0]!
     const { x, z } = this.proj.project(spawn.lat, spawn.lon)
     const nums = (s: string | null) => s?.split(',').map(Number) ?? null
@@ -149,11 +161,12 @@ export class Game {
       if (fly?.length === 2) this.fly = [fly[0]!, fly[1]!]
       focus = this.devCamera.focus
     } else {
-      // 玩家模式：?start=x,z 指定出生位置（测试用）
+      // 玩家模式：有存档从存档位置继续；?start=x,z 指定出生位置（测试用）
       const start = nums(params.get('start'))
-      focus = start?.length === 2 ? { x: start[0]!, z: start[1]! } : { x, z }
+      focus = start?.length === 2 ? { x: start[0]!, z: start[1]! } : save ? { x: save.player.x, z: save.player.z } : { x, z }
       this.scene.add(this.player.model)
       this.rig.yaw = -Math.PI / 2 // 面朝东（外滩方向）
+      if (save) Object.assign(this.rig, save.camera)
       this.route = (params.get('walk') ?? '')
         .split(';')
         .filter(Boolean)
@@ -167,8 +180,41 @@ export class Game {
       this.player.spawn(focus.x, focus.z, this.playerWorld)
       // 人和相机朝同一方向
       this.player.facing = this.player.model.rotation.y = this.rig.yaw
+      if (this.persist) {
+        addEventListener('visibilitychange', this.onHide)
+        addEventListener('pagehide', this.onPageHide)
+      }
     }
+    if (params.get('debug') === '1') void import('./debug.ts').then((m) => m.attachDebug(this))
     return this.backend
+  }
+
+  /** 切换画质：视距（分块半径、雾、远裁剪面）、渲染分辨率、水面倒影 */
+  setQuality(level: QualityLevel) {
+    const p = QUALITY_PRESETS[level]
+    this.quality = level
+    const fog = this.scene.fog as THREE.Fog
+    fog.near = p.viewDistance * 0.55
+    fog.far = p.viewDistance
+    this.camera.far = p.viewDistance * 1.3
+    this.camera.updateProjectionMatrix()
+    this.chunks?.setRadius(p.viewDistance)
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, p.pixelRatio))
+    this.materials.setReflection(p.reflection, this.scene)
+    this.resize()
+  }
+
+  /** 立即存档（玩家模式且不是测试参数时） */
+  saveNow() {
+    if (!this.persist || this.devCamera || !this.world) return
+    const p = this.player.pos
+    const r = this.rig
+    writeSave(localStorage, {
+      city: this.city.config.id,
+      player: { x: p.x, y: p.y, z: p.z, facing: this.player.facing },
+      camera: { yaw: r.yaw, pitch: r.pitch, distance: r.distance, mode: r.mode },
+      settings: { quality: this.quality }
+    })
   }
 
   get backend(): RenderBackend {
@@ -199,7 +245,12 @@ export class Game {
     // 地面平面按分块对齐跟随
     this.ground.position.set(Math.round(f.x / CHUNK_SIZE) * CHUNK_SIZE, 0, Math.round(f.z / CHUNK_SIZE) * CHUNK_SIZE)
     this.renderer.render(this.scene, this.camera)
+    this.afterRender?.()
     this.updateStats(now, f)
+    if (now - this.savedAt > AUTOSAVE_MS) {
+      this.savedAt = now
+      this.saveNow()
+    }
   }
 
   private updateDev(dt: number) {
@@ -293,7 +344,10 @@ export class Game {
   }
 
   dispose() {
+    this.saveNow()
     this.disposed = true
+    removeEventListener('visibilitychange', this.onHide)
+    removeEventListener('pagehide', this.onPageHide)
     this.stop()
     this.ro.disconnect()
     this.input.dispose()

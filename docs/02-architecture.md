@@ -68,7 +68,9 @@ block-shanghai/
     │   ├── interior/          独立室内场景（地铁站、车厢）
     │   ├── photo/             摄影、滤镜、景点识别
     │   ├── sky/               昼夜、天气、季节
-    │   └── state/             store、存档、事件与任务结算
+    │   ├── state/             存档（save.ts）、store、事件与任务结算
+    │   ├── quality.ts         三档画质
+    │   └── debug.ts           调试面板（?debug=1 按需加载）
     └── cities/
         ├── index.ts           城市注册表
         └── shanghai/
@@ -169,7 +171,11 @@ export default {
 
 ## 6. 存档
 
-- key：`block-shanghai:save:v<schema>`，跟城市 id 绑定，结构变化时提升 schema 版本并写迁移函数。
+实现：`src/engine/state/save.ts`（不依赖浏览器 API，有单元测试）。
+
+- key：`block-shanghai:save:v<schema>`，存档里记着城市 id，换城市不读。结构变化时提升 `SAVE_SCHEMA` 并在 `MIGRATIONS` 里写迁移函数；读档时找不到当前版本，就从新到旧找旧版本、逐级迁移后写回新 key。坏档、字段不全一律当没有存档。
+- 时机：每 10 秒、切走页面（`visibilitychange`）、关闭页面（`pagehide`）自动存；测试参数（`?cam` / `?walk` / `?start`）下不读不写。
+- P1 已存：位置、朝向、相机（朝向、俯仰、距离、视角）、画质。
 - 内容：角色外观、金钱、位置、已发现景点、图鉴、背包、任务进度、统计（步行距离、乘车次数、到访车站等）、设置。
 - 照片存 IndexedDB，存档里只存照片 id。
 
@@ -179,7 +185,7 @@ export default {
 | --- | --- |
 | 帧率 | ≥ 50 fps |
 | Draw call | 目标 ≤ 600；硬上限 1000（再多 WebGPURenderer 的单物体开销会拖垮帧率，见 [07 第 4.3 节](./07-tech-selection.md#43-实测本仓库-bench)） |
-| 视距 | 低 800 / 中 1050 / 高 1300 格 |
+| 视距 | 低 800 / 中 1050 / 高 1300 格（`src/engine/quality.ts`，同时调渲染分辨率上限 1 / 1.5 / 2 和水面倒影；触屏设备默认低档） |
 | 同屏 NPC | 低 22 / 中 40 / 高 55 |
 | 同屏渲染列车 | ≤ 12 列 |
 | 首次进入加载 | ≤ 5 秒 |
