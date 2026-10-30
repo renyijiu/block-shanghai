@@ -1,60 +1,10 @@
 // 分块几何生成：烘焙数据 → 顶点数组。纯函数（数据进、TypedArray 出），以后可以整体挪进 Web Worker。
 // 坐标是游戏格；道路宽度、高架尺寸按人物尺度（docs/03 第 3 节）
-import { Color, ShapeUtils, Vector2 } from 'three/webgpu'
+import { ShapeUtils, Vector2 } from 'three/webgpu'
+import { GeoBuilder, rgb as hex, type GeometryData, type RGB } from '../build/geometry.ts'
 import type { AreaPiece, RoadInfo, RoadPiece } from './data.ts'
 
-export interface GeometryData {
-  position: Float32Array
-  normal: Float32Array
-  color: Float32Array
-  index: Uint32Array
-}
-
-type RGB = [number, number, number]
-
-/** 可增长的顶点缓冲 */
-class GeoBuilder {
-  pos: number[] = []
-  nor: number[] = []
-  col: number[] = []
-  idx: number[] = []
-
-  vertex(x: number, y: number, z: number, nx: number, ny: number, nz: number, c: RGB) {
-    this.pos.push(x, y, z)
-    this.nor.push(nx, ny, nz)
-    this.col.push(c[0], c[1], c[2])
-    return this.pos.length / 3 - 1
-  }
-
-  /** 四边形 a-b-c-d（逆时针朝向法线一侧） */
-  quad(a: number[], b: number[], c: number[], d: number[], n: number[], col: RGB) {
-    const i = this.vertex(a[0]!, a[1]!, a[2]!, n[0]!, n[1]!, n[2]!, col)
-    this.vertex(b[0]!, b[1]!, b[2]!, n[0]!, n[1]!, n[2]!, col)
-    this.vertex(c[0]!, c[1]!, c[2]!, n[0]!, n[1]!, n[2]!, col)
-    this.vertex(d[0]!, d[1]!, d[2]!, n[0]!, n[1]!, n[2]!, col)
-    this.idx.push(i, i + 1, i + 2, i, i + 2, i + 3)
-  }
-
-  /** 轴对齐方块（不含底面） */
-  box(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, c: RGB) {
-    this.quad([x0, y1, z0], [x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [0, 1, 0], c)
-    this.quad([x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [x1, y0, z1], [1, 0, 0], c)
-    this.quad([x0, y0, z1], [x0, y1, z1], [x0, y1, z0], [x0, y0, z0], [-1, 0, 0], c)
-    this.quad([x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], [0, 0, 1], c)
-    this.quad([x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [0, 0, -1], c)
-  }
-
-  build(): GeometryData | null {
-    if (!this.idx.length) return null
-    return { position: new Float32Array(this.pos), normal: new Float32Array(this.nor), color: new Float32Array(this.col), index: new Uint32Array(this.idx) }
-  }
-}
-
-// 顶点颜色要用线性空间的值：Color.setHex 会把 sRGB 十六进制换算过去，直接除 255 会整体发白
-const hex = (h: number): RGB => {
-  const c = new Color(h)
-  return [c.r, c.g, c.b]
-}
+export type { GeometryData }
 
 // ---------------------------------------------------------------- 面状图层
 

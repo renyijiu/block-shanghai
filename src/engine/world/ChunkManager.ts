@@ -2,10 +2,28 @@
 // 每帧建块有时间预算（docs/02 第 5 节），卸载时按 owner 一并释放几何体；
 // 以后的建筑、行道树、碰撞盒、交互点也挂在同一个分块 owner 上
 import * as THREE from 'three/webgpu'
+import { Builder } from '../build/Builder.ts'
+import { chunkSeed, mulberry32, pick } from '../build/random.ts'
+import type { CityBuildings, Place } from '../city.ts'
+import type { CollisionWorld } from '../geo/CollisionWorld.ts'
+import type { Projection } from '../geo/projection.ts'
 import { CHUNK_SIZE, chunkKey } from './chunks.ts'
 import { buildAreas, buildElevated, buildGroundRoads, type GeometryData } from './chunkMesh.ts'
+import type { RoadPiece } from './data.ts'
+import type { DistrictIndex } from './districts.ts'
+import { findLots, streetTreeSpots, type LotInputs } from './lots.ts'
 import { WORLD_COLORS, type WorldMaterials } from './materials.ts'
 import type { WorldData } from './WorldData.ts'
+
+/** 生成分块需要的外部依赖 */
+export interface ChunkContext {
+  data: WorldData
+  materials: WorldMaterials
+  buildings: CityBuildings
+  districts: DistrictIndex
+  collision: CollisionWorld
+  proj: Projection
+}
 
 export interface ChunkManagerOptions {
   /** 加载半径（格），一般等于视距 */
@@ -24,6 +42,7 @@ function toGeometry(d: GeometryData) {
   g.setAttribute('position', new THREE.BufferAttribute(d.position, 3))
   g.setAttribute('normal', new THREE.BufferAttribute(d.normal, 3))
   g.setAttribute('color', new THREE.BufferAttribute(d.color, 3))
+  if (d.win) g.setAttribute('win', new THREE.BufferAttribute(d.win, 1))
   g.setIndex(new THREE.BufferAttribute(d.index, 1))
   g.computeBoundingSphere()
   return g
@@ -32,14 +51,16 @@ function toGeometry(d: GeometryData) {
 export class ChunkManager {
   readonly root = new THREE.Group()
   private readonly loaded = new Map<string, Chunk>()
+  private readonly ctx: ChunkContext
   private readonly data: WorldData
   private readonly materials: WorldMaterials
   private opts: ChunkManagerOptions
   private queue: { cx: number; cz: number; d: number }[] = []
 
-  constructor(data: WorldData, materials: WorldMaterials, opts: ChunkManagerOptions) {
-    this.data = data
-    this.materials = materials
+  constructor(ctx: ChunkContext, opts: ChunkManagerOptions) {
+    this.ctx = ctx
+    this.data = ctx.data
+    this.materials = ctx.materials
     this.opts = opts
     this.root.name = 'chunks'
   }
@@ -51,6 +72,9 @@ export class ChunkManager {
   get pendingCount() {
     return this.queue.length
   }
+
+  /** 建块耗时（毫秒）：最近 60 个分块的平均值和最大值 */
+  readonly buildMs: number[] = []
 
   setRadius(radius: number) {
     this.opts = { ...this.opts, radius }
@@ -75,6 +99,8 @@ export class ChunkManager {
       onProgress?.(total - this.queue.length, total)
       await new Promise((r) => setTimeout(r, 0))
     }
+    // 耗时统计只看之后移动中的流式建块（预建时还有 JIT 预热）
+    this.buildMs.length = 0
   }
 
   private plan(x: number, z: number) {
@@ -106,6 +132,7 @@ export class ChunkManager {
   private build(cx: number, cz: number) {
     const key = chunkKey(cx, cz)
     if (this.loaded.has(key)) return
+    const t0 = performance.now()
     const src = this.data.chunk(key)
     const roads = this.data.roads.roads
     const group = new THREE.Group()
@@ -121,11 +148,53 @@ export class ChunkManager {
     add(buildAreas(src.water, 0.03, {}, 0xffffff), this.materials.water, 'water')
     add(buildGroundRoads(src.roads, roads), this.materials.roads, 'roads')
     add(buildElevated(src.roads, roads), this.materials.elevated, 'elevated')
+    const built = this.buildCity(cx, cz, src.roads)
+    add(built.solid, this.materials.buildings, 'buildings')
+    add(built.glass, this.materials.glass, 'glass')
+    this.ctx.collision.add(key, built.colliders)
     this.root.add(group)
     this.loaded.set(key, { key, group })
+    this.buildMs.push(performance.now() - t0)
+    if (this.buildMs.length > 60) this.buildMs.shift()
+  }
+
+  /** 地块上盖房子、路边种树（城市包决定风格和树种） */
+  private buildCity(cx: number, cz: number, own: RoadPiece[]) {
+    const { buildings, data } = this.ctx
+    const roadsNear: RoadPiece[] = []
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) roadsNear.push(...(data.roads.chunks[chunkKey(cx + dx, cz + dz)] ?? []))
+    const src = data.chunk(chunkKey(cx, cz))
+    const inputs: LotInputs = { roads: roadsNear, roadInfo: data.roads.roads, water: src.water, parks: src.parks }
+    const b = new Builder()
+    const rng = mulberry32(chunkSeed(cx, cz))
+    // 位置信息（所在区、经纬度）按 24 格网格缓存：同一格里的地块和树共用，省掉大量点在多边形内的判断
+    const places = new Map<string, Place>()
+    const placeAt = (x: number, z: number) => {
+      const k = `${Math.floor(x / 24)},${Math.floor(z / 24)}`
+      return places.get(k) ?? places.set(k, this.placeAt(x, z)).get(k)!
+    }
+    for (const lot of findLots(cx, cz, CHUNK_SIZE, inputs)) {
+      const mix = buildings.mixAt(placeAt((lot.x0 + lot.x1) / 2, (lot.z0 + lot.z1) / 2))
+      const style = mix && pick(mix, rng)
+      if (style) buildings.styles[style]?.(b, lot, rng)
+    }
+    for (const t of streetTreeSpots(own, inputs, buildings.treeSpacing)) {
+      const mix = buildings.treeMixAt(placeAt(t.x, t.z))
+      const species = mix && pick(mix, rng)
+      if (species) buildings.trees[species]?.(b, t.x, t.z, rng)
+    }
+    return b.build()
+  }
+
+  private placeAt(x: number, z: number): Place {
+    const { lat, lon } = this.ctx.proj.unproject(x, z)
+    const o = this.ctx.proj.origin
+    const distKm = Math.hypot((lon - o.lon) * 111.32 * Math.cos((o.lat * Math.PI) / 180), (lat - o.lat) * 110.574)
+    return { lat, lon, distKm, district: this.ctx.districts.at(x, z)?.id ?? null }
   }
 
   private unload(c: Chunk) {
+    this.ctx.collision.removeOwner(c.key)
     for (const o of c.group.children) if (o instanceof THREE.Mesh) o.geometry.dispose()
     c.group.removeFromParent()
     this.loaded.delete(c.key)

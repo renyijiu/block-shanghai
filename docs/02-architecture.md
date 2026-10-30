@@ -91,6 +91,7 @@ export default {
   data: {        // 烘焙产物，可按需动态 import
     water, roads, parks, districts, metro
   },
+  buildings,     // 程序化建筑：mixAt(place) 风格权重、styles 各风格的建模函数、treeMixAt / trees 行道树（P1 起）
   landmarks,     // 景点定义数组
   content,       // 美食 / 文化 / 纪念品 / 商店 / 任务 / 对白
   strings,       // UI 文案
@@ -182,7 +183,7 @@ export default {
 | 同屏渲染列车 | ≤ 12 列 |
 | 首次进入加载 | ≤ 5 秒 |
 
-手段：静态方块按材质合并网格；重复构件（桥墩、地铁口、树）用 InstancedMesh / BatchedMesh；远处景点用 LOD 简模；倒影和阴影随画质开关。
+手段：静态方块按材质合并网格——每个分块的建筑和行道树合并成一个网格、玻璃幕墙一个、高架（含桥墩）一个，合并比 InstancedMesh 的 draw call 更少；跨分块共享、数量大的构件（如以后的地铁口）再考虑 InstancedMesh / BatchedMesh；远处景点用 LOD 简模；倒影和阴影随画质开关。
 
 ## 8. 代码约定
 

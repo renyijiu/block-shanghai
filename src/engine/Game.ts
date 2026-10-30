@@ -2,9 +2,11 @@
 import * as THREE from 'three/webgpu'
 import type { CityPackage } from './city.ts'
 import { DevCamera } from './DevCamera.ts'
+import { CollisionWorld } from './geo/CollisionWorld.ts'
 import { createProjection, type Projection } from './geo/projection.ts'
 import { ChunkManager } from './world/ChunkManager.ts'
 import { CHUNK_SIZE } from './world/chunks.ts'
+import { DistrictIndex } from './world/districts.ts'
 import { createWorldMaterials, type WorldMaterials } from './world/materials.ts'
 import { WorldData } from './world/WorldData.ts'
 
@@ -26,6 +28,9 @@ export interface GameStats {
   triangles: number
   chunks: number
   pending: number
+  /** 最近建块的平均 / 最大耗时（毫秒） */
+  buildAvg: number
+  buildMax: number
   x: number
   z: number
 }
@@ -38,7 +43,9 @@ export class Game {
   readonly scene = new THREE.Scene()
   readonly camera = new THREE.PerspectiveCamera(60, 1, 0.5, QUALITY.viewDistance * 1.3)
   readonly devCamera: DevCamera
-  readonly stats: GameStats = { fps: 0, drawCalls: 0, triangles: 0, chunks: 0, pending: 0, x: 0, z: 0 }
+  readonly collision = new CollisionWorld()
+  districts: DistrictIndex | null = null
+  readonly stats: GameStats = { fps: 0, drawCalls: 0, triangles: 0, chunks: 0, pending: 0, buildAvg: 0, buildMax: 0, x: 0, z: 0 }
   private readonly ro: ResizeObserver
   private readonly materials: WorldMaterials
   private readonly ground: THREE.Mesh
@@ -46,6 +53,8 @@ export class Game {
   private chunks: ChunkManager | null = null
   private disposed = false
   private last = 0
+  /** 测试用：相机自动平移速度（格/秒），?fly=vx,vz */
+  private fly: [number, number] | null = null
   private frames = 0
   private statsAt = 0
 
@@ -92,7 +101,11 @@ export class Game {
     const world = await WorldData.load(this.city.data, (d, t) => onProgress?.(`加载地图数据 ${d}/${t}`))
     if (this.disposed) return this.backend
     this.world = world
-    this.chunks = new ChunkManager(world, this.materials, { radius: QUALITY.viewDistance, budgetMs: 6 })
+    this.districts = new DistrictIndex(world.districts)
+    this.chunks = new ChunkManager(
+      { data: world, materials: this.materials, buildings: this.city.buildings, districts: this.districts, collision: this.collision, proj: this.proj },
+      { radius: QUALITY.viewDistance, budgetMs: 6 }
+    )
     this.scene.add(this.chunks.root)
 
     // 机位：地址参数 ?cam=x,y,z&at=x,y,z（截图检查用），否则在出生点上空斜看
@@ -101,6 +114,8 @@ export class Game {
     const params = new URLSearchParams(location.search)
     if (QUALITY.reflection || params.get('reflect') === '1') this.materials.setReflection(true, this.scene)
     const vec = (s: string | null) => (s ? (s.split(',').map(Number) as [number, number, number]) : null)
+    const fly = params.get('fly')?.split(',').map(Number)
+    if (fly?.length === 2) this.fly = [fly[0]!, fly[1]!]
     const cam = vec(params.get('cam'))
     const at = vec(params.get('at'))
     this.devCamera.set(cam ? { x: cam[0], y: cam[1], z: cam[2] } : { x: x - 120, y: 160, z: z + 260 }, at ? { x: at[0], y: at[1], z: at[2] } : { x, y: 0, z })
@@ -133,6 +148,13 @@ export class Game {
   private frame(now: number) {
     const dt = Math.min(0.1, (now - this.last) / 1000)
     this.last = now
+    if (this.fly) {
+      const [vx, vz] = this.fly
+      this.camera.position.x += vx * dt
+      this.camera.position.z += vz * dt
+      this.devCamera.focus.x += vx * dt
+      this.devCamera.focus.z += vz * dt
+    }
     this.devCamera.update(dt)
     const f = this.devCamera.focus
     this.chunks?.update(f.x, f.z)
@@ -146,7 +168,10 @@ export class Game {
     this.frames++
     if (now - this.statsAt < 500) return
     const info = this.renderer.info.render
+    const ms = this.chunks?.buildMs ?? []
     Object.assign(this.stats, {
+      buildAvg: ms.length ? +(ms.reduce((a, b) => a + b, 0) / ms.length).toFixed(1) : 0,
+      buildMax: ms.length ? +Math.max(...ms).toFixed(1) : 0,
       fps: Math.round((this.frames * 1000) / (now - this.statsAt)),
       drawCalls: info.drawCalls,
       triangles: info.triangles,
