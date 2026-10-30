@@ -20,7 +20,7 @@
 - [ ] **真机检查点**：iPhone（iOS 26 / iOS 18）、中端安卓、微信内置浏览器上跑 `bench/`，确认 WebGL 2 回退可用
 - [x] `tools/fetch-osm.ts`：下载 Geofabrik 上海、江苏提取包，osmium 合并、按 bbox 裁剪、按图层过滤导出（江苏包是为了 11 号线昆山段，见 [03 第 5 节](./03-coordinates-and-data.md#5-烘焙管线)）
 - [x] `tools/bake-world.ts`：水系（多边形）、海面、道路、高架、公园、区界 → 投影 → 抽稀 → 按分块裁剪；俯视预览页 `/tools/preview/`
-- [ ] 水面渲染（含倒影开关）、道路和桥面、高架路（分层）
+- [x] 水面渲染（含倒影开关）、道路和桥面、高架路（分层，含桥墩、护栏、匝道坡度）；`ChunkManager` 按视距流式加载分块（每帧 6 ms 预算）
 - [ ] `ChunkManager`：分块流式加载，按 [05](./05-shanghai-content.md#3-程序化建筑画像) 的画像生成建筑和梧桐行道树
 - [ ] `Builder`：方块合并网格 + 碰撞登记；`CollisionWorld`
 - [ ] 玩家：WASD 移动、跳跃、奔跑、第一/第三人称、移动端摇杆
