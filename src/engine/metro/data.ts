@@ -72,6 +72,8 @@ export interface MetroRules {
   fare: { baseKm: number; baseYuan: number; stepKm: number; stepYuan: number }
   /** 磁浮单程票价（元），单独计价 */
   maglevFare: number
+  /** 官方票价和里程规则不一致的区间（按站名，双向适用），如人民广场—莘庄沿用 4 元 */
+  fareExceptions?: { a: string; b: string; yuan: number }[]
   avgSpeedKmh: Record<LineKind, number>
   dwellSec: number
   /** 发车间隔（分钟） */

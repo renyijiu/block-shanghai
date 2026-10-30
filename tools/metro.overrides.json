@@ -32,6 +32,13 @@
     "serviceHours": [
       5.5,
       23
+    ],
+    "fareExceptions": [
+      {
+        "a": "人民广场",
+        "b": "莘庄",
+        "yuan": 4
+      }
     ]
   },
   "lines": {},
@@ -53,5 +60,7 @@
     "龙阳路": 6,
     "陕西南路": 6
   },
-  "wayStructure": {}
+  "wayStructure": {
+    "97560780": "viaduct"
+  }
 }

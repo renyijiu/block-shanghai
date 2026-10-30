@@ -221,14 +221,22 @@ export function planRoute(g: MetroGraph, from: number, to: number, mode: RouteMo
   return { from, to, legs, minutes, transfers: Math.max(0, legs.length - 1), km: legs.reduce((s, l) => s + l.km, 0), fare: routeFare(g, legs) }
 }
 
-/** 票价：连续的地铁段按最短里程计价，磁浮单独计价 */
+/** 特例票价：官方和里程规则不一致的区间（rules.fareExceptions） */
+function exceptionFare(g: MetroGraph, from: number, to: number): number | null {
+  const a = g.data.stations[from]!.name
+  const b = g.data.stations[to]!.name
+  const hit = g.data.rules.fareExceptions?.find((e) => (e.a === a && e.b === b) || (e.a === b && e.b === a))
+  return hit ? hit.yuan : null
+}
+
+/** 票价：连续的地铁段按最短里程计价（特例区间查表），磁浮单独计价 */
 export function routeFare(g: MetroGraph, legs: RouteLeg[]) {
   const rules = g.data.rules
   let fare = 0
   let metroFrom: number | null = null
   let metroTo = 0
   const flush = () => {
-    if (metroFrom !== null) fare += fareForKm(shortestKm(g, metroFrom, metroTo), rules)
+    if (metroFrom !== null) fare += exceptionFare(g, metroFrom, metroTo) ?? fareForKm(shortestKm(g, metroFrom, metroTo), rules)
     metroFrom = null
   }
   for (const l of legs) {

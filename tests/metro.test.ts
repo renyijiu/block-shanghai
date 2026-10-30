@@ -149,6 +149,17 @@ describe('真实线网（metro.json）', () => {
     expect(r.minutes).toBeLessThan(10)
   })
 
+  // 2026-10-30 对照上海本地宝的票价查询抽查
+  test('官方票价抽查：徐家汇 → 人民广场 4 元；人民广场 → 莘庄沿用 4 元（特例，按里程应为 5 元）', () => {
+    expect(planRoute(rg, st('徐家汇'), st('人民广场'))!.fare).toBe(4)
+    expect(planRoute(rg, st('人民广场'), st('莘庄'))!.fare).toBe(4)
+    expect(planRoute(rg, st('莘庄'), st('人民广场'))!.fare).toBe(4)
+  })
+
+  test('虹桥火车站 → 浦东机场只坐地铁 8 元（与官方一致）', () => {
+    expect(fareForKm(shortestKm(rg, st('虹桥火车站'), st('浦东1号2号航站楼')), real.rules)).toBe(8)
+  })
+
   test('龙阳路 → 浦东1号2号航站楼：最快坐磁浮，50 元', () => {
     const r = planRoute(rg, st('龙阳路'), st('浦东1号2号航站楼'))!
     expect(r.legs.map((l) => lineName(l.line))).toEqual(['磁浮线'])
