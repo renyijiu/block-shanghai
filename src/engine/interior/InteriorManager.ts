@@ -381,6 +381,8 @@ export class InteriorManager {
       car.setStationOutside(1, '', '', color, null)
     }
     car.setScroll(r.scroll)
+    // 磁浮的速度屏：加速到 300 km/h 巡航，进站前减速
+    if (rt.line.kind === 'maglev') car.setSpeed(moving ? 300 * Math.min(1, Math.sin(Math.PI * Math.min(1, r.elapsed / r.duration)) * 1.6) : 0)
     car.setDisplay(
       stops.map((s) => data.stations[s]!.name),
       moving ? r.stop + 1 : r.stop,

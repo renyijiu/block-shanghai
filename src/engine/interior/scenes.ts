@@ -650,9 +650,15 @@ export interface CarInfo {
   crowd: Crowd
 }
 
-/** 车厢：长 14、宽 3、高 2.4（docs/04 第 9 节），纵向座椅、扶杆，门上方是线路进度屏；窗外是隧道灯带或城市 */
+/**
+ * 车厢：长 14、宽 3、高 2.4（docs/04 第 9 节），门上方是线路进度屏；窗外是隧道灯带或城市。
+ * 普通地铁纵向座椅、扶杆拉环；浦江线（无人驾驶胶轮车）车头是大玻璃窗，能看到前方轨道；磁浮是横排座椅、行李架和速度屏
+ */
 export class CarScene extends InteriorScene {
   readonly info: CarInfo
+  /** 车门位置（z） */
+  readonly doorZ: number[]
+  private speedScreen: Screen | null = null
   private readonly doorPanels: { mesh: THREE.Mesh; base: number; open: number }[] = []
   private doorsOpen = false
   private readonly tunnel = new THREE.Group()
@@ -673,19 +679,30 @@ export class CarScene extends InteriorScene {
     const HL = 7
     const HW = 1.5
     const H = 2.4
+    const kind = info.line.kind
+    const maglev = kind === 'maglev'
+    const doors = (this.doorZ = maglev ? [-5.4, 5.4] : kind === 'apm' ? [-4, 4] : [-4.5, 0, 4.5])
     this.bounds = { x0: -1.1, z0: -HL + 0.4, x1: 1.1, z1: HL - 0.4 }
-    b.box(-HW, -0.2, -HL, HW, 0, HL, 0x8d8f91, { collide: false, windows: 0 })
+    b.box(-HW, -0.2, -HL, HW, 0, HL, maglev ? 0x4a5566 : 0x8d8f91, { collide: false, windows: 0 })
     b.box(-HW, H, -HL, HW, H + 0.2, HL, 0xeef0f2, { collide: 'camera', windows: 0, bottom: true })
     glowBox(glow, -0.5, H - 0.06, -HL + 0.5, -0.3, H, HL - 0.5, 0xffffff)
     glowBox(glow, 0.3, H - 0.06, -HL + 0.5, 0.5, H, HL - 0.5, 0xffffff)
-    // 两端墙（贯通道）
+    // 两端墙：普通地铁是贯通道；浦江线车头是大玻璃窗；磁浮前墙挂速度屏
     for (const s of [-1, 1]) {
       const z = s * HL
-      b.box(-HW, 0, s > 0 ? z : z - 0.2, HW, H, s > 0 ? z + 0.2 : z, 0xdfe2e5, { windows: 0 })
-      b.box(-0.6, 0, s > 0 ? z - 0.02 : z, 0.6, 2, s > 0 ? z : z + 0.02, 0x2a2d31, { windows: 0, collide: false })
+      const [z0, z1] = s > 0 ? [z, z + 0.2] : [z - 0.2, z]
+      if (kind === 'apm' && s < 0) {
+        b.box(-HW, 0, z0, HW, 0.9, z1, 0xdfe2e5, { windows: 0 })
+        b.box(-HW, 2.1, z0, HW, H, z1, 0xdfe2e5, { windows: 0 })
+        for (const x of [-HW, HW - 0.25]) b.box(x, 0.9, z0, x + 0.25, 2.1, z1, 0xdfe2e5, { windows: 0 })
+        b.box(-HW + 0.25, 0.9, z0 + 0.05, HW - 0.25, 2.1, z1 - 0.05, 0xc8d8e8, { windows: 0, collide: false, glass: true })
+        continue
+      }
+      b.box(-HW, 0, z0, HW, H, z1, 0xdfe2e5, { windows: 0 })
+      if (!maglev) b.box(-0.6, 0, s > 0 ? z - 0.02 : z, 0.6, 2, s > 0 ? z : z + 0.02, 0x2a2d31, { windows: 0, collide: false })
     }
+    if (maglev) this.speedScreen = this.place(new Screen(1.6, 0.55, 200), 0, 1.95, -HL + 0.02, 0)
     // 侧墙：窗下墙、窗间柱、窗上墙；车门处留洞，门扇另外做（右侧 x+ 的门到站会开）
-    const doors = [-4.5, 0, 4.5]
     for (const s of [-1, 1]) {
       const x0 = s > 0 ? HW : -HW - 0.12
       const x1 = s > 0 ? HW + 0.12 : -HW
@@ -718,27 +735,38 @@ export class CarScene extends InteriorScene {
         const scr = this.place(new Screen(1.3, 0.28, 220), s * (HW - 0.02), 2.22, d, s > 0 ? -Math.PI / 2 : Math.PI / 2)
         this.displays.push(scr)
       }
-      // 纵向座椅（门与门之间）
-      for (const [a, c] of [
-        [-HL + 0.3, -5.25],
-        [-3.75, -0.75],
-        [0.75, 3.75],
-        [5.25, HL - 0.3]
-      ] as const) {
-        const sx0 = s > 0 ? HW - 0.5 : -HW
-        b.box(sx0, 0, a, sx0 + 0.5, 0.45, c, 0x6f7f8f, { windows: 0, collide: false, top: color })
-        b.box(s > 0 ? HW - 0.1 : -HW, 0.45, a, s > 0 ? HW : -HW + 0.1, 0.9, c, 0x6f7f8f, { windows: 0, collide: false })
-        b.colliders.push({ x0: sx0, y0: 0, z0: a, x1: sx0 + 0.5, y1: 0.6, z1: c })
+      // 纵向座椅（门与门之间），磁浮另做横排
+      if (!maglev)
+        for (const [a, c] of this.benches(HL)) {
+          const sx0 = s > 0 ? HW - 0.5 : -HW
+          b.box(sx0, 0, a, sx0 + 0.5, 0.45, c, 0x6f7f8f, { windows: 0, collide: false, top: color })
+          b.box(s > 0 ? HW - 0.1 : -HW, 0.45, a, s > 0 ? HW : -HW + 0.1, 0.9, c, 0x6f7f8f, { windows: 0, collide: false })
+          b.colliders.push({ x0: sx0, y0: 0, z0: a, x1: sx0 + 0.5, y1: 0.6, z1: c })
+        }
+    }
+    if (maglev) {
+      // 磁浮：2 + 2 横排座椅面朝车头，行李架
+      for (let z = -4.2; z <= 4.3; z += 1) {
+        for (const [x0, x1] of [
+          [-1.45, -0.5],
+          [0.5, 1.45]
+        ] as const) {
+          b.box(x0, 0, z - 0.25, x1, 0.45, z + 0.25, 0x2c5a8c, { windows: 0, collide: false, top: 0x3b6fa8 })
+          b.box(x0, 0.45, z + 0.25, x1, 1.25, z + 0.38, 0x2c5a8c, { windows: 0, collide: false })
+          b.colliders.push({ x0, y0: 0, z0: z - 0.3, x1, y1: 0.6, z1: z + 0.38 })
+        }
+      }
+      for (const s of [-1, 1]) b.box(s > 0 ? 0.9 : -HW, 1.95, -4.6, s > 0 ? HW : -0.9, 2.02, 4.6, 0xb9bec4, { windows: 0, collide: false, bottom: true })
+    } else {
+      // 扶杆、横杆和拉环
+      for (const d of doors) for (const x of [-0.45, 0.45]) b.box(x - 0.03, 0, d - 0.03, x + 0.03, H, d + 0.03, 0xd0d4d8, { windows: 0, collide: false })
+      for (const x of [-0.75, 0.75]) {
+        b.box(x - 0.025, 2.0, -HL + 0.3, x + 0.025, 2.05, HL - 0.3, 0xd0d4d8, { windows: 0, collide: false, bottom: true })
+        for (let z = -HL + 0.6; z < HL - 0.3; z += 0.5) b.box(x - 0.06, 1.72, z - 0.04, x + 0.06, 1.85, z + 0.04, 0xf2f2f2, { windows: 0, collide: false, bottom: true })
       }
     }
-    // 扶杆、横杆和拉环
-    for (const d of doors) for (const x of [-0.45, 0.45]) b.box(x - 0.03, 0, d - 0.03, x + 0.03, H, d + 0.03, 0xd0d4d8, { windows: 0, collide: false })
-    for (const x of [-0.75, 0.75]) {
-      b.box(x - 0.025, 2.0, -HL + 0.3, x + 0.025, 2.05, HL - 0.3, 0xd0d4d8, { windows: 0, collide: false, bottom: true })
-      for (let z = -HL + 0.6; z < HL - 0.3; z += 0.5) b.box(x - 0.06, 1.72, z - 0.04, x + 0.06, 1.85, z + 0.04, 0xf2f2f2, { windows: 0, collide: false, bottom: true })
-    }
     this.add(b, glow)
-    this.spawns.set('board', { x: 0.3, z: 1.6, facing: FACE.north })
+    this.spawns.set('board', { x: maglev ? 0 : 0.3, z: maglev ? doors[1]! - 0.8 : 1.6, facing: FACE.north })
 
     // 窗外：隧道（墙、灯带）
     const tb = new GeoBuilder()
@@ -756,6 +784,8 @@ export class CarScene extends InteriorScene {
     // 窗外：高架段（地面、城市方块）
     const ob = new GeoBuilder()
     ob.box(-500, -9.3, -500, 500, -9.1, 500, rgb(0x8f9a7c))
+    // 高架桥面（从浦江线车头、磁浮车窗往下看得见）
+    ob.box(-2.2, -0.9, -500, 2.2, -0.5, 500, rgb(0xaaa59c))
     const om = toMesh(ob.build(), this.mats.solid)!
     this.open.add(om)
     // 城市方块按 480 格周期铺两遍，滚动时接缝看不出来
@@ -768,6 +798,9 @@ export class CarScene extends InteriorScene {
       const h = 5 + this.rng() * 40
       for (const k of [0, -480]) cb.box(x - w / 2, -9.1, z + k - w / 2, x + w / 2, -9.1 + h, z + k + w / 2, rgb([0xbfb6a6, 0xa9b4bf, 0xc9c1b3, 0x8e9aa6][i % 4]!))
     }
+    // 桥面上的轨枕（跟着城市一起滚动，看得出在往前走）和桥墩
+    for (let z = -240; z < 240; z += 2) for (const k of [0, -480]) cb.box(-1.3, -0.5, z + k - 0.15, 1.3, -0.44, z + k + 0.15, rgb(0x6b6258))
+    for (let z = -240; z < 240; z += 24) for (const k of [0, -480]) cb.box(-1.2, -9.1, z + k - 0.8, 1.2, -0.9, z + k + 0.8, rgb(0xaaa59c))
     this.city = new THREE.Group()
     this.city.add(toMesh(cb.build(), this.mats.solid)!)
     this.open.add(this.city)
@@ -788,20 +821,17 @@ export class CarScene extends InteriorScene {
       this.stationsOut.push({ group, sign: signs, name: '' })
     }
 
-    // 乘客
+    // 乘客：普通地铁坐在两侧面朝过道，磁浮坐在横排面朝车头
     const pg = new GeoBuilder()
-    const seats: [number, number][] = []
-    for (const s of [-1, 1])
-      for (const [a, c] of [
-        [-HL + 0.3, -5.25],
-        [-3.75, -0.75],
-        [0.75, 3.75],
-        [5.25, HL - 0.3]
-      ] as const)
-        for (let z = a + 0.3; z < c - 0.2; z += 0.55) seats.push([s * (HW - 0.32), z])
+    const seats: [number, number, number][] = []
+    if (maglev) {
+      for (let z = -4.2; z <= 4.3; z += 1) for (const x of [-1.2, -0.75, 0.75, 1.2]) seats.push([x, z - 0.05, -Math.PI / 2])
+    } else {
+      for (const s of [-1, 1]) for (const [a, c] of this.benches(HL)) for (let z = a + 0.3; z < c - 0.2; z += 0.55) seats.push([s * (HW - 0.32), z, s > 0 ? Math.PI : 0])
+    }
     const fill = { full: 1, busy: 1, normal: 0.6, sparse: 0.1 }[info.crowd]
-    const standing = { full: 14, busy: 5, normal: 0, sparse: 0 }[info.crowd]
-    for (const [x, z] of seats) if (this.rng() < fill && Math.abs(z) > 0.9) addPerson(pg, x, z, x > 0 ? Math.PI : 0, true, this.rng)
+    const standing = maglev ? 0 : { full: 14, busy: 5, normal: 0, sparse: 0 }[info.crowd]
+    for (const [x, z, a] of seats) if (this.rng() < fill && (maglev || Math.abs(z) > 0.9)) addPerson(pg, x, z, a, true, this.rng)
     for (let k = 0; k < standing; k++) {
       const z = -6 + this.rng() * 12
       const x = (this.rng() - 0.5) * 1.2
@@ -812,10 +842,36 @@ export class CarScene extends InteriorScene {
     if (pm) this.scene.add(pm)
   }
 
+  // 两侧纵向座椅的分段：避开车门
+  private benches(HL: number): [number, number][] {
+    const cuts = [-HL + 0.3, ...this.doorZ.flatMap((d) => [d - 0.75, d + 0.75]), HL - 0.3]
+    const out: [number, number][] = []
+    for (let i = 0; i < cuts.length; i += 2) if (cuts[i + 1]! - cuts[i]! > 0.6) out.push([cuts[i]!, cuts[i + 1]!])
+    return out
+  }
+
   setDoors(open: boolean) {
     this.doorsOpen = open
     this.interact.removeOwner('doors')
-    if (open) this.interact.add('doors', [-4.5, 0, 4.5].map((z) => ({ x: 1.0, z, r: 1.2, label: '下车', action: '下车', kind: 'interior' as const, go: 'alight' })))
+    if (open) this.interact.add('doors', this.doorZ.map((z) => ({ x: 1.0, z, r: 1.2, label: '下车', action: '下车', kind: 'interior' as const, go: 'alight' })))
+  }
+
+  /** 磁浮的速度屏（km/h） */
+  setSpeed(kmh: number) {
+    const v = Math.round(kmh)
+    this.speedScreen?.draw(String(v), (ctx, W, H) => {
+      ctx.fillStyle = '#05080c'
+      ctx.fillRect(0, 0, W, H)
+      ctx.textBaseline = 'middle'
+      ctx.textAlign = 'right'
+      ctx.fillStyle = '#ff3b30'
+      ctx.font = `700 ${Math.round(H * 0.7)}px ${FONT}`
+      ctx.fillText(String(v), W * 0.68, H * 0.55)
+      ctx.textAlign = 'left'
+      ctx.fillStyle = '#e6ebf0'
+      ctx.font = `600 ${Math.round(H * 0.3)}px ${FONT}`
+      ctx.fillText('km/h', W * 0.71, H * 0.62)
+    })
   }
 
   /** 窗外是隧道还是高架；高架时天空颜色跟着时间 */
