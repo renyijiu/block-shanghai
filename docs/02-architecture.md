@@ -64,7 +64,8 @@ block-shanghai/
     │   ├── world/             分块（chunks.ts）、烘焙数据格式（data.ts）、地面、水面、道路、高架、分块管理
     │   ├── build/             Builder（方块合并网格 + 碰撞登记）、通用构件
     │   ├── actors/            玩家、角色皮肤、NPC
-    │   ├── transport/         巴士、船、电梯、地铁（metro/）
+    │   ├── metro/             地铁：数据格式、线网与路线规划、时刻表、轨道和车站建模、列车
+    │   ├── transport/         巴士、船、电梯
     │   ├── interior/          独立室内场景（地铁站、车厢）
     │   ├── photo/             摄影、滤镜、景点识别
     │   ├── sky/               昼夜、天气、季节
@@ -148,12 +149,12 @@ export default {
 | `Game` | 主循环、系统调度、场景切换（城市 ↔ 室内） | ✅ |
 | `ChunkManager` | 按玩家位置加载/卸载 240×240 格分块：地面、建筑、行道树、地铁口、高架段。每个分块的公园、水面、地面道路、高架各合并成一个网格（`world/chunkMesh.ts`，纯函数） | ✅（有时间预算） |
 | `LandmarkManager` | 景点按距离加载、LOD、发现检测 | ✅ |
-| `InteractRegistry` | 交互点，按 owner 增删；分块和景点卸载时一并清理 | 查询 |
+| `InteractRegistry` | 交互点，按 owner 增删；分块和景点卸载时一并清理（`world/interact.ts`，P2 起地铁口） | 查询 |
 | `CollisionWorld` | 碰撞盒和可站立平台，按 owner 增删 | 查询 |
 | `Player` | 移动、跳跃、骑乘、第一/第三人称、脚本动画（电梯等）。`actors/Input` 把键鼠和触屏统一成一份输入状态，`actors/CameraRig` 管跟随相机（撞墙拉近，碰撞盒带 `soft` 的只挡相机） | ✅ |
 | `NPCManager` | 路人生成、行为、人群区域、对白 | ✅ |
 | `Transport` | 巴士、渡轮、游船、观光车、电梯 | ✅ |
-| `MetroSystem` | 线网、路线规划、按时刻表算列车位置、高架列车渲染、乘车流程 | ✅ |
+| `MetroSystem` | 线网、路线规划、按时刻表算列车位置（`metro/MetroSystem.ts`）；`TrainRenderer` 负责高架列车渲染（`metro/trains.ts`）；乘车流程（P4） | ✅ |
 | `InteriorManager` | 站厅、站台、车厢等独立场景的构建与切换 | 在室内时 |
 | `PhotoSystem` | 滤镜后处理、景点识别、存相册 | 拍照时 |
 | `Sky` | 昼夜、天气、季节、夜间材质 | ✅ |

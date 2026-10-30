@@ -63,6 +63,38 @@ export class GeoBuilder {
     this.quad([x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [0, 0, -1], c)
   }
 
+  /**
+   * 任意朝向的方块（不含底面）：中心 (cx, cz)，沿 angle 方向（atan2(dz, dx)）长 len、横向宽 wid，高度 y0..y1。
+   * 用于地铁桥墩盖梁、隧道口、车站等沿轨道方向的构件
+   */
+  orientedBox(cx: number, cz: number, angle: number, len: number, wid: number, y0: number, y1: number, c: RGB, top: RGB = c) {
+    const ux = Math.cos(angle)
+    const uz = Math.sin(angle)
+    // 横向（沿前进方向的左侧）
+    const vx = uz
+    const vz = -ux
+    const hl = len / 2
+    const hw = wid / 2
+    const P = (a: number, b: number, y: number) => [cx + ux * a + vx * b, y, cz + uz * a + vz * b]
+    // 四个角：后左、前左、前右、后右（俯视）
+    const bl = [-hl, hw]
+    const fl = [hl, hw]
+    const fr = [hl, -hw]
+    const br = [-hl, -hw]
+    const face = (p: number[], q: number[], n: number[], col: RGB) =>
+      this.quad(P(p[0]!, p[1]!, y0), P(p[0]!, p[1]!, y1), P(q[0]!, q[1]!, y1), P(q[0]!, q[1]!, y0), n, col)
+    // 侧面法线：前 +u、后 -u、左 +v、右 -v
+    face(fl, fr, [ux, 0, uz], c)
+    face(br, bl, [-ux, 0, -uz], c)
+    face(bl, fl, [vx, 0, vz], c)
+    face(fr, br, [-vx, 0, -vz], c)
+    // 顶面：从上往下看要顺时针（x 东 z 南）
+    const t = [P(bl[0]!, bl[1]!, y1), P(fl[0]!, fl[1]!, y1), P(fr[0]!, fr[1]!, y1), P(br[0]!, br[1]!, y1)]
+    const cross = (t[1]![0]! - t[0]![0]!) * (t[2]![2]! - t[0]![2]!) - (t[1]![2]! - t[0]![2]!) * (t[2]![0]! - t[0]![0]!)
+    if (cross < 0) this.quad(t[0]!, t[1]!, t[2]!, t[3]!, [0, 1, 0], top)
+    else this.quad(t[0]!, t[3]!, t[2]!, t[1]!, [0, 1, 0], top)
+  }
+
   tri(a: number[], b: number[], c: number[], n: number[], col: RGB) {
     const i = this.vertex(a[0]!, a[1]!, a[2]!, n[0]!, n[1]!, n[2]!, col)
     this.vertex(b[0]!, b[1]!, b[2]!, n[0]!, n[1]!, n[2]!, col)

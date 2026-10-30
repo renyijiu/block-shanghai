@@ -156,7 +156,7 @@ onMounted(async () => {
     const p = g.player.pos
     Object.assign(window, {
       __ready: true,
-      __probe: () => ({ backend: backend.value, ...g.stats, player: [+p.x.toFixed(1), +p.y.toFixed(2), +p.z.toFixed(1)], autopilot: g.autopilot, toast: toast.name }),
+      __probe: () => ({ backend: backend.value, ...g.stats, player: [+p.x.toFixed(1), +p.y.toFixed(2), +p.z.toFixed(1)], autopilot: g.autopilot, toast: toast.name, trains: g.trains?.visible.length ?? 0 }),
       __openMap: () => (mapOpen.value = true),
       __openMetro: (from: number | null, inStation: boolean) => openMetro(from, inStation),
       __travel: async (from: string, to: string, mode: 'fastest' | 'fewest' = 'fastest') => {

@@ -10,6 +10,7 @@ import { createProjection, type Projection } from './geo/projection.ts'
 import type { InteractPoint } from './world/interact.ts'
 import { InteractRegistry } from './world/interact.ts'
 import { MetroSystem } from './metro/MetroSystem.ts'
+import { TrainRenderer } from './metro/trains.ts'
 import type { Route } from './metro/network.ts'
 import { GameClock } from './state/clock.ts'
 import { ChunkManager } from './world/ChunkManager.ts'
@@ -79,6 +80,7 @@ export class Game {
   readonly clock = new GameClock()
   readonly interact = new InteractRegistry()
   metro: MetroSystem | null = null
+  trains: TrainRenderer | null = null
   money = NEW_GAME.money
   readonly metroStats = { rides: 0, visited: new Set<string>() }
   /** 附近的交互点 */
@@ -162,6 +164,8 @@ export class Game {
       { radius: QUALITY_PRESETS[this.quality].viewDistance, budgetMs: 6 }
     )
     this.scene.add(this.chunks.root)
+    this.trains = new TrainRenderer(metro, this.materials.elevated)
+    this.scene.add(this.trains.root)
     this.playerWorld = {
       boxes: (x0, z0, x1, z1) => this.collision.query(x0, z0, x1, z1),
       walkable: (x, z) => walkable(world, x, z)
@@ -170,6 +174,9 @@ export class Game {
     const params = new URLSearchParams(location.search)
     this.persist = !['cam', 'walk', 'start'].some((k) => params.has(k))
     const save = this.persist ? loadSave(localStorage, this.city.config.id) : null
+    // 测试用：?time=17:45 指定游戏时刻（看高峰期的列车）
+    const time = params.get('time')?.split(':').map(Number)
+    if (time?.length === 2) this.clock.seconds = time[0]! * 3600 + time[1]! * 60
     const q = params.get('quality')
     this.setQuality(q === 'low' || q === 'mid' || q === 'high' ? q : (save?.settings.quality ?? this.quality))
     if (params.get('reflect') === '1') this.materials.setReflection(true, this.scene)
@@ -317,6 +324,7 @@ export class Game {
     this.clock.tick(dt)
     const f = this.devCamera ? this.updateDev(dt) : this.updatePlayer(dt, now)
     this.chunks?.update(f.x, f.z)
+    this.trains?.update(this.clock.seconds, f.x, f.z, QUALITY_PRESETS[this.quality].viewDistance)
     // 地面平面按分块对齐跟随
     this.ground.position.set(Math.round(f.x / CHUNK_SIZE) * CHUNK_SIZE, 0, Math.round(f.z / CHUNK_SIZE) * CHUNK_SIZE)
     this.renderer.render(this.scene, this.camera)
@@ -433,6 +441,7 @@ export class Game {
     this.input.dispose()
     this.devCamera?.dispose()
     this.chunks?.dispose()
+    this.trains?.dispose()
     this.player.dispose()
     this.ground.geometry.dispose()
     this.materials.dispose()

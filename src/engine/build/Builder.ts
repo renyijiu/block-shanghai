@@ -28,6 +28,19 @@ export class Builder {
     else if (c) this.colliders.push({ x0, y0, z0, x1, y1, z1 })
   }
 
+  /** 任意朝向的方块；碰撞登记它的外接 AABB（用于立柱等小构件） */
+  orientedBox(cx: number, cz: number, angle: number, len: number, wid: number, y0: number, y1: number, color: number, o: BoxOptions = {}) {
+    const g = o.glass ? this.glass : this.solid
+    g.window = o.windows ?? 1
+    g.orientedBox(cx, cz, angle, len, wid, y0, y1, rgb(color), rgb(o.top ?? color))
+    const c = o.collide ?? y0 < 1
+    if (c) {
+      const ex = (Math.abs(Math.cos(angle)) * len + Math.abs(Math.sin(angle)) * wid) / 2
+      const ez = (Math.abs(Math.sin(angle)) * len + Math.abs(Math.cos(angle)) * wid) / 2
+      this.colliders.push({ x0: cx - ex, y0, z0: cz - ez, x1: cx + ex, y1, z1: cz + ez, soft: c === 'camera' || undefined })
+    }
+  }
+
   /**
    * 双坡屋顶：底面矩形、檐口高度 y0、屋脊高 h；屋脊沿 axis 方向（'x' 东西向、'z' 南北向）。
    * 两端是三角形山墙

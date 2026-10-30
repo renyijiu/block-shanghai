@@ -72,15 +72,15 @@ export const ROAD_STYLE = {
   }
 }
 
-interface Frame {
+export interface Frame {
   /** 中心线顶点 [x, z, h] */
   pts: number[][]
   /** 每个顶点的左右偏移向量（已乘半宽和斜接系数） */
   off: number[][]
 }
 
-// 折线 → 每个顶点的左侧偏移（斜接，系数上限 2.5，急弯处不会刺得太长）
-function frame(flat: number[], halfWidth: number): Frame | null {
+// 折线 → 每个顶点的左侧偏移（斜接，系数上限 2.5，急弯处不会刺得太长）。地铁轨道也用
+export function frame(flat: number[], halfWidth: number): Frame | null {
   const pts: number[][] = []
   for (let i = 0; i < flat.length; i += 3) {
     const p = [flat[i]!, flat[i + 1]!, flat[i + 2]!]

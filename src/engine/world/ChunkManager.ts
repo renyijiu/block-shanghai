@@ -6,7 +6,8 @@ import { Builder } from '../build/Builder.ts'
 import { chunkSeed, mulberry32, pick } from '../build/random.ts'
 import type { CityBuildings, Place } from '../city.ts'
 import type { MetroData } from '../metro/data.ts'
-import { buildEntrance, buildVent, entranceFootprint } from '../metro/structures.ts'
+import { buildElevatedStation, buildEntrance, buildVent, entranceFootprint, STATION_SIZE } from '../metro/structures.ts'
+import { buildMetroTracks } from '../metro/trackMesh.ts'
 import type { Box, CollisionWorld } from '../geo/CollisionWorld.ts'
 import type { Projection } from '../geo/projection.ts'
 import { CHUNK_SIZE, chunkKey } from './chunks.ts'
@@ -30,6 +31,27 @@ export interface ChunkContext {
   metro: MetroData | null
   interact: InteractRegistry
 }
+
+/**
+ * 车站的高架站台按位置分组，合成一座车站：共线（如 3/4 号线）的两条线分别取了上下行的停靠点，
+ * 相距几十格、方向相反，其实是同一座站。45 格内、方向平行（同向或反向）的合并，位置取平均
+ */
+export function elevatedStations(metro: MetroData, si: number) {
+  const groups: { x: number; z: number; angle: number; h: number; lines: string[]; n: number }[] = []
+  for (const p of metro.stations[si]!.platforms) {
+    if (p.structure !== 'viaduct') continue
+    const g = groups.find((g) => Math.hypot(g.x - p.pos[0], g.z - p.pos[1]) < 45 && Math.abs(Math.sin(g.angle - p.angle)) < 0.3)
+    if (g) {
+      g.x = (g.x * g.n + p.pos[0]) / (g.n + 1)
+      g.z = (g.z * g.n + p.pos[1]) / (g.n + 1)
+      g.n++
+      g.lines.push(p.line)
+    } else groups.push({ x: p.pos[0], z: p.pos[1], angle: p.angle, h: p.h, lines: [p.line], n: 1 })
+  }
+  return groups
+}
+
+const hexColor = (c: string) => Number.parseInt(c.slice(1), 16)
 
 /** 地铁高架、地面轨道在地块避让里当作一条 9 格宽的路 */
 const METRO_CORRIDOR: RoadInfo = { name: '', class: 'secondary', width: 9, level: 0, bridge: false }
@@ -158,6 +180,12 @@ export class ChunkManager {
     add(buildGroundRoads(src.roads, roads), this.materials.roads, 'roads')
     const piers: Box[] = []
     add(buildElevated(src.roads, roads, piers), this.materials.elevated, 'elevated')
+    const metro = this.ctx.metro
+    const mc = metro?.chunks[key]
+    if (metro && mc?.tracks.length) {
+      const color = (id: string) => hexColor(metro.lines.find((l) => l.id === id)?.color ?? '#888888')
+      add(buildMetroTracks(mc.tracks, metro.tracks, color, piers), this.materials.elevated, 'metro')
+    }
     const built = this.buildCity(cx, cz, src.roads)
     add(built.solid, this.materials.buildings, 'buildings')
     add(built.glass, this.materials.glass, 'glass')
@@ -184,6 +212,13 @@ export class ChunkManager {
         for (const e of metro?.chunks[k]?.entrances ?? []) {
           const f = entranceFootprint(metro!, e)
           obstacles.push({ x0: f.x0 - 1, z0: f.z0 - 1, x1: f.x1 + 1, z1: f.z1 + 1 })
+        }
+        // 高架车站的占地（取外接矩形）
+        for (const si of metro?.chunks[k]?.stations ?? []) {
+          for (const st of elevatedStations(metro!, si)) {
+            const r = STATION_SIZE.len / 2 + 2
+            obstacles.push({ x0: st.x - r, z0: st.z - r, x1: st.x + r, z1: st.z + r })
+          }
         }
       }
     }
@@ -224,6 +259,14 @@ export class ChunkManager {
       buildEntrance(b, entranceFootprint(metro, e))
       const exit = ent.ref ? `${ent.ref} 号口` : '出入口'
       points.push({ x: ent.pos[0], z: ent.pos[1], r: 5, label: `${st.name}站 · ${exit}`, action: '进站', kind: 'metro', station: ent.station, entrance: e })
+    }
+    const color = (id: string) => hexColor(metro.lines.find((l) => l.id === id)?.color ?? '#888888')
+    for (const si of mc.stations) {
+      // 高架车站：建在站台所在的分块
+      for (const es of elevatedStations(metro, si)) {
+        if (Math.floor(es.x / CHUNK_SIZE) !== cx || Math.floor(es.z / CHUNK_SIZE) !== cz) continue
+        buildElevatedStation(b, es.x, es.z, es.angle, es.h, es.lines.map(color))
+      }
     }
     for (const si of mc.stations) {
       const st = metro.stations[si]!

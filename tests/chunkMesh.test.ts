@@ -79,3 +79,37 @@ test('核心区真实分块的生成耗时', () => {
   console.log(`核心区 49 个分块：中位 ${times[24]!.toFixed(2)} ms，最慢 ${times[48]!.toFixed(2)} ms`)
   expect(times[24]).toBeLessThan(6)
 })
+
+test('任意朝向的方块：侧面法线朝外，顶面朝上', async () => {
+  const { GeoBuilder } = await import('../src/engine/build/geometry.ts')
+  for (const angle of [0, 0.7, 2.5, -1.2]) {
+    const g = new GeoBuilder()
+    g.orientedBox(10, 20, angle, 8, 3, 0, 2, [1, 1, 1])
+    const d = g.build()!
+    expect(faceNormalsY(d).filter((n) => n > 0.99)).toHaveLength(2) // 顶面两个三角形
+    // 每个面的几何法线都和写入的顶点法线同向
+    for (let i = 0; i < d.index.length; i += 3) {
+      const [a, b, c] = [d.index[i]! * 3, d.index[i + 1]! * 3, d.index[i + 2]! * 3]
+      const p = d.position
+      const u = [p[b]! - p[a]!, p[b + 1]! - p[a + 1]!, p[b + 2]! - p[a + 2]!]
+      const v = [p[c]! - p[a]!, p[c + 1]! - p[a + 1]!, p[c + 2]! - p[a + 2]!]
+      const n = [u[1]! * v[2]! - u[2]! * v[1]!, u[2]! * v[0]! - u[0]! * v[2]!, u[0]! * v[1]! - u[1]! * v[0]!]
+      const dot = n[0]! * d.normal[a]! + n[1]! * d.normal[a + 1]! + n[2]! * d.normal[a + 2]!
+      expect(dot).toBeGreaterThan(0)
+    }
+  }
+})
+
+test('轨道在 h = 0 处切开：地上部分保留，切点放隧道口', async () => {
+  const { splitAtGround } = await import('../src/engine/metro/trackMesh.ts')
+  const parts = splitAtGround([0, 0, 9, 50, 0, 9, 100, 0, -3])
+  expect(parts[0]!.pts).toEqual([0, 0, 9, 50, 0, 9, 87.5, 0, 0])
+  expect(parts[1]!.portal!.x).toBeCloseTo(87.5)
+  expect(parts[1]!.portal!.angle).toBeCloseTo(0) // 往东钻进地下
+  // 反方向（从地下钻出来）：隧道仍在东边，隧道口方向同样是从地上指向地下，朝东
+  const rev = splitAtGround([100, 0, -3, 50, 0, 9])
+  expect(rev[0]!.portal!.angle).toBeCloseTo(0)
+  expect(rev[1]!.pts.slice(0, 3)).toEqual([87.5, 0, 0]) // 从 -3 升到 9，四分之一处越过地面
+  // 全在地下：什么都不画
+  expect(splitAtGround([0, 0, -3, 10, 0, -3])).toEqual([])
+})

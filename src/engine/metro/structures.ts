@@ -71,3 +71,54 @@ export function buildVent(b: Builder, r: Lot) {
   // 百叶：深色横条
   for (let y = 0.8; y < h - 0.3; y += 0.5) b.box(r.x0 - 0.05, y, r.z0 - 0.05, r.x1 + 0.05, y + 0.18, r.z1 + 0.05, 0x6d6a64, { windows: 0, collide: false })
 }
+
+/** 高架车站沿轨道的长度、总宽（格） */
+export const STATION_SIZE = { len: 52, wid: 18 }
+
+/**
+ * 高架车站：轨道两侧的站台、雨棚（边缘是线路色）、雨棚立柱，轨道下方的站厅和落地立柱。
+ * 列车从中间穿过；colors 是在这里停靠的线路颜色（共线站两侧各用一种）
+ */
+export function buildElevatedStation(b: Builder, x: number, z: number, angle: number, h: number, colors: number[]) {
+  const vx = Math.sin(angle)
+  const vz = -Math.cos(angle)
+  const ux = Math.cos(angle)
+  const uz = Math.sin(angle)
+  const at = (along: number, across: number): [number, number] => [x + ux * along + vx * across, z + uz * along + vz * across]
+  const { len, wid } = STATION_SIZE
+  const no = { windows: 0, collide: false }
+  // 站台：轨道两侧
+  for (const k of [1, -1]) {
+    const [px, pz] = at(0, k * 4.8)
+    b.orientedBox(px, pz, angle, len - 2, 3.2, h - 1.2, h + 0.6, 0xbdb8ae, { ...no, top: 0xd8d3c8 })
+    // 站台边缘的黄色安全线
+    const [ex, ez] = at(0, k * 3.3)
+    b.orientedBox(ex, ez, angle, len - 2, 0.3, h + 0.6, h + 0.62, 0xe8c330, no)
+  }
+  // 雨棚和立柱
+  b.orientedBox(x, z, angle, len, wid, h + 5.4, h + 6, 0xe6e4df, no)
+  colors.slice(0, 2).forEach((c, i) => {
+    const [sx, sz] = at(0, (i === 0 ? 1 : -1) * (wid / 2 - 0.2))
+    b.orientedBox(sx, sz, angle, len, 0.4, h + 4.6, h + 6, c, no)
+  })
+  if (colors.length === 1) {
+    const [sx, sz] = at(0, -(wid / 2 - 0.2))
+    b.orientedBox(sx, sz, angle, len, 0.4, h + 4.6, h + 6, colors[0]!, no)
+  }
+  for (let a = -len / 2 + 4; a <= len / 2 - 4; a += 11) {
+    for (const k of [1, -1]) {
+      const [cx, cz] = at(a, k * 6.2)
+      b.orientedBox(cx, cz, angle, 0.6, 0.6, h + 0.6, h + 5.4, 0x9aa0a6, no)
+    }
+  }
+  // 站厅：桥面下方的玻璃盒子，落地立柱登记碰撞
+  const hallTop = h - 2
+  const hallBottom = Math.max(3.2, h - 6.5)
+  b.orientedBox(x, z, angle, len - 14, wid - 2, hallBottom, hallTop, 0xd4d0c8)
+  for (const a of [-14, 0, 14]) {
+    for (const k of [1, -1]) {
+      const [cx, cz] = at(a, k * 6)
+      b.orientedBox(cx, cz, angle, 1.4, 1.4, 0, hallBottom, 0xb9b5ab, { windows: 0 })
+    }
+  }
+}
