@@ -28,6 +28,8 @@ npm run build      # 类型检查 + 打包，输出 dist/，可直接静态部�
 npm run bench      # 渲染基准，需先 npm run dev（见 docs/07 第 4 节）
 ```
 
+地图数据已经烘焙好放在仓库里。要用最新的 OSM 数据重新生成：先 `brew install osmium-tool`，再 `npm run fetch-osm && npm run bake`，详见 [tools/README.md](./tools/README.md)。烘焙结果可以在 http://localhost:5173/tools/preview/ 俯视检查。
+
 P0 的预览画面：分块网格、核心区 12km 边界（黄圈）和原点标记，可以用鼠标拖动、缩放查看。左上角显示当前渲染后端（WebGPU / WebGL 2）。
 
 ## 项目结构
@@ -46,7 +48,7 @@ block-shanghai/
 │           ├── config.ts    投影、尺度、区划、OSM 范围
 │           └── data/        OSM 烘焙产物
 ├── bench/                   渲染基准（WebGPU / WebGL 对比，npm run bench）
-├── tools/                   数据烘焙脚本（P1 起）
+├── tools/                   数据烘焙脚本、俯视预览页
 └── tests/                   单元测试
 ```
 

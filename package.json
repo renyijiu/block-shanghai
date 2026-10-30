@@ -13,7 +13,9 @@
     "preview": "vite preview",
     "typecheck": "vue-tsc --build",
     "test": "vitest run",
-    "bench": "node bench/run-bench.ts"
+    "bench": "node bench/run-bench.ts",
+    "fetch-osm": "node tools/fetch-osm.ts",
+    "bake": "node tools/bake-world.ts"
   },
   "dependencies": {
     "three": "0.186.1",

@@ -47,7 +47,9 @@ block-shanghai/
 ├── docs/                      设计文档
 ├── bench/                     渲染基准（WebGPU / WebGL 对比，性能回归）
 ├── tests/                     单元测试（*.test.ts）
-├── tools/                     数据烘焙脚本
+├── tools/                     数据烘焙脚本（fetch-osm.ts、bake-world.ts）
+│   ├── lib/                   几何算法、海岸线、OSM 读取（有单元测试）
+│   ├── preview/               烘焙数据的俯视预览页（开发用，/tools/preview/）
 │   └── .cache/                OSM 原始数据缓存（不入库）
 └── src/
     ├── main.ts
@@ -58,7 +60,7 @@ block-shanghai/
     │   ├── Game.ts            主循环、系统调度
     │   ├── city.ts            城市包契约（类型）
     │   ├── geo/               projection、空间索引、水陆判定
-    │   ├── world/             地面、水面、道路、高架、分块管理
+    │   ├── world/             分块（chunks.ts）、烘焙数据格式（data.ts）、地面、水面、道路、高架、分块管理
     │   ├── build/             Builder（方块合并网格 + 碰撞登记）、通用构件
     │   ├── actors/            玩家、角色皮肤、NPC
     │   ├── transport/         巴士、船、电梯、地铁（metro/）
@@ -76,7 +78,7 @@ block-shanghai/
             └── strings.ts     UI 文案
 ```
 
-目前只建了 `engine/Game.ts`、`engine/city.ts`、`engine/geo/projection.ts`、`cities/`、`bench/`、`tests/` 和 `tools/README.md`，其余目录按路线图逐步加入。
+目录按路线图逐步加入，以仓库实际内容为准。
 
 ## 4. 城市包契约
 

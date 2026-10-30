@@ -18,8 +18,8 @@
 
 - [x] 按 [07](./07-tech-selection.md#10-迁移记录) 迁移技术栈（WebGPURenderer、TypeScript 6.0、Vitest），2026-10-30 完成
 - [ ] **真机检查点**：iPhone（iOS 26 / iOS 18）、中端安卓、微信内置浏览器上跑 `bench/`，确认 WebGL 2 回退可用
-- [ ] `tools/fetch-osm.ts`：下载 Geofabrik 上海、江苏提取包，osmium 合并、按 bbox 裁剪、按图层过滤导出（江苏包是为了 11 号线昆山段，见 [03 第 5 节](./03-coordinates-and-data.md#5-烘焙管线)）
-- [ ] `tools/bake-world.ts`：水系（多边形）、道路、高架、公园、区界 → 投影 → 抽稀 → 分块索引
+- [x] `tools/fetch-osm.ts`：下载 Geofabrik 上海、江苏提取包，osmium 合并、按 bbox 裁剪、按图层过滤导出（江苏包是为了 11 号线昆山段，见 [03 第 5 节](./03-coordinates-and-data.md#5-烘焙管线)）
+- [x] `tools/bake-world.ts`：水系（多边形）、海面、道路、高架、公园、区界 → 投影 → 抽稀 → 按分块裁剪；俯视预览页 `/tools/preview/`
 - [ ] 水面渲染（含倒影开关）、道路和桥面、高架路（分层）
 - [ ] `ChunkManager`：分块流式加载，按 [05](./05-shanghai-content.md#3-程序化建筑画像) 的画像生成建筑和梧桐行道树
 - [ ] `Builder`：方块合并网格 + 碰撞登记；`CollisionWorld`
@@ -95,8 +95,14 @@
 | 托管位置 | 海外静态托管 / 国内 OSS+CDN（需备案） | P6 前 |
 | 项目许可证 | MIT / Apache-2.0 / 不开源 | 首次公开前 |
 | 建筑高度比例 | `buildingMetersPerUnit` 2.5 是初值 | P1 做出陆家嘴天际线后 |
-| 压缩参数 | `coreRadiusKm` 12 / `outerCompress` 0.35 | P1 烘焙出水系后 |
-| 海岸线处理 | 用 coastline 拼陆地多边形，还是只画到某个范围 | P1 |
 | 是否使用 OSM 建筑轮廓 | 核心区参考 / 完全程序化 | P1 末 |
 | 高架段实景乘车 | 在城市场景里让镜头跟着列车走 | P4 之后 |
 | 报站语音 | 只用文字 / 浏览器 TTS / 录音 | P4 |
+
+## 已定事项
+
+| 事项 | 结论 | 日期 |
+| --- | --- | --- |
+| 技术栈调整 | 按 [07](./07-tech-selection.md#10-迁移记录) 迁移到 WebGPURenderer + TypeScript 6.0 + Vitest | 2026-10-30 |
+| 压缩参数 | 保持 `coreRadiusKm` 12 / `outerCompress` 0.35。烘焙出全图后，黄浦江、陆家嘴半岛、长江口、崇明岛的形状都自然，12 km 圈上的道路在全图截图里看不出明显折角 | 2026-10-30 |
+| 海岸线处理 | 用 coastline 在 bbox 内拼海面多边形（[03 第 5 节](./03-coordinates-and-data.md#海面)）；上海 + 江苏两包的海岸线足够闭合，不需要浙江包 | 2026-10-30 |

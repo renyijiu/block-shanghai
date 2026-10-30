@@ -92,30 +92,44 @@
 ## 5. 烘焙管线
 
 ```
-fetch-osm.ts                                                                  bake-*.ts
-Geofabrik 上海 + 江苏 .osm.pbf ──► osmium 合并 → 按 bbox 裁剪 → 按图层过滤/导出 ──► tools/.cache/ ──► 过滤标签 ──► 合并 way ──► 投影 ──► 抽稀 ──► 分块索引 ──► src/cities/shanghai/data/*.json
+npm run fetch-osm（tools/fetch-osm.ts）                                       npm run bake（tools/bake-*.ts）
+Geofabrik 上海 + 江苏 .osm.pbf ──► osmium 合并 → 按 bbox 裁剪 → 按图层过滤/导出 ──► tools/.cache/ ──► 过滤标签 ──► 合并 way ──► 投影 ──► 抽稀 ──► 按分块裁剪 ──► src/cities/shanghai/data/*.json
 ```
+
+烘焙结果可以在开发服务器的 `/tools/preview/` 俯视检查（拖动、缩放，地址参数 `?x=&z=&s=` 指定中心和比例）。
 
 1. **拉取**：下载 Geofabrik 的 `asia/china/shanghai-latest.osm.pbf`（约 25 MB）和 `asia/china/jiangsu-latest.osm.pbf`（约 76 MB），`osmium merge` 合并，`osmium extract --bbox` 按 `config.osm.bbox` 裁剪，再按图层过滤并导出（选型理由见 [07 第 8 节](./07-tech-selection.md#8-数据管线)）。中间文件放在 `tools/.cache/`（不入库），重复烘焙不重复下载。Overpass 只用来做小范围的临时查询。
    - **为什么要江苏包**：Geofabrik 的上海包按上海市界（外扩少量缓冲）切割，11 号线最西边的兆丰路、光明路、花桥三站在江苏昆山，不在包内。2026-10-30 用 Geofabrik 的 `shanghai.poly` 核实：这一纬度上包的西边界约在东经 121.145°，三站分别在 121.1455°、121.1126°、121.0998°。
    - **两个包同一天下载**：Geofabrik 每天用同一份全球数据生成各地的包，同一天的包里同一对象的版本一致，`osmium merge` 才能去重。`fetch-osm.ts` 下载后用 `osmium fileinfo` 核对两个包的数据时间戳，不一致就重新下载。
-   - bbox 西南角还盖到浙江嘉善、平湖一带，那里没有本项目需要的地铁和景点，暂不下载浙江包；P1 定海岸线和市界外地面的处理方式时再看是否需要。
+   - bbox 西南角还盖到浙江嘉善、平湖一带。2026-10-30 实际烘焙时，上海 + 江苏两包里的海岸线在 bbox 内首尾完整，能闭合成海面，**不需要浙江包**。市界外的陆地只铺地面、水系和道路，不生成建筑。
+   - **区界自己组装**：`osmium export` 遇到成员不全的 relation 会整个跳过，不报错（宝山区缺 26 条成员，就这样丢了）。所以区界图层导出成带坐标的 OPL，由 `bake-world.ts` 把现有的外圈 way 拼成闭合环，缺的成员只打警告。水面、公园的 relation 没有这个问题（2026-10-30 只丢了 2 个无名小水面）。
 2. **过滤**：按下表保留需要的要素和标签。
-3. **合并**：把同名、首尾相接的 way 合并成长折线；多边形按 OSM multipolygon 规则组装（外环 / 内环）。
-4. **投影**：调用 `createProjection(config.projection)`，输出整数或 1 位小数的格坐标。
-5. **抽稀**：Douglas–Peucker，容差按图层定（河岸 2 格、道路 1 格、轨道 0.5 格）。
-6. **分块索引**：给每条折线、多边形算出覆盖的 240 格分块，运行时只读所需分块。
+3. **合并**：把名称、等级、桥梁 / 层级、单行属性都相同且首尾相接的道路 way 合并成长折线（道路允许反向拼接）；海岸线按方向拼接（陆地在左侧，不能反向）；多边形由 osmium 按 multipolygon 规则组装。
+4. **投影**：调用 `createProjection(config.projection)`。投影前先在长边上每隔约 0.002°（200 米）插点，外圈的径向压缩不会把直边拉歪；输出保留 1 位小数。
+5. **抽稀**：Douglas–Peucker，容差按图层定（水面、公园 1.5 格，海岸 2 格，道路 1 格，区界 3 格，轨道 0.5 格）；面积过小的面丢掉（水面 < 150 格²、公园 < 300 格²）。
+6. **按分块裁剪**：多边形用 Sutherland–Hodgman、折线用 Liang–Barsky 裁到每个 240 格分块里，运行时直接三角化，不再做几何运算。区界不裁分块，整体保存（用于判断所在区和画地图）。
 7. **输出**：写 JSON，并打印每层的要素数和文件大小。
+
+### 海面
+
+OSM 的海岸线约定陆地在走向左侧。在经纬度空间里把海岸线裁成进出 bbox 的若干段，反向后沿 bbox 边框逆时针连接，得到海面多边形；bbox 内完整闭合的逆时针海岸线是岛屿，作为海面的洞（崇明、长兴、横沙等，共 11 个）。海岸线断在 bbox 内部（数据缺口）时，把断头接到最近的边框上并打警告。实现在 `tools/lib/coastline.ts`。
+
+### 道路高度
+
+- 宽度按人物尺度：motorway / trunk 14 格，primary 12，secondary 10，匝道 7；分离式双向道路在 OSM 里是两条单行线，各取 0.6 倍宽，并排后看起来是一条宽路。
+- 高架：`bridge` + `layer ≥ 1` 的快速路和匝道，或者长度超过 600 米的普通道路桥，按层抬高，每层 7 格（最多 5 层）。其余的桥是过河小桥，留在地面层，渲染时加栏杆。
+- 匝道：高度不同的道路首尾相接处，在 40 格内平滑过渡（接地面就落地，接高架就升到较高的一层）。每个顶点的高度写进数据。
+- 隧道和 `layer < 0` 的路段不输出。
 
 ### 图层与 OSM 标签
 
 | 图层 | 标签 |
 | --- | --- |
 | 水面 | `natural=water`（含 `water=river/lake/reservoir`）、`waterway=riverbank`（旧标签） |
-| 海岸线 | `natural=coastline`（长江口、杭州湾；需要拼接成陆地多边形，P1 再定方案） |
-| 道路 | `highway=motorway/trunk/primary/secondary`，附带 `name`、`bridge`、`layer`、`lanes` |
+| 海岸线 | `natural=coastline`（长江口、东海、杭州湾），拼成海面多边形，见下文“海面” |
+| 道路 | `highway=motorway/motorway_link/trunk/trunk_link/primary/secondary`，用到 `name`、`ref`、`bridge`、`layer`、`tunnel`、`oneway` |
 | 公园 | `leisure=park/garden`、`landuse=forest/grass`（面积过小的丢掉） |
-| 区界 | `boundary=administrative` + `admin_level=6` |
+| 区界 | `admin_level=6` 的 relation，按名称匹配 `config.districts` |
 | 地铁 | 见 [04](./04-metro-system.md#3-数据从-osm-到-metrojson) |
 
 ### Overpass 使用注意
@@ -134,30 +148,29 @@ way(r.r)["railway"]->.w;
 .w out geom tags;
 ```
 
-## 6. 输出格式（草案）
+## 6. 输出格式
 
-坐标都是游戏格，`[x, z]`。
+类型定义在 `src/engine/world/data.ts`（烘焙脚本和运行时共用）。坐标都是游戏格，用扁平数组 `[x0, z0, x1, z1, ...]` 节省体积，保留 1 位小数；分块键是 `"cx,cz"`（`src/engine/world/chunks.ts`）。
 
 ```jsonc
-// water.json
-{ "polygons": [ { "name": "黄浦江", "outer": [[x, z], ...], "holes": [[[x, z], ...]], "chunks": ["3,-2", ...] } ] }
+// world.json：范围和元数据
+{ "version": 1, "generatedAt": "2026-10-30", "osmTimestamp": "2026-10-29T21:21:26Z", "chunkSize": 240,
+  "bbox": [30.67, 120.85, 31.88, 122.05], "outline": [x, z, ...], "chunks": { "minX": -24, "maxX": 22, "minZ": -28, "maxZ": 24 } }
 
-// roads.json
-{ "roads": [ {
-  "name": "延安高架路",
-  "class": "trunk",            // motorway | trunk | primary | secondary
-  "width": 14,                 // 格（人物尺度）
-  "level": 1,                  // 0 地面；1、2 为高架层
-  "pts": [[x, z], ...],
-  "chunks": ["0,-1", ...]
-} ] }
+// water.json / parks.json：按分块裁好的多边形，[外环, ...洞]
+{ "version": 1, "chunks": { "3,-2": [ { "kind": "river", "polygon": [[x, z, ...], [洞...]] } ] } }
+//   水面 kind：sea | river | lake | water；公园 kind：park | garden | forest | grass
 
-// parks.json
-{ "parks": [ { "name": "人民公园", "outer": [[x, z], ...], "chunks": [...] } ] }
+// roads.json：道路属性 + 按分块裁好的折线，每个顶点 [x, z, h]，h 为路面高度（含匝道坡度）
+{ "version": 1,
+  "roads": [ { "name": "延安高架路", "class": "trunk", "width": 8.4, "level": 1, "bridge": false } ],
+  "chunks": { "0,-1": [ [道路序号, [x, z, h, x, z, h, ...]] ] } }
 
-// districts.json
-{ "districts": [ { "id": "huangpu", "outer": [[x, z], ...] } ] }
+// districts.json：整区多边形（已裁到世界范围内，去掉了飞地和碎片）+ 区名标注点
+{ "version": 1, "districts": [ { "id": "huangpu", "name": "黄浦区", "polygons": [[[x, z, ...]]], "bounds": [minX, minZ, maxX, maxZ], "label": [x, z] } ] }
 ```
+
+2026-10-30 的烘焙结果：水面 0.87 MB、公园 0.35 MB、道路 4.71 MB、区界 0.08 MB，共约 6 MB（gzip 后约 1.5 MB），全部入库。
 
 `metro.json` 的格式见 [04](./04-metro-system.md#4-metrojson-数据模型)。
 

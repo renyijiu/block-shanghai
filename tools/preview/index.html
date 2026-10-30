@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>数据预览 · Block Shanghai</title>
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #e9e5da; font: 13px/1.6 system-ui, 'PingFang SC', sans-serif; }
+      canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+      #hud { position: fixed; top: 8px; left: 8px; padding: 6px 10px; background: rgba(0, 0, 0, 0.65); color: #fff; white-space: pre; pointer-events: none; }
+    </style>
+  </head>
+  <body>
+    <canvas id="map"></canvas>
+    <div id="hud">加载中…</div>
+    <script type="module" src="./preview.ts"></script>
+  </body>
+</html>
