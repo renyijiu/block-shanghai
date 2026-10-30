@@ -116,7 +116,7 @@ export default {
 | `buildingProfiles`（P1） | 区域 → 建筑画像规则（见 [05](./05-shanghai-content.md)） |
 | `streetTrees`（P1） | 行道树种类和比例 |
 | `weather`（P5） | 各天气概率、季节事件 |
-| `photoFilters`（P3） | 滤镜 id → 名称、参数 |
+| `photoFilters`（P3） | 滤镜列表：id、名称、参数（去色、复古、饱和、对比、冷暖、分离色调、褪色、暗角、颗粒、色阶、像素），可带相纸边框 |
 
 ### 景点定义
 
@@ -163,7 +163,7 @@ export default {
 | `Transport` | 巴士、渡轮、游船、观光车、电梯 | ✅ |
 | `MetroSystem` | 线网、路线规划、按时刻表算列车位置（`metro/MetroSystem.ts`）；`TrainRenderer` 负责高架列车渲染（`metro/trains.ts`）；乘车流程（P4） | ✅ |
 | `InteriorManager` | 站厅、站台、车厢等独立场景的构建与切换 | 在室内时 |
-| `PhotoSystem` | 滤镜后处理、景点识别、存相册 | 拍照时 |
+| `PhotoSystem` | 按快门那一帧渲染完从画布取图；滤镜按城市包参数逐像素处理（`photo/filters.ts`，取景时用 CSS filter 近似预览，像素风降低渲染分辨率）；识别景点（`photo/recognize.ts`：瞄准点在画面中间 90%、在 `photoR` 以内、视线没被碰撞盒挡住）；照片存 IndexedDB（`photo/album.ts`） | 拍照时 |
 | `Sky` | 昼夜、天气、季节、夜间材质 | ✅ |
 | `store` | 响应式 UI 状态 + 存档 + 事件 → 任务结算 | — |
 

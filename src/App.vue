@@ -1,30 +1,36 @@
 <template>
   <div ref="container" class="stage"></div>
-  <div class="hud" :class="{ compact: touch }">
+  <div v-show="!photoOpen" class="hud" :class="{ compact: touch }">
     <div class="title">{{ config.name }}<span v-if="!touch"> · {{ config.nameEn }}</span></div>
     <div v-if="loading">{{ loading }}</div>
     <template v-else>
       <div class="status">🕘 {{ stats.time }} · ¥{{ stats.money }} · 景点 {{ stats.found }}/{{ stats.landmarks }}</div>
       <div>{{ backend }} · {{ stats.fps }} fps<span v-if="!touch"> · {{ stats.drawCalls }} 次绘制 · {{ (stats.triangles / 1000).toFixed(0) }}k 三角形</span></div>
       <div v-if="!touch">分块：{{ stats.chunks }}（待建 {{ stats.pending }}）· 位置：{{ stats.x }}, {{ stats.z }} 格</div>
-      <div v-if="!touch" class="hint">{{ stats.mode === 'dev' ? 'WASD 移动 · Q/E 升降 · Shift 加速 · 拖动旋转 · 滚轮缩放' : 'WASD 移动 · Shift 奔跑 · 空格跳 · 拖动转视角 · 滚轮远近 · V 切换视角 · M 地图 · E 交互' }}</div>
+      <div v-if="!touch" class="hint">{{ stats.mode === 'dev' ? 'WASD 移动 · Q/E 升降 · Shift 加速 · 拖动旋转 · 滚轮缩放' : 'WASD 移动 · Shift 奔跑 · 空格跳 · 拖动转视角 · 滚轮远近 · V 切换视角 · M 地图 · E 交互 · P 拍照 · C 图鉴' }}</div>
     </template>
   </div>
   <template v-if="game && !loading && stats.mode === 'player'">
     <template v-if="!panelOpen">
-      <MiniMap :game="game" :size="mapSize" @open="mapOpen = true" />
-      <div class="side" :style="{ top: `calc(max(12px, env(safe-area-inset-top)) + ${mapSize + 10}px)` }">
-        <button title="地铁线路图" @click="openMetro(null)">🚇 地铁</button>
-        <button title="切换画质" @click="cycleQuality">画质 {{ QUALITY_PRESETS[quality].label }}</button>
-      </div>
-      <TouchControls v-if="touch" :input="game.input" :action="stats.prompt?.action ?? null" />
-      <div v-if="stats.prompt" class="prompt">
-        <b v-if="!touch">E</b> {{ stats.prompt.action }} · {{ stats.prompt.label }}
-      </div>
+      <template v-if="!photoOpen">
+        <MiniMap :game="game" :size="mapSize" @open="mapOpen = true" />
+        <div class="side" :style="{ top: `calc(max(12px, env(safe-area-inset-top)) + ${mapSize + 10}px)` }">
+          <button title="拍照（P）" @click="photoOpen = true">📷 拍照</button>
+          <button title="图鉴和相册（C）" @click="codexTab = 'codex'">📖 图鉴</button>
+          <button title="地铁线路图" @click="openMetro(null)">🚇 地铁</button>
+          <button title="切换画质" @click="cycleQuality">画质 {{ QUALITY_PRESETS[quality].label }}</button>
+        </div>
+        <div v-if="stats.prompt" class="prompt">
+          <b v-if="!touch">E</b> {{ stats.prompt.action }} · {{ stats.prompt.label }}
+        </div>
+      </template>
+      <TouchControls v-if="touch" :input="game.input" :action="photoOpen ? null : (stats.prompt?.action ?? null)" :buttons="!photoOpen" />
+      <PhotoMode v-if="photoOpen" :game="game" :touch="touch" @close="photoOpen = false" @album="openAlbum" />
     </template>
     <DistrictToast :name="toast.name" :theme="toast.theme" />
     <DiscoverToast :landmark="discovered" />
     <BigMap v-if="mapOpen" :game="game" :title="config.name" :here="districtName" @close="mapOpen = false" />
+    <CodexPanel v-if="codexTab" :game="game" :initial-tab="codexTab" @close="codexTab = null" />
     <MetroPanel v-if="metroPanel" :game="game" :initial-from="metroPanel.from" :in-station="metroPanel.inStation" @close="metroPanel = null" @travel="travel" />
     <Transition name="fade">
       <div v-if="travelText" class="travel">{{ travelText }}</div>
@@ -39,10 +45,12 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import BigMap from './components/BigMap.vue'
+import CodexPanel from './components/CodexPanel.vue'
 import DiscoverToast, { type DiscoverInfo } from './components/DiscoverToast.vue'
 import DistrictToast from './components/DistrictToast.vue'
 import MetroPanel from './components/MetroPanel.vue'
 import MiniMap from './components/MiniMap.vue'
+import PhotoMode from './components/PhotoMode.vue'
 import TouchControls from './components/TouchControls.vue'
 import { Game, type GameStats } from './engine/Game.ts'
 import type { Route } from './engine/metro/network.ts'
@@ -64,7 +72,14 @@ const mapOpen = ref(false)
 const mapSize = touch ? 112 : 160
 // 地铁面板：from 是起点站；inStation 表示从地铁口进站打开的，才能乘车
 const metroPanel = ref<{ from: number | null; inStation: boolean } | null>(null)
-const panelOpen = computed(() => mapOpen.value || !!metroPanel.value)
+// 拍照模式（游戏照常跑）和图鉴 / 相册面板
+const photoOpen = ref(false)
+const codexTab = ref<'codex' | 'album' | null>(null)
+const panelOpen = computed(() => mapOpen.value || !!metroPanel.value || !!codexTab.value)
+function openAlbum() {
+  photoOpen.value = false
+  codexTab.value = 'album'
+}
 const travelText = ref('')
 const notice = ref('')
 let noticeTimer = 0
@@ -157,7 +172,11 @@ function onKey(e: KeyboardEvent) {
     if (e.code === 'Escape') metroPanel.value = null
     return
   }
-  if (e.code === 'KeyM' && !e.repeat && !metroPanel.value) mapOpen.value = !mapOpen.value
+  // 拍照模式自己处理按键（空格快门、数字滤镜、Esc / P 退出）
+  if (photoOpen.value || e.repeat) return
+  if (e.code === 'KeyM' && !metroPanel.value && !codexTab.value) mapOpen.value = !mapOpen.value
+  else if (e.code === 'KeyP' && !panelOpen.value) photoOpen.value = true
+  else if (e.code === 'KeyC' && !mapOpen.value && !metroPanel.value) codexTab.value = codexTab.value ? null : 'codex'
   else if (e.code === 'Escape') {
     mapOpen.value = false
     metroPanel.value = null
@@ -186,11 +205,21 @@ onMounted(async () => {
     const p = g.player.pos
     Object.assign(window, {
       __ready: true,
+      __game: g,
       __probe: () => ({ backend: backend.value, ...g.stats, player: [+p.x.toFixed(1), +p.y.toFixed(2), +p.z.toFixed(1)], autopilot: g.autopilot, toast: toast.name, trains: g.trains?.visible.length ?? 0 }),
       __openMap: () => (mapOpen.value = true),
       __openMetro: (from: number | null, inStation: boolean) => openMetro(from, inStation),
       __interact: () => g.prompt && g.onInteract?.(g.prompt),
       __discovered: () => discovered.value?.name ?? null,
+      __photo: (on: boolean) => (photoOpen.value = on),
+      __codex: (tab: 'codex' | 'album' | null) => (codexTab.value = tab),
+      __face: (x: number, y: number, z: number) => {
+        // 测试用：让相机朝向某个点（第三人称时相机在人身后）
+        const p = g.player.pos
+        g.rig.yaw = Math.atan2(-(x - p.x), -(z - p.z))
+        g.rig.pitch = g.rig.mode === 'first' ? Math.atan2(y - p.y - 1.6, Math.hypot(x - p.x, z - p.z)) : 0.05
+        if (g.rig.mode === 'first') g.rig.pitch = -g.rig.pitch
+      },
       __travel: async (from: string, to: string, mode: 'fastest' | 'fewest' = 'fastest') => {
         const m = g.metro!
         const idx = (n: string) => m.data.stations.findIndex((s) => s.name === n)

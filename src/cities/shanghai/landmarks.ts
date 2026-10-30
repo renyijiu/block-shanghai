@@ -347,7 +347,7 @@ const ljzBridge: LandmarkDef = {
   rot: 0,
   rect: [-21, -21, 21, 21],
   focusY: 4,
-  photoR: 300,
+  photoR: 160,
   build(c) {
     const R = 16
     const DECK = 3.2

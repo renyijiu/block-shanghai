@@ -6,7 +6,7 @@
     </div>
     <!-- 右半屏拖动转视角 -->
     <div class="look" @pointerdown="startLook" @pointermove="moveLook" @pointerup="endLook" @pointercancel="endLook"></div>
-    <div class="buttons">
+    <div v-if="buttons" class="buttons">
       <button v-if="action" class="act" @pointerdown.prevent="input.press('interact')">{{ action }}</button>
       <button :class="{ on: running }" @pointerdown.prevent="toggleRun">跑</button>
       <button @pointerdown.prevent="input.press('view')">视角</button>
@@ -19,7 +19,7 @@
 import { reactive, ref } from 'vue'
 import type { Input } from '../engine/actors/Input.ts'
 
-const props = defineProps<{ input: Input; action: string | null }>()
+const props = withDefaults(defineProps<{ input: Input; action: string | null; buttons?: boolean }>(), { buttons: true })
 const input = props.input
 const pad = ref<HTMLDivElement | null>(null)
 const RADIUS = 48 // 摇杆可推动的半径（像素）

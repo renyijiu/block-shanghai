@@ -30,3 +30,17 @@ test('碰撞世界的查询对斜放方块按实际朝向判断', () => {
   w.removeOwner('bridge')
   expect(w.query(-0.1, -0.1, 0.1, 0.1)).toHaveLength(0)
 })
+
+test('线段遮挡：中间有楼挡住，跳过的盒子不算', () => {
+  const w = new CollisionWorld()
+  w.add('chunk', [{ x0: 10, y0: 0, z0: -5, x1: 20, y1: 30, z1: 5 }])
+  w.add('landmark:tower', [{ x0: 40, y0: 0, z0: -2, x1: 44, y1: 100, z1: 2 }])
+  const self = (b: { owner?: string }) => b.owner === 'landmark:tower'
+  // 低处穿过楼
+  expect(w.segmentBlocked(0, 2, 0, 42, 50, 0, self)).toBe(true)
+  // 从楼顶上方越过
+  expect(w.segmentBlocked(0, 40, 0, 42, 50, 0, self)).toBe(false)
+  // 只有被拍的景点自己挡着：跳过它
+  expect(w.segmentBlocked(60, 10, 0, 30, 10, 0, self)).toBe(false)
+  expect(w.segmentBlocked(60, 10, 0, 30, 10, 0)).toBe(true)
+})

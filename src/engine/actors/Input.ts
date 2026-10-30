@@ -14,6 +14,9 @@ export class Input {
   runToggle = false
   /** 打开大地图等面板时暂停移动输入 */
   enabled = true
+  /** 拍照模式：不能跳（空格是快门）；自拍时也不能走 */
+  jumpLocked = false
+  moveLocked = false
   private readonly dom: HTMLElement
   private drag: { id: number; x: number; y: number } | null = null
 
@@ -85,7 +88,7 @@ export class Input {
 
   /** 移动方向：x 向右、y 向前，长度不超过 1 */
   axes() {
-    if (!this.enabled) return { x: 0, y: 0 }
+    if (!this.enabled || this.moveLocked) return { x: 0, y: 0 }
     const k = this.keys
     let x = this.stick.x + (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0)
     let y = this.stick.y + (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0)
@@ -115,7 +118,7 @@ export class Input {
   }
 
   consumeJump() {
-    const j = this.jumpQueued && this.enabled
+    const j = this.jumpQueued && this.enabled && !this.jumpLocked
     this.jumpQueued = false
     return j
   }

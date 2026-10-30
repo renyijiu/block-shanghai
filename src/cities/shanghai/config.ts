@@ -47,5 +47,28 @@ export default {
     jinshan: { name: '金山区', color: '#b8a05b', theme: '渔村海湾' },
     fengxian: { name: '奉贤区', color: '#b88a6b', theme: '滨海' },
     chongming: { name: '崇明区', color: '#5fae7a', theme: '湿地生态岛' }
-  }
+  },
+
+  // 摄影滤镜（docs/05 第 10 节）：参数含义见 src/engine/photo/filters.ts
+  photoFilters: [
+    { id: 'original', name: '原片', params: {} },
+    {
+      id: 'yuefenpai',
+      name: '老上海月份牌',
+      params: { sepia: 0.4, saturate: 1.35, contrast: 0.92, brightness: 1.05, warmth: 0.6, split: { shadow: 0x2a4a6a, highlight: 0xffd9a0, amount: 0.25 }, fade: 0.4, vignette: 0.35, grain: 0.15 },
+      border: 0xf1e4c4
+    },
+    {
+      id: 'bundnight',
+      name: '外滩夜色',
+      params: { contrast: 1.3, saturate: 1.5, brightness: 1.03, split: { shadow: 0x1a3a8a, highlight: 0xffa040, amount: 0.45 }, vignette: 0.45 }
+    },
+    {
+      id: 'wutong',
+      name: '梧桐胶片',
+      params: { warmth: 0.7, saturate: 1.1, contrast: 0.95, split: { shadow: 0x2f5a3a, highlight: 0xffe0a0, amount: 0.2 }, fade: 0.5, vignette: 0.25, grain: 0.55 }
+    },
+    { id: 'mono', name: '黑白', params: { grayscale: 1, contrast: 1.25, vignette: 0.3, grain: 0.25 } },
+    { id: 'pixel', name: '像素', params: { pixel: 200, posterize: 7, saturate: 1.2 } }
+  ]
 } satisfies CityConfig

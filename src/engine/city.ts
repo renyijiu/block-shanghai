@@ -3,6 +3,7 @@
 import type { Builder } from './build/Builder.ts'
 import type { Rng } from './build/random.ts'
 import type { LatLon, ProjectionConfig } from './geo/projection.ts'
+import type { PhotoFilter } from './photo/filters.ts'
 import type { Lot } from './world/lots.ts'
 import type { WorldDataUrls } from './world/WorldData.ts'
 
@@ -29,6 +30,8 @@ export interface CityConfig {
     bbox: [south: number, west: number, north: number, east: number]
   }
   districts: Record<string, DistrictConfig>
+  /** 摄影滤镜，第一个是原片（P3） */
+  photoFilters: PhotoFilter[]
 }
 
 export interface SpawnPoint extends LatLon {

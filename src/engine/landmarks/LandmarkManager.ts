@@ -199,6 +199,10 @@ export class LandmarkManager {
     return null
   }
 
+  isLoaded(id: string) {
+    return this.loaded.has(id)
+  }
+
   byId(id: string) {
     return this.placed.find((p) => p.def.id === id) ?? null
   }

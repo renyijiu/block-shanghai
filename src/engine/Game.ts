@@ -8,6 +8,9 @@ import { DevCamera } from './DevCamera.ts'
 import { CollisionWorld } from './geo/CollisionWorld.ts'
 import { createProjection, type Projection } from './geo/projection.ts'
 import { LandmarkManager, type PlacedLandmark } from './landmarks/LandmarkManager.ts'
+import { Album, newPhotoId } from './photo/album.ts'
+import { previewCss, type PhotoFilter } from './photo/filters.ts'
+import { PhotoSystem } from './photo/PhotoSystem.ts'
 import type { InteractPoint } from './world/interact.ts'
 import { InteractRegistry } from './world/interact.ts'
 import { MetroSystem } from './metro/MetroSystem.ts'
@@ -58,6 +61,18 @@ export interface GameStats {
   landmarks: number
 }
 
+/** 拍照的结果，给界面显示 */
+export interface PhotoResult {
+  id: string
+  /** 拍到的景点和子景点 */
+  recognized: string[]
+  /** 这张照片新解锁的图鉴 */
+  newly: string[]
+  thumb: Blob
+  /** 存进相册了没有（隐私模式等情况下 IndexedDB 不可用） */
+  saved: boolean
+}
+
 /** 快速到达的结果，给界面提示用 */
 export interface TravelResult {
   ok: boolean
@@ -92,6 +107,12 @@ export class Game {
   codexShot: Record<string, string> = {}
   /** 走近新景点时调用（界面弹出“发现景点”） */
   onDiscover: ((p: PlacedLandmark) => void) | null = null
+  photo: PhotoSystem | null = null
+  /** 相册（IndexedDB）；打不开时为 null，照片不能保存 */
+  album: Album | null = null
+  /** 拍照模式和当前滤镜 */
+  photoMode = false
+  photoFilter: PhotoFilter
   money = NEW_GAME.money
   readonly metroStats = { rides: 0, visited: new Set<string>() }
   /** 附近的交互点 */
@@ -152,6 +173,7 @@ export class Game {
     this.scene.add(this.ground)
 
     this.input = new Input(this.renderer.domElement)
+    this.photoFilter = city.config.photoFilters[0]!
 
     this.resize()
     this.ro = new ResizeObserver(() => this.resize())
@@ -172,6 +194,10 @@ export class Game {
     this.districts = new DistrictIndex(world.districts)
     this.landmarks = new LandmarkManager(this.city.landmarks, this.proj, this.materials, this.collision, this.interact)
     this.scene.add(this.landmarks.root)
+    this.photo = new PhotoSystem(this.renderer, this.camera, this.collision, this.landmarks)
+    Album.open()
+      .then((a) => (this.disposed ? a.close() : (this.album = a)))
+      .catch((e) => console.warn('相册打不开，照片不能保存', e))
     this.chunks = new ChunkManager(
       {
         data: world,
@@ -326,6 +352,85 @@ export class Game {
     return p.arrive ?? ''
   }
 
+  /** 景点或子景点的名字 */
+  landmarkName(id: string): string {
+    for (const p of this.landmarks?.placed ?? []) {
+      if (p.def.id === id) return p.def.name
+      const s = p.def.subs?.find((s) => s.id === id)
+      if (s) return s.name
+    }
+    return id
+  }
+
+  /** 进出拍照模式：空格变成快门，V 键多一个自拍视角；退出时取消滤镜预览 */
+  setPhotoMode(on: boolean) {
+    this.photoMode = on
+    this.rig.photo = on
+    this.input.jumpLocked = on
+    if (!on) {
+      this.rig.selfie = false
+      this.input.moveLocked = false
+      this.setPhotoFilter(this.city.config.photoFilters[0]!)
+    }
+  }
+
+  /** 换滤镜：取景画面用 CSS filter 近似；像素风降低渲染分辨率再放大 */
+  setPhotoFilter(f: PhotoFilter) {
+    this.photoFilter = f
+    const canvas = this.renderer.domElement
+    canvas.style.filter = previewCss(f.params) === 'none' ? '' : previewCss(f.params)
+    const px = f.params.pixel
+    canvas.style.imageRendering = px ? 'pixelated' : ''
+    const dpr = Math.min(window.devicePixelRatio || 1, QUALITY_PRESETS[this.quality].pixelRatio)
+    this.renderer.setPixelRatio(px ? px / Math.max(1, this.container.clientWidth) : dpr)
+    this.resize()
+  }
+
+  /** 按快门：取图、识别景点、存相册、解锁图鉴 */
+  async takePhoto(): Promise<PhotoResult> {
+    if (!this.photo || !this.landmarks) throw new Error('还没加载完')
+    const district = this.districts?.at(this.player.pos.x, this.player.pos.z)?.id
+    const place = (district && this.city.config.districts[district]?.name) ?? ''
+    const time = this.clock.format()
+    const shot = await this.photo.shoot(
+      this.photoFilter,
+      (names) => [this.city.config.name, names.slice(0, 3).join('、') || place, time].filter(Boolean).join(' · '),
+      (id) => this.landmarkName(id)
+    )
+    const id = newPhotoId()
+    let saved = false
+    if (this.album) {
+      try {
+        await this.album.add({
+          id,
+          city: this.city.config.id,
+          takenAt: new Date().toISOString(),
+          gameTime: this.clock.seconds,
+          filter: this.photoFilter.id,
+          landmarks: shot.recognized,
+          width: shot.width,
+          height: shot.height,
+          thumb: shot.thumb,
+          image: shot.image
+        })
+        saved = true
+      } catch (e) {
+        console.warn('照片保存失败', e)
+      }
+    }
+    // 拍到就算发现；第一次拍到解锁图鉴
+    const newly: string[] = []
+    for (const lid of shot.recognized) {
+      if (this.landmarks.byId(lid) && !this.landmarks.found.has(lid)) this.landmarks.found.set(lid, this.clock.seconds)
+      if (!this.codexShot[lid]) {
+        this.codexShot[lid] = id
+        newly.push(lid)
+      }
+    }
+    this.saveNow()
+    return { id, recognized: shot.recognized, newly, thumb: shot.thumb, saved }
+  }
+
   /** 立即存档（玩家模式且不是测试参数时） */
   saveNow() {
     if (!this.persist || this.devCamera || !this.world) return
@@ -375,6 +480,7 @@ export class Game {
     // 地面平面按分块对齐跟随
     this.ground.position.set(Math.round(f.x / CHUNK_SIZE) * CHUNK_SIZE, 0, Math.round(f.z / CHUNK_SIZE) * CHUNK_SIZE)
     this.renderer.render(this.scene, this.camera)
+    this.photo?.afterRender()
     this.afterRender?.()
     this.updateStats(now, f)
     if (now - this.savedAt > AUTOSAVE_MS) {
@@ -404,6 +510,7 @@ export class Game {
     let move = { dx: fx * a.y + rx * a.x, dz: fz * a.y + rz * a.x, run: this.input.running }
     if (this.autopilot.active) move = this.steer(now)
     this.player.update(dt, { ...move, jump: this.input.consumeJump() }, world)
+    this.input.moveLocked = this.rig.selfie
     this.rig.update(this.camera, this.player, this.input, world)
     const p = this.player.pos
     this.prompt = this.interact.nearest(p.x, p.z, p.y)
@@ -498,6 +605,7 @@ export class Game {
     this.chunks?.dispose()
     this.trains?.dispose()
     this.landmarks?.dispose()
+    this.album?.close()
     this.player.dispose()
     this.ground.geometry.dispose()
     this.materials.dispose()

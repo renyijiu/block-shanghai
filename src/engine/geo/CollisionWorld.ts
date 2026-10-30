@@ -13,6 +13,8 @@ export interface Box {
   deck?: boolean
   /** 水平方向斜放的方块：中心、长度方向单位向量、半长、半宽。x0..z1 是它的外接矩形 */
   obb?: Obb
+  /** 登记时填上（分块 key、`landmark:<id>`），拍照判断遮挡时跳过景点自己 */
+  owner?: string
 }
 
 export interface Obb {
@@ -61,6 +63,7 @@ export class CollisionWorld {
   add(owner: string, boxes: Box[]) {
     const list = this.owners.get(owner) ?? this.owners.set(owner, []).get(owner)!
     for (const box of boxes) {
+      box.owner = owner
       const keys: string[] = []
       for (let cx = Math.floor(box.x0 / CELL); cx <= Math.floor(box.x1 / CELL); cx++)
         for (let cz = Math.floor(box.z0 / CELL); cz <= Math.floor(box.z1 / CELL); cz++) {
@@ -94,6 +97,28 @@ export class CollisionWorld {
       for (let cz = Math.floor(z0 / CELL); cz <= Math.floor(z1 / CELL); cz++)
         for (const b of this.cells.get(`${cx},${cz}`) ?? []) if (b.x1 > x0 && b.x0 < x1 && b.z1 > z0 && b.z0 < z1 && (!b.obb || rectHitsObb(x0, z0, x1, z1, b.obb))) out.add(b)
     return [...out]
+  }
+
+  /**
+   * 线段 a → b 有没有被碰撞盒挡住（拍照的遮挡判断）。每隔 step 格取一个点，点落在盒子里算挡住；
+   * skip 返回 true 的盒子不算（只挡相机的树冠、被拍的景点自己）
+   */
+  segmentBlocked(ax: number, ay: number, az: number, bx: number, by: number, bz: number, skip: (b: Box) => boolean = () => false, step = 1.5): boolean {
+    const len = Math.hypot(bx - ax, by - ay, bz - az)
+    const n = Math.max(1, Math.ceil(len / step))
+    // 两头各留一点，不算相机所在和目标点本身
+    for (let i = 1; i < n; i++) {
+      const t = i / n
+      const x = ax + (bx - ax) * t
+      const y = ay + (by - ay) * t
+      const z = az + (bz - az) * t
+      for (const b of this.cells.get(`${Math.floor(x / CELL)},${Math.floor(z / CELL)}`) ?? []) {
+        if (y < b.y0 || y > b.y1 || x < b.x0 || x > b.x1 || z < b.z0 || z > b.z1 || skip(b)) continue
+        if (b.obb && !rectHitsObb(x, z, x, z, b.obb)) continue
+        return true
+      }
+    }
+    return false
   }
 
   clear() {
