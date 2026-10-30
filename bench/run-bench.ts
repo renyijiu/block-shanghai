@@ -1,5 +1,5 @@
 // 用本机 Chrome（临时配置目录、无头、启用 GPU）依次跑三种渲染路径，打印结果
-// 用法：先 npm run dev，再 node bench/run-bench.mjs [chunks=15] [shadows=1] [split=0]
+// 用法：先 npm run dev，再 npm run bench -- [chunks=15] [shadows=1] [split=0]
 // 关闭了垂直同步和帧率上限，fps 反映的是吞吐能力而不是显示器刷新率
 import { spawn } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -32,12 +32,28 @@ const chrome = spawn(CHROME, [
   'about:blank'
 ], { stdio: 'ignore' })
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
-async function waitForChrome() {
+// city-bench.ts 写到 window.__bench 的结果（只列这里用到的字段）
+interface BenchResult {
+  mode: string
+  error?: string
+  backend?: string
+  gpu?: { webgpu: string | null; webgl: string | null }
+  viewport?: string
+  drawCalls?: number
+  triangles?: number
+  fps?: number
+  p95ms?: number
+  initMs?: number
+  buildMs?: number
+  firstFrameMs?: number
+}
+
+async function waitForChrome(): Promise<{ Browser: string }> {
   for (let i = 0; i < 50; i++) {
     try {
-      return await (await fetch(`http://127.0.0.1:${PORT}/json/version`)).json()
+      return (await (await fetch(`http://127.0.0.1:${PORT}/json/version`)).json()) as { Browser: string }
     } catch {
       await sleep(200)
     }
@@ -45,26 +61,26 @@ async function waitForChrome() {
   throw new Error('Chrome 没有启动')
 }
 
-async function runOne(mode) {
+async function runOne(mode: string): Promise<BenchResult> {
   const url = `${BASE}?r=${mode}&chunks=${chunks}&shadows=${shadows}&split=${split}`
-  const target = await (await fetch(`http://127.0.0.1:${PORT}/json/new?${encodeURIComponent(url)}`, { method: 'PUT' })).json()
+  const target = (await (await fetch(`http://127.0.0.1:${PORT}/json/new?${encodeURIComponent(url)}`, { method: 'PUT' })).json()) as { id: string; webSocketDebuggerUrl: string }
   const ws = new WebSocket(target.webSocketDebuggerUrl)
   await new Promise((r) => ws.addEventListener('open', r, { once: true }))
   let id = 0
-  const pending = new Map()
+  const pending = new Map<number, (result: { result?: { value?: unknown } }) => void>()
   ws.addEventListener('message', (e) => {
-    const msg = JSON.parse(e.data)
-    if (pending.has(msg.id)) pending.get(msg.id)(msg.result)
+    const msg = JSON.parse(String(e.data))
+    pending.get(msg.id)?.(msg.result)
   })
-  const evaluate = (expression) =>
-    new Promise((r) => {
+  const evaluate = (expression: string) =>
+    new Promise<unknown>((r) => {
       pending.set(++id, (res) => r(res?.result?.value))
       ws.send(JSON.stringify({ id, method: 'Runtime.evaluate', params: { expression, returnByValue: true } }))
     })
-  let result = null
+  let result: BenchResult | null = null
   for (let i = 0; i < 120 && !result; i++) {
     await sleep(500)
-    result = await evaluate('window.__bench || null')
+    result = (await evaluate('window.__bench || null')) as BenchResult | null
   }
   ws.close()
   await fetch(`http://127.0.0.1:${PORT}/json/close/${target.id}`)
@@ -74,14 +90,14 @@ async function runOne(mode) {
 try {
   const v = await waitForChrome()
   console.log(`# ${v.Browser} · chunks=${chunks} shadows=${shadows} split=${split}`)
-  const rows = []
+  const rows: BenchResult[] = []
   for (const mode of ['webgpu', 'fallback', 'webgl']) rows.push(await runOne(mode))
-  console.log(`# GPU: ${rows[0].gpu?.webgpu} / ${rows[0].gpu?.webgl} · ${rows[0].viewport}`)
+  console.log(`# GPU: ${rows[0]?.gpu?.webgpu} / ${rows[0]?.gpu?.webgl} · ${rows[0]?.viewport}`)
   console.log('| 渲染路径 | 后端 | draw calls | 三角形 | fps | p95 帧时间 | 初始化 | 建城 | 首帧 |')
   console.log('| --- | --- | --- | --- | --- | --- | --- | --- | --- |')
   for (const r of rows) {
     if (r.error) console.log(`| ${r.mode} | 出错：${r.error} |`)
-    else console.log(`| ${r.mode} | ${r.backend} | ${r.drawCalls} | ${(r.triangles / 1e6).toFixed(2)}M | ${r.fps} | ${r.p95ms} ms | ${r.initMs} ms | ${r.buildMs} ms | ${r.firstFrameMs} ms |`)
+    else console.log(`| ${r.mode} | ${r.backend} | ${r.drawCalls} | ${((r.triangles ?? 0) / 1e6).toFixed(2)}M | ${r.fps} | ${r.p95ms} ms | ${r.initMs} ms | ${r.buildMs} ms | ${r.firstFrameMs} ms |`)
   }
 } finally {
   chrome.kill()

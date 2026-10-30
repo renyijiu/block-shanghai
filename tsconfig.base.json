@@ -1,0 +1,21 @@
+{
+  // 前端和 Node 脚本共用的编译选项。只做类型检查，不产出 JS：
+  // 浏览器端由 Vite 转译，Node 端（tools/、bench/run-bench.ts）用 Node 自带的类型擦除直接运行
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    // Node 类型擦除的要求：相对导入写 .ts 扩展名、类型导入写 import type、不用 enum / namespace 等需要转译的语法
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
+  }
+}

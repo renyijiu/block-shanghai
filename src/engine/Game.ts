@@ -1,27 +1,39 @@
 // 游戏主控（P0 骨架）：渲染循环 + 投影参数可视化预览
 // 后续世界流式加载、玩家、交通等系统都挂在这里，见 docs/02-architecture.md
-import * as THREE from 'three'
+import * as THREE from 'three/webgpu'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-import { createProjection } from './geo/projection.js'
+import { createProjection, type Projection } from './geo/projection.ts'
+import type { CityConfig } from './city.ts'
 
 export const CHUNK_SIZE = 240 // 城市分块边长（格）
 
+export type RenderBackend = 'WebGPU' | 'WebGL 2'
+
 export class Game {
-  constructor(container, city) {
+  readonly container: HTMLElement
+  readonly city: CityConfig
+  readonly proj: Projection
+  readonly renderer: THREE.WebGPURenderer
+  readonly scene = new THREE.Scene()
+  readonly camera = new THREE.PerspectiveCamera(60, 1, 1, 12000)
+  readonly controls: OrbitControls
+  private readonly ro: ResizeObserver
+  private disposed = false
+
+  constructor(container: HTMLElement, city: CityConfig) {
     this.container = container
     this.city = city
     this.proj = createProjection(city.projection)
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' })
+    // 默认走 WebGPU，不支持时自动回退 WebGL 2（docs/07-tech-selection.md 第 4 节）
+    this.renderer = new THREE.WebGPURenderer({ antialias: true, powerPreference: 'high-performance' })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5))
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping
     container.appendChild(this.renderer.domElement)
 
-    this.scene = new THREE.Scene()
     this.scene.background = new THREE.Color(0x9cc4e4)
     this.scene.fog = new THREE.Fog(0x9cc4e4, 3000, 9000)
 
-    this.camera = new THREE.PerspectiveCamera(60, 1, 1, 12000)
     this.camera.position.set(0, 1600, 2600)
     this.controls = new OrbitControls(this.camera, this.renderer.domElement)
     this.controls.enableDamping = true
@@ -32,6 +44,16 @@ export class Game {
     this.resize()
     this.ro = new ResizeObserver(() => this.resize())
     this.ro.observe(container)
+  }
+
+  // WebGPURenderer 的初始化是异步的：探测 WebGPU 适配器，拿不到就切到 WebGL 2 后端
+  async init(): Promise<RenderBackend> {
+    await this.renderer.init()
+    return this.backend
+  }
+
+  get backend(): RenderBackend {
+    return 'isWebGPUBackend' in this.renderer.backend ? 'WebGPU' : 'WebGL 2'
   }
 
   buildPreview() {
@@ -79,29 +101,29 @@ export class Game {
   }
 
   start() {
-    if (this.running) return
-    this.running = true
-    const loop = () => {
-      if (!this.running) return
-      this.raf = requestAnimationFrame(loop)
+    // init() 期间组件可能已经卸载
+    if (this.disposed) return
+    this.renderer.setAnimationLoop(() => {
       this.controls.update()
       this.renderer.render(this.scene, this.camera)
-    }
-    loop()
+    })
   }
 
   stop() {
-    this.running = false
-    cancelAnimationFrame(this.raf)
+    this.renderer.setAnimationLoop(null)
   }
 
   dispose() {
+    this.disposed = true
     this.stop()
     this.ro.disconnect()
     this.controls.dispose()
     this.scene.traverse((o) => {
-      if (o.geometry) o.geometry.dispose()
-      if (o.material) o.material.dispose()
+      if (o instanceof THREE.Mesh || o instanceof THREE.LineSegments) {
+        o.geometry.dispose()
+        const mats: THREE.Material[] = Array.isArray(o.material) ? o.material : [o.material]
+        for (const m of mats) m.dispose()
+      }
     })
     this.renderer.dispose()
     this.renderer.domElement.remove()

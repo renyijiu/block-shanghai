@@ -1,5 +1,6 @@
 // 上海城市包配置。引擎只读这里和 ./data/ 下的烘焙数据，不直接写死任何上海内容。
 // 字段说明见 docs/02-architecture.md「城市包契约」。
+import type { CityConfig } from '../../engine/city.ts'
 
 export default {
   id: 'shanghai',
@@ -22,7 +23,8 @@ export default {
     actorMetersPerUnit: 1
   },
 
-  // OSM 拉取范围 [south, west, north, east]，覆盖全市及地铁延伸段（11 号线花桥等）
+  // OSM 拉取范围 [south, west, north, east]，覆盖全市及地铁延伸段（11 号线花桥等）。
+  // 花桥段在江苏昆山，超出 Geofabrik 上海提取包的边界，烘焙时要合并江苏包再按此范围裁剪
   osm: {
     bbox: [30.67, 120.85, 31.88, 122.05]
   },
@@ -46,4 +48,4 @@ export default {
     fengxian: { name: '奉贤区', color: '#b88a6b', theme: '滨海' },
     chongming: { name: '崇明区', color: '#5fae7a', theme: '湿地生态岛' }
   }
-}
+} satisfies CityConfig

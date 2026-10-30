@@ -6,7 +6,7 @@
 
 - [x] Vite + Vue 3 + Three.js 工程，依赖精确锁定
 - [x] 引擎和城市分离的目录结构
-- [x] 投影模块 `engine/geo/projection.js` 及单元测试
+- [x] 投影模块 `engine/geo/projection.ts` 及单元测试
 - [x] 上海城市配置（原点、尺度、OSM 范围、16 区）
 - [x] 预览场景：分块网格、核心区边界、原点标记
 - [x] 设计文档 01–07（含技术选型调研）
@@ -16,10 +16,10 @@
 
 **目标**：在真实形状的上海里走路。
 
-- [ ] 按 [07](./07-tech-selection.md#10-迁移步骤确认后执行) 迁移技术栈（WebGPURenderer、TypeScript 6.0、Vitest）
+- [x] 按 [07](./07-tech-selection.md#10-迁移记录) 迁移技术栈（WebGPURenderer、TypeScript 6.0、Vitest），2026-10-30 完成
 - [ ] **真机检查点**：iPhone（iOS 26 / iOS 18）、中端安卓、微信内置浏览器上跑 `bench/`，确认 WebGL 2 回退可用
-- [ ] `tools/fetch-osm.mjs`：下载 Geofabrik 提取包，osmium 按图层过滤导出
-- [ ] `tools/bake-world.mjs`：水系（多边形）、道路、高架、公园、区界 → 投影 → 抽稀 → 分块索引
+- [ ] `tools/fetch-osm.ts`：下载 Geofabrik 上海、江苏提取包，osmium 合并、按 bbox 裁剪、按图层过滤导出（江苏包是为了 11 号线昆山段，见 [03 第 5 节](./03-coordinates-and-data.md#5-烘焙管线)）
+- [ ] `tools/bake-world.ts`：水系（多边形）、道路、高架、公园、区界 → 投影 → 抽稀 → 分块索引
 - [ ] 水面渲染（含倒影开关）、道路和桥面、高架路（分层）
 - [ ] `ChunkManager`：分块流式加载，按 [05](./05-shanghai-content.md#3-程序化建筑画像) 的画像生成建筑和梧桐行道树
 - [ ] `Builder`：方块合并网格 + 碰撞登记；`CollisionWorld`
@@ -33,7 +33,7 @@
 
 **目标**：真实线网能查能坐（快速到达），3/4 号线高架上有车跑。
 
-- [ ] `tools/bake-metro.mjs` + `metro.overrides.json`
+- [ ] `tools/bake-metro.ts` + `metro.overrides.json`
 - [ ] 线网图、路线规划（最快 / 少换乘）、票价、运行时间，带单元测试
 - [ ] 线路图面板、路线规划 UI、快速到达
 - [ ] 出入口、风亭随分块流式生成
@@ -91,7 +91,6 @@
 
 | 事项 | 选项 | 什么时候定 |
 | --- | --- | --- |
-| 技术栈调整 | 按 [07](./07-tech-selection.md) 的建议迁移，或保持现状 | P1 开始前 |
 | 双渲染器 | 只用 WebGPURenderer（含回退）/ 低端机改用 WebGLRenderer | P1 真机检查点后 |
 | 托管位置 | 海外静态托管 / 国内 OSS+CDN（需备案） | P6 前 |
 | 项目许可证 | MIT / Apache-2.0 / 不开源 | 首次公开前 |

@@ -63,9 +63,9 @@ OSM 里还有：浦东机场捷运（东线 / 西线，无颜色）、松江有�
 - 5、16、17 号线和磁浮以高架为主，都在外圈，适合做“高架看风景”的乘车体验。
 - 12–15、18 号线全在地下，地面只有出入口。
 
-### 3.2 烘焙步骤（`tools/bake-metro.mjs`）
+### 3.2 烘焙步骤（`tools/bake-metro.ts`）
 
-1. **拉取**：从 Geofabrik 上海提取包里用 `osmium tags-filter` 切出下列要素，导出为 OSM XML（保留 relation 成员顺序，GeoJSON 会丢掉顺序）
+1. **拉取**：从合并、裁剪后的上海 + 江苏提取包（见 [03 第 5 节](./03-coordinates-and-data.md#5-烘焙管线)）里用 `osmium tags-filter` 切出下列要素，导出为 OSM XML（保留 relation 成员顺序，GeoJSON 会丢掉顺序）
    - subway / light_rail / monorail 的 route relation
    - 成员轨道 way 及其节点坐标
    - stop / platform 节点和 `public_transport=stop_area` relation
@@ -328,6 +328,7 @@ NPC 数量随时段和线路变化：早高峰 7:00–9:30、晚高峰 17:00–1
 | --- | --- | --- |
 | OSM 滞后 | 新开通线路或区段可能没录入 | 发布前对照官网线网核对；用 `metro.overrides.json` 补 |
 | 支线和大站车 | 5、10、11 号线有支线，16 号线有大站车 | 数据模型用 services 表达；第 1 层先只做普通交路 |
+| 跨省区段 | 11 号线兆丰路、光明路、花桥三站在江苏昆山，不在 Geofabrik 上海包里 | 合并江苏包后按 bbox 裁剪（[03 第 5 节](./03-coordinates-and-data.md#5-烘焙管线)）；烘焙输出里检查 11 号线终点是花桥 |
 | 站台数据不全 | 站台类型、开门方向缺失 | 推断不了就用默认值，不影响主流程 |
 | 英文站名 | 部分站点缺少 `name:en` | 用 overrides 补；缺失时临时显示拼音 |
 | 实景乘车 | 高架段让镜头跟着列车在城市场景里走，视觉效果最好，但要同时加载沿线分块 | 第 3 层之后单独评估 |

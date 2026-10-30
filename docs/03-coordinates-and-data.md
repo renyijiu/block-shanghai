@@ -14,7 +14,7 @@
 
 ## 2. 投影
 
-实现：`src/engine/geo/projection.js`，测试：`tests/projection.test.js`。
+实现：`src/engine/geo/projection.ts`，测试：`tests/projection.test.ts`。
 
 1. **局部等距圆柱投影**（以原点为中心，十几公里范围内误差可忽略）：
    - 东向 `ex = (lon − lon0) × 111.32 × cos(lat0)` km
@@ -24,7 +24,7 @@
    - `d > R` 时变成 `R + (d − R) × c`
 3. **换算成格**：`x = ex' × U`，`z = −nz' × U`
 
-当前参数（`src/cities/shanghai/config.js`）：
+当前参数（`src/cities/shanghai/config.ts`）：
 
 | 参数 | 值 | 说明 |
 | --- | --- | --- |
@@ -92,11 +92,14 @@
 ## 5. 烘焙管线
 
 ```
-fetch-osm.mjs                                   bake-*.mjs
-Geofabrik 上海 .osm.pbf ──► osmium 按图层过滤/导出 ──► tools/.cache/ ──► 过滤标签 ──► 合并 way ──► 投影 ──► 抽稀 ──► 分块索引 ──► src/cities/shanghai/data/*.json
+fetch-osm.ts                                                                  bake-*.ts
+Geofabrik 上海 + 江苏 .osm.pbf ──► osmium 合并 → 按 bbox 裁剪 → 按图层过滤/导出 ──► tools/.cache/ ──► 过滤标签 ──► 合并 way ──► 投影 ──► 抽稀 ──► 分块索引 ──► src/cities/shanghai/data/*.json
 ```
 
-1. **拉取**：下载 Geofabrik 的 `asia/china/shanghai-latest.osm.pbf`（约 26 MB，每天更新），用 osmium-tool 按图层过滤并导出（选型理由见 [07 第 8 节](./07-tech-selection.md#8-数据管线)）。中间文件放在 `tools/.cache/`（不入库），重复烘焙不重复下载。Overpass 只用来做小范围的临时查询。
+1. **拉取**：下载 Geofabrik 的 `asia/china/shanghai-latest.osm.pbf`（约 25 MB）和 `asia/china/jiangsu-latest.osm.pbf`（约 76 MB），`osmium merge` 合并，`osmium extract --bbox` 按 `config.osm.bbox` 裁剪，再按图层过滤并导出（选型理由见 [07 第 8 节](./07-tech-selection.md#8-数据管线)）。中间文件放在 `tools/.cache/`（不入库），重复烘焙不重复下载。Overpass 只用来做小范围的临时查询。
+   - **为什么要江苏包**：Geofabrik 的上海包按上海市界（外扩少量缓冲）切割，11 号线最西边的兆丰路、光明路、花桥三站在江苏昆山，不在包内。2026-10-30 用 Geofabrik 的 `shanghai.poly` 核实：这一纬度上包的西边界约在东经 121.145°，三站分别在 121.1455°、121.1126°、121.0998°。
+   - **两个包同一天下载**：Geofabrik 每天用同一份全球数据生成各地的包，同一天的包里同一对象的版本一致，`osmium merge` 才能去重。`fetch-osm.ts` 下载后用 `osmium fileinfo` 核对两个包的数据时间戳，不一致就重新下载。
+   - bbox 西南角还盖到浙江嘉善、平湖一带，那里没有本项目需要的地铁和景点，暂不下载浙江包；P1 定海岸线和市界外地面的处理方式时再看是否需要。
 2. **过滤**：按下表保留需要的要素和标签。
 3. **合并**：把同名、首尾相接的 way 合并成长折线；多边形按 OSM multipolygon 规则组装（外环 / 内环）。
 4. **投影**：调用 `createProjection(config.projection)`，输出整数或 1 位小数的格坐标。

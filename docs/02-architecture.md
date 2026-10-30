@@ -5,15 +5,16 @@
 | 项 | 选择 | 版本（锁定） |
 | --- | --- | --- |
 | UI 框架 | Vue 3（Composition API，`<script setup>`） | 3.5.44 |
-| 3D 渲染 | Three.js / WebGL | 0.186.1 |
+| 3D 渲染 | Three.js `WebGPURenderer`（`three/webgpu`），不支持 WebGPU 时自动回退 WebGL 2；着色器和后处理用 TSL | 0.186.1 |
+| 语言 | TypeScript（`vue-tsc` 做类型检查） | 6.0.3 / vue-tsc 3.3.14 |
 | 构建 | Vite + @vitejs/plugin-vue | 8.3.4 / 6.0.10 |
-| 运行环境 | Node ≥ 20.19（Vite 8 要求） | — |
-| 测试 | `node:test`（纯函数模块） | 内置 |
+| 运行环境 | Node 22.18+ / 24 / 26+（Vitest 5 要求；Node 直接运行 `tools/`、`bench/` 的 `.ts` 脚本） | — |
+| 测试 | Vitest（纯函数模块） | 5.0.5 |
 | 存储 | localStorage（存档）+ IndexedDB（照片） | — |
 
 依赖用精确版本锁定，升级时手动改。
 
-> 技术选型调研见 [07](./07-tech-selection.md)。建议的改动（WebGPURenderer、TypeScript 6.0、Vitest）确认后再更新本表。
+> 选型理由见 [07](./07-tech-selection.md)；2026-10-30 确认并完成迁移，记录见 [07 第 10 节](./07-tech-selection.md#10-迁移记录)。
 
 ## 2. 分层
 
@@ -34,26 +35,28 @@
 
 - `engine/` 不能 import `cities/` 里的任何东西，城市包由入口注入。
 - 城市包不能修改引擎内部状态，只能通过契约里的钩子（建模函数的 `ctx`、任务事件等）交互。
-- 投影只有一份实现（`engine/geo/projection.js`），运行时和 `tools/` 共用。
+- 投影只有一份实现（`engine/geo/projection.ts`），运行时和 `tools/` 共用（Node 直接运行 `.ts`，不需要编译步骤）。
 
 ## 3. 目录结构（目标）
 
 ```
 block-shanghai/
 ├── index.html
-├── vite.config.js
+├── vite.config.ts             Vite + Vitest 配置
+├── tsconfig.json              引用 tsconfig.app.json（浏览器）和 tsconfig.node.json（Node）
 ├── docs/                      设计文档
 ├── bench/                     渲染基准（WebGPU / WebGL 对比，性能回归）
-├── tests/                     单元测试（*.test.js）
+├── tests/                     单元测试（*.test.ts）
 ├── tools/                     数据烘焙脚本
 │   └── .cache/                OSM 原始数据缓存（不入库）
 └── src/
-    ├── main.js
+    ├── main.ts
     ├── App.vue
     ├── style.css
     ├── components/            Menu / GameView / Panels / MetroMap …
     ├── engine/
-    │   ├── Game.js            主循环、系统调度
+    │   ├── Game.ts            主循环、系统调度
+    │   ├── city.ts            城市包契约（类型）
     │   ├── geo/               projection、空间索引、水陆判定
     │   ├── world/             地面、水面、道路、高架、分块管理
     │   ├── build/             Builder（方块合并网格 + 碰撞登记）、通用构件
@@ -64,23 +67,23 @@ block-shanghai/
     │   ├── sky/               昼夜、天气、季节
     │   └── state/             store、存档、事件与任务结算
     └── cities/
-        ├── index.js           城市注册表
+        ├── index.ts           城市注册表
         └── shanghai/
-            ├── config.js      投影、尺度、区划、OSM 范围
+            ├── config.ts      投影、尺度、区划、OSM 范围
             ├── data/          烘焙产物（water / roads / parks / districts / metro）
             ├── landmarks/     景点建模，按区分文件
-            ├── content.js     美食、文化、纪念品、商店、任务、对白
-            └── strings.js     UI 文案
+            ├── content.ts     美食、文化、纪念品、商店、任务、对白
+            └── strings.ts     UI 文案
 ```
 
-当前（P0）只建了 `engine/Game.js`、`engine/geo/projection.js`、`cities/`、`bench/`、`tests/` 和 `tools/README.md`，其余目录按路线图逐步加入。
+目前只建了 `engine/Game.ts`、`engine/city.ts`、`engine/geo/projection.ts`、`cities/`、`bench/`、`tests/` 和 `tools/README.md`，其余目录按路线图逐步加入。
 
 ## 4. 城市包契约
 
-一个城市包需要提供下面这些东西。字段先按上海的需要定，第二个城市接入时再调整。
+一个城市包需要提供下面这些东西。字段先按上海的需要定，第二个城市接入时再调整。类型定义在 `src/engine/city.ts`，城市配置用 `satisfies CityConfig` 检查。
 
 ```js
-// cities/<id>/index.js（P1 起）
+// cities/<id>/index.ts（P1 起）
 export default {
   config,        // 见下
   data: {        // 烘焙产物，可按需动态 import
@@ -171,17 +174,19 @@ export default {
 | 指标 | 目标 |
 | --- | --- |
 | 帧率 | ≥ 50 fps |
-| Draw call | ≤ 600 |
+| Draw call | 目标 ≤ 600；硬上限 1000（再多 WebGPURenderer 的单物体开销会拖垮帧率，见 [07 第 4.3 节](./07-tech-selection.md#43-实测本仓库-bench)） |
 | 视距 | 低 800 / 中 1050 / 高 1300 格 |
 | 同屏 NPC | 低 22 / 中 40 / 高 55 |
 | 同屏渲染列车 | ≤ 12 列 |
 | 首次进入加载 | ≤ 5 秒 |
 
-手段：方块按材质合并网格；重复构件（桥墩、地铁口、树）用 InstancedMesh；远处景点用 LOD 简模；倒影和阴影随画质开关。
+手段：静态方块按材质合并网格；重复构件（桥墩、地铁口、树）用 InstancedMesh / BatchedMesh；远处景点用 LOD 简模；倒影和阴影随画质开关。
 
 ## 8. 代码约定
 
-- ES Modules，2 空格缩进，不写分号。
+- TypeScript `strict` 模式，ES Modules，2 空格缩进，不写分号。`npm run typecheck` 必须通过。
+- 只写 Node 能直接擦除的语法（tsconfig 开了 `erasableSyntaxOnly`、`verbatimModuleSyntax`）：相对导入写 `.ts` 扩展名，类型导入写 `import type`，不用 `enum` / `namespace` / 构造函数参数属性。这样 `tools/`、`bench/` 的脚本能用 `node xxx.ts` 直接运行。
+- 渲染只用 `three/webgpu`：自定义着色器和后处理写 TSL，不用 `ShaderMaterial` / `onBeforeCompile` / `EffectComposer`（WebGPURenderer 不支持）。
 - 注释用中文，只写“为什么”和不明显的约定。
 - 坐标一律注明是经纬度（WGS-84）还是游戏坐标（格）。
-- 纯函数模块（投影、空间索引、路线规划、票价、时刻表）必须有单元测试：`npm test`。
+- 纯函数模块（投影、空间索引、路线规划、票价、时刻表）必须有单元测试（Vitest）：`npm test`。

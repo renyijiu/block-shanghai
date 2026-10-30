@@ -2,9 +2,9 @@
 
 > 方块风格的上海城市漫游：在真实形状的上海里散步、拍照收集景点、坐遍真实的地铁网络。
 
-基于 **Vue 3 + Three.js（WebGL）**，纯前端运行。地理和地铁数据来自 OpenStreetMap，离线烘焙成游戏坐标。
+基于 **Vue 3 + Three.js（WebGPU，自动回退 WebGL 2）+ TypeScript**，纯前端运行。地理和地铁数据来自 OpenStreetMap，离线烘焙成游戏坐标。
 
-**当前阶段：P0 · 项目骨架**（路线图见 [docs/06-roadmap.md](./docs/06-roadmap.md)）
+**当前阶段：P1 · 世界底座**（技术栈迁移已完成，路线图见 [docs/06-roadmap.md](./docs/06-roadmap.md)）
 
 ---
 
@@ -17,16 +17,18 @@
 
 ## 快速开始
 
-需要 Node ≥ 20.19。
+需要 Node 22.18+、24 或 26+（Vitest 5 的要求；22.18 起 Node 能直接运行 `.ts` 脚本）。
 
 ```bash
 npm install
-npm run dev       # http://localhost:5173
-npm test          # 单元测试
-npm run build     # 输出 dist/，可直接静态部署
+npm run dev        # http://localhost:5173
+npm test           # 单元测试（Vitest）
+npm run typecheck  # 类型检查（vue-tsc）
+npm run build      # 类型检查 + 打包，输出 dist/，可直接静态部署
+npm run bench      # 渲染基准，需先 npm run dev（见 docs/07 第 4 节）
 ```
 
-P0 的预览画面：分块网格、核心区 12km 边界（黄圈）和原点标记，可以用鼠标拖动、缩放查看。
+P0 的预览画面：分块网格、核心区 12km 边界（黄圈）和原点标记，可以用鼠标拖动、缩放查看。左上角显示当前渲染后端（WebGPU / WebGL 2）。
 
 ## 项目结构
 
@@ -35,12 +37,13 @@ block-shanghai/
 ├── docs/                    设计文档（从这里开始读）
 ├── src/
 │   ├── engine/              与城市无关的引擎
-│   │   ├── Game.js
-│   │   └── geo/projection.js
+│   │   ├── Game.ts
+│   │   ├── city.ts          城市包契约（类型）
+│   │   └── geo/projection.ts
 │   └── cities/
-│       ├── index.js         城市注册表
+│       ├── index.ts         城市注册表
 │       └── shanghai/
-│           ├── config.js    投影、尺度、区划、OSM 范围
+│           ├── config.ts    投影、尺度、区划、OSM 范围
 │           └── data/        OSM 烘焙产物
 ├── bench/                   渲染基准（WebGPU / WebGL 对比，npm run bench）
 ├── tools/                   数据烘焙脚本（P1 起）
