@@ -107,7 +107,7 @@ const route = computed(() => (from.value !== null && to.value !== null && from.v
 watch(route, () => (dirty = true))
 
 // 线路图：初始以起点为中心
-const start = from.value !== null ? stations[from.value]!.pos : [props.game.player.pos.x, props.game.player.pos.z]
+const start = from.value !== null ? stations[from.value]!.pos : [props.game.mapPos.x, props.game.mapPos.z]
 const view = { x: start[0]!, z: start[1]!, scale: 0.12 }
 let dirty = true
 let raf = 0

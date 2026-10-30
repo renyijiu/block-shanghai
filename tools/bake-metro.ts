@@ -14,6 +14,7 @@ import {
   type MetroService,
   type MetroStation,
   type MetroTrack,
+  type PlatformType,
   type Structure
 } from '../src/engine/metro/data.ts'
 import { CHUNK_SIZE, chunkKey, chunkOf } from '../src/engine/world/chunks.ts'
@@ -34,6 +35,8 @@ interface Overrides {
   transferMin: Record<string, number>
   /** 按 OSM way id 指定轨道结构（规则覆盖不到的漏标） */
   wayStructure: Record<string, Structure>
+  /** 站台形式：“站名|线路 id”或“站名” → island / side */
+  platformType?: Record<string, PlatformType>
 }
 const OVR = JSON.parse(readFileSync(join(import.meta.dirname, 'metro.overrides.json'), 'utf8')) as Overrides
 
@@ -271,6 +274,31 @@ for (const r of routes) {
   line.services.push(service)
 }
 
+// 站台形式：线路关系里的 platform 成员。同一条线在一个车站只用一个站台 way（上下行共用）是岛式，两个以上是侧式；
+// OSM 上标了站台的不多，大部分车站按结构取默认值
+const platformWays = new Map<string, Set<number>>()
+for (const r of routes) {
+  const line = lineMeta(r.tags.ref ?? '', r.tags.route ?? '').id
+  for (const m of r.members) {
+    if (m.type !== 'w' || !m.role.startsWith('platform')) continue
+    const g = ways.get(m.ref)
+    if (!g?.length) continue
+    const c: Pt = [g.reduce((s, p) => s + p[0]!, 0) / g.length, g.reduce((s, p) => s + p[1]!, 0) / g.length]
+    const st = stations.findIndex((s) => km(s.lonlat, c) < 0.4)
+    if (st < 0) continue
+    const k = `${st}|${line}`
+    ;(platformWays.get(k) ?? platformWays.set(k, new Set()).get(k)!).add(m.ref)
+  }
+}
+const platformTypeOf = (st: number, line: string, structure: Structure): PlatformType => {
+  const name = stations[st]!.name
+  const o = OVR.platformType?.[`${name}|${line}`] ?? OVR.platformType?.[name]
+  if (o) return o
+  const n = platformWays.get(`${st}|${line}`)?.size ?? 0
+  if (n) return n >= 2 ? 'side' : 'island'
+  return structure === 'tunnel' ? 'island' : 'side'
+}
+
 // 站台：每条线在车站处的结构、方向、高度（取经过该站的第一个交路）
 for (const line of linesById.values()) {
   for (const s of line.services) {
@@ -287,7 +315,14 @@ for (const line of linesById.values()) {
       const u = bk > ak ? Math.min(1, Math.max(0, (at - ak) / (bk - ak))) : 0
       const h = ah + (bh - ah) * u
       const structure: Structure = h > 4 ? 'viaduct' : h < -1 ? 'tunnel' : 'ground'
-      station.platforms.push({ line: line.id, structure, angle: round3(Math.atan2(bz - az, bx - ax)), pos: [round1(ax + (bx - ax) * u), round1(az + (bz - az) * u)], h: round1(h) })
+      station.platforms.push({
+        line: line.id,
+        structure,
+        angle: round3(Math.atan2(bz - az, bx - ax)),
+        pos: [round1(ax + (bx - ax) * u), round1(az + (bz - az) * u)],
+        h: round1(h),
+        type: platformTypeOf(st, line.id, structure)
+      })
     })
   }
 }

@@ -37,8 +37,8 @@ let last = 0
 const { zoom, onWheel, onDown, onMove, onUp } = usePanZoom(view, { min: 0.03, max: 4, onChange: () => (dirty = true) })
 
 function center() {
-  view.x = props.game.player.pos.x
-  view.z = props.game.player.pos.z
+  view.x = props.game.mapPos.x
+  view.z = props.game.mapPos.z
   dirty = true
 }
 
@@ -61,7 +61,7 @@ function frame(now: number) {
   drawMap(ctx, world, v, { districtColors, districtLines: true, labels: true })
   // 玩家：红色箭头
   const p = props.game.player
-  const [px, py] = toScreen(v, p.pos.x, p.pos.z)
+  const [px, py] = toScreen(v, props.game.mapPos.x, props.game.mapPos.z)
   ctx.save()
   ctx.translate(px, py)
   ctx.rotate(-p.facing)

@@ -230,7 +230,7 @@ function exceptionFare(g: MetroGraph, from: number, to: number): number | null {
 }
 
 /** 票价：连续的地铁段按最短里程计价（特例区间查表），磁浮单独计价 */
-export function routeFare(g: MetroGraph, legs: RouteLeg[]) {
+export function routeFare(g: MetroGraph, legs: Pick<RouteLeg, 'line' | 'from' | 'to'>[]) {
   const rules = g.data.rules
   let fare = 0
   let metroFrom: number | null = null

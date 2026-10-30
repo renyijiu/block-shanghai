@@ -13,8 +13,9 @@
   <template v-if="game && !loading && stats.mode === 'player'">
     <template v-if="!panelOpen">
       <template v-if="!photoOpen">
-        <MiniMap :game="game" :size="mapSize" @open="mapOpen = true" />
-        <div class="side" :style="{ top: `calc(max(12px, env(safe-area-inset-top)) + ${mapSize + 10}px)` }">
+        <MiniMap v-if="!stats.station" :game="game" :size="mapSize" @open="mapOpen = true" />
+        <MetroHud v-else :status="stats.station" :announce="stats.announce" @skip-wait="game.interior?.skipWait(game.player.pos.x)" @skip-next="game.interior?.skipNext()" @skip-to="(i) => game?.interior?.skipTo(i)" />
+        <div class="side" :style="{ top: stats.station ? 'max(12px, env(safe-area-inset-top))' : `calc(max(12px, env(safe-area-inset-top)) + ${mapSize + 10}px)` }">
           <button title="拍照（P）" @click="photoOpen = true">📷 拍照</button>
           <button title="图鉴和相册（C）" @click="codexTab = 'codex'">📖 图鉴</button>
           <button title="地铁线路图" @click="openMetro(null)">🚇 地铁</button>
@@ -54,6 +55,7 @@ import BoatPanel from './components/BoatPanel.vue'
 import CodexPanel from './components/CodexPanel.vue'
 import DiscoverToast, { type DiscoverInfo } from './components/DiscoverToast.vue'
 import DistrictToast from './components/DistrictToast.vue'
+import MetroHud from './components/MetroHud.vue'
 import MetroPanel from './components/MetroPanel.vue'
 import MiniMap from './components/MiniMap.vue'
 import PhotoMode from './components/PhotoMode.vue'
@@ -70,7 +72,7 @@ const config = city.config
 const container = ref<HTMLDivElement | null>(null)
 const backend = ref('')
 const loading = ref('初始化渲染器…')
-const stats = reactive<GameStats>({ fps: 0, drawCalls: 0, triangles: 0, chunks: 0, pending: 0, buildAvg: 0, buildMax: 0, x: 0, z: 0, mode: 'player', view: 'third', district: null, time: '', money: 0, prompt: null, found: 0, landmarks: 0, ride: null })
+const stats = reactive<GameStats>({ fps: 0, drawCalls: 0, triangles: 0, chunks: 0, pending: 0, buildAvg: 0, buildMax: 0, x: 0, z: 0, mode: 'player', view: 'third', district: null, time: '', money: 0, prompt: null, found: 0, landmarks: 0, ride: null, station: null, announce: null })
 // 触屏设备显示摇杆和按钮
 const touch = matchMedia('(pointer: coarse)').matches
 const game = shallowRef<Game | null>(null)
@@ -121,6 +123,40 @@ async function travel(route: Route) {
     travelText.value = ''
   }
   Object.assign(stats, g.stats, { time: g.clock.format(), money: g.money })
+}
+
+// 地铁站内：换场景时淡出淡入；出站要预建目的地分块；站厅的售票机打开线路图（可以快速到达）
+const GO_TEXT: Record<string, string> = { platform: '去站台…', hall: '去站厅…', transfer: '换乘…', board: '上车…', alight: '下车…' }
+async function interiorGo(go: string) {
+  const g = game.value
+  if (!g?.interior?.active || travelText.value) return
+  const verb = go.split(':')[0]!
+  const fade = GO_TEXT[verb]
+  if (fade) {
+    travelText.value = fade
+    await new Promise((r) => setTimeout(r, 350))
+  }
+  const r = g.interiorAction(go)
+  if (fade) travelText.value = ''
+  if (r.notice) showNotice(r.notice)
+  if (r.map) openMetro(g.interior.station, true)
+  if (r.leave !== undefined) {
+    travelText.value = '出站…'
+    try {
+      showNotice(await g.leaveStation(r.leave, (t) => (travelText.value = t)))
+    } finally {
+      travelText.value = ''
+    }
+  }
+}
+
+async function enterStation(station: number, entrance: number) {
+  const g = game.value
+  if (!g || travelText.value) return
+  travelText.value = '进站…'
+  await new Promise((r) => setTimeout(r, 450))
+  g.enterStation(station, entrance)
+  travelText.value = ''
 }
 
 // 坐船：关面板 → 淡出（要等船时显示“等船”）→ 站到船上 → 淡入
@@ -224,7 +260,8 @@ onMounted(async () => {
     loading.value = ''
     // 走到地铁口按 E（或点“进站”）打开地铁面板，起点是这个站
     g.onInteract = (p) => {
-      if (p.kind === 'metro') openMetro(p.station ?? null, true)
+      if (p.kind === 'metro' && p.station !== undefined && p.entrance !== undefined) void enterStation(p.station, p.entrance)
+      else if (p.kind === 'interior' && p.go) void interiorGo(p.go)
       else if (p.kind === 'elevator') void rideElevator(p)
       else if (p.kind === 'boat' && p.pier) boatPanel.value = p.pier
     }
@@ -242,6 +279,13 @@ onMounted(async () => {
       __openMap: () => (mapOpen.value = true),
       __openMetro: (from: number | null, inStation: boolean) => openMetro(from, inStation),
       __interact: () => g.prompt && g.onInteract?.(g.prompt),
+      __go: (go: string) => interiorGo(go),
+      __enter: (name: string, ref?: string) => {
+        const m = g.metro!
+        const si = m.data.stations.findIndex((s) => s.name === name)
+        const ei = m.data.stations[si]!.exits.find((e) => !ref || m.data.entrances[e]!.ref === ref) ?? m.data.stations[si]!.exits[0]!
+        return enterStation(si, ei)
+      },
       __discovered: () => discovered.value?.name ?? null,
       __photo: (on: boolean) => (photoOpen.value = on),
       __board: async (pier: string, line: string) => {

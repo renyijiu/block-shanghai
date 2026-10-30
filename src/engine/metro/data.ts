@@ -4,6 +4,8 @@ export const METRO_DATA_VERSION = 1
 
 export type LineKind = 'subway' | 'apm' | 'maglev'
 export type Structure = 'tunnel' | 'viaduct' | 'ground'
+/** 岛式（一个站台夹在两条轨道中间）/ 侧式（轨道在中间，两边各一个站台） */
+export type PlatformType = 'island' | 'side'
 
 /** 运营交路：一个方向、一条支线或一种大站车 */
 export interface MetroService {
@@ -39,6 +41,8 @@ export interface MetroPlatform {
   pos: [number, number]
   /** 轨面高度（格） */
   h: number
+  /** 站台形式：OSM 能看出来就用 OSM 的，否则地下默认岛式、高架和地面默认侧式（旧数据没有这个字段） */
+  type?: PlatformType
 }
 
 export interface MetroStation {

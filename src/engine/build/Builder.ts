@@ -11,6 +11,8 @@ export interface BoxOptions {
   windows?: number
   /** 是否登记碰撞盒；默认贴地（y0 < 1）的方块登记。'camera' 只挡相机不挡人（树冠） */
   collide?: boolean | 'camera'
+  /** 加上底面（站内的天花板、悬挂的牌子从下面看得见） */
+  bottom?: boolean
 }
 
 export class Builder {
@@ -23,6 +25,7 @@ export class Builder {
     const g = o.glass ? this.glass : this.solid
     g.window = o.windows ?? 1
     g.box(x0, y0, z0, x1, y1, z1, rgb(color), rgb(o.top ?? color))
+    if (o.bottom) g.bottom(x0, y0, z0, x1, z1, rgb(color))
     const c = o.collide ?? y0 < 1
     if (c === 'camera') this.colliders.push({ x0, y0, z0, x1, y1, z1, soft: true })
     else if (c) this.colliders.push({ x0, y0, z0, x1, y1, z1 })

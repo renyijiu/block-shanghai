@@ -45,6 +45,11 @@ export class MetroSystem {
     return new MetroSystem(data)
   }
 
+  /** 直接用已经读好的数据（测试用） */
+  static fromData(data: MetroData): MetroSystem {
+    return new MetroSystem(data)
+  }
+
   /** 离 (x, z) 最近的车站 */
   nearestStation(x: number, z: number) {
     let best = 0

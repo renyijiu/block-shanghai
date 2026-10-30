@@ -72,9 +72,10 @@ export class PhotoSystem {
   }
 
   /** 按快门：等下一帧渲染完取图，识别景点，再套滤镜和落款 */
-  async shoot(filter: PhotoFilter, caption: (names: string[]) => string, nameOf: (id: string) => string): Promise<Shot> {
+  async shoot(filter: PhotoFilter, caption: (names: string[]) => string, nameOf: (id: string) => string, identify = true): Promise<Shot> {
     const { canvas, cam } = await new Promise<{ canvas: HTMLCanvasElement; cam: ShotCamera }>((r) => (this.pending = r))
-    const recognized = recognize(this.targets, cam, (t) => this.visible(t, cam))
+    // 站内（独立场景）不识别城市里的景点
+    const recognized = identify ? recognize(this.targets, cam, (t) => this.visible(t, cam)) : []
     const out = this.develop(canvas, filter, caption(recognized.map(nameOf)))
     const thumb = document.createElement('canvas')
     const tk = THUMB_SIZE / Math.max(out.width, out.height)

@@ -19,6 +19,8 @@ import type { Route } from './metro/network.ts'
 import { Sky } from './sky/Sky.ts'
 import { GameClock } from './state/clock.ts'
 import { BoatSystem, type Pier, type Ride } from './transport/BoatSystem.ts'
+import { InteriorManager, type InteriorResult, type MetroEvent, type StationStatus } from './interior/InteriorManager.ts'
+import type { Announcement } from './interior/trip.ts'
 import { ChunkManager } from './world/ChunkManager.ts'
 import { CHUNK_SIZE } from './world/chunks.ts'
 import { DistrictIndex } from './world/districts.ts'
@@ -62,6 +64,10 @@ export interface GameStats {
   landmarks: number
   /** 坐船中：线名、开往哪里、还有几分钟（游戏时间）、开没开 */
   ride: { name: string; to: string; minutes: number; sailing: boolean } | null
+  /** 在地铁站里：位置、站台两侧、车厢里的下一站 */
+  station: StationStatus | null
+  /** 最新报站（id 变了界面就弹出） */
+  announce: (Announcement & { id: number }) | null
 }
 
 /** 拍照的结果，给界面显示 */
@@ -99,7 +105,7 @@ export class Game {
   devCamera: DevCamera | null = null
   districts: DistrictIndex | null = null
   world: WorldData | null = null
-  readonly stats: GameStats = { fps: 0, drawCalls: 0, triangles: 0, chunks: 0, pending: 0, buildAvg: 0, buildMax: 0, x: 0, z: 0, mode: 'player', view: 'third', district: null, time: '', money: 0, prompt: null, found: 0, landmarks: 0, ride: null }
+  readonly stats: GameStats = { fps: 0, drawCalls: 0, triangles: 0, chunks: 0, pending: 0, buildAvg: 0, buildMax: 0, x: 0, z: 0, mode: 'player', view: 'third', district: null, time: '', money: 0, prompt: null, found: 0, landmarks: 0, ride: null, station: null, announce: null }
   readonly clock = new GameClock()
   readonly sky: Sky
   readonly interact = new InteractRegistry()
@@ -111,6 +117,14 @@ export class Game {
   /** 走近新景点时调用（界面弹出“发现景点”） */
   onDiscover: ((p: PlacedLandmark) => void) | null = null
   boats: BoatSystem | null = null
+  /** 地铁站内（站厅、站台、车厢、换乘通道），独立场景 */
+  interior: InteriorManager | null = null
+  /** 地铁事件（进站、出站、乘车、换乘），界面和以后的成就系统用 */
+  onMetro: ((e: MetroEvent) => void) | null = null
+  /** 在站里时，城市里对应的位置（这个站的出入口）：存档、小地图用 */
+  private cityAnchor: { x: number; z: number } | null = null
+  /** 上车时自动从第三人称换成了第一人称，下车要换回来 */
+  private carView = false
   /** 正在坐的船 */
   ride: Ride | null = null
   /** 下船时调用（界面提示到达） */
@@ -223,6 +237,8 @@ export class Game {
       { radius: QUALITY_PRESETS[this.quality].viewDistance, budgetMs: 6 }
     )
     this.scene.add(this.chunks.root)
+    this.interior = new InteriorManager(metro, this.clock)
+    this.interior.onEvent = (e) => this.onMetroEvent(e)
     this.trains = new TrainRenderer(metro, this.materials.elevated)
     this.scene.add(this.trains.root)
     this.playerWorld = {
@@ -316,6 +332,8 @@ export class Game {
     const metro = this.metro
     if (!metro || !this.playerWorld || !this.chunks) return { ok: false, message: '地铁还没准备好' }
     if (this.money < route.fare) return { ok: false, message: `余额不足：票价 ${route.fare} 元，钱包里只有 ${this.money} 元` }
+    // 从站厅的线路图快速到达：先离开站内场景
+    if (this.interior?.active) this.exitInterior()
     const stations = metro.data.stations
     const dest = stations[route.to]!
     this.money -= route.fare
@@ -381,6 +399,107 @@ export class Game {
     this.saveNow()
     const to = line.kind === 'ferry' ? `开往${ride.to.name}` : '黄浦江往返'
     return { ok: true, message: `${line.name} · ${to} · ${line.fare} 元${wait > 60 ? ` · 等了 ${Math.round(wait / 60)} 分钟` : ''}` }
+  }
+
+  /** 从街上的地铁口进站：切到站厅场景，站在对应出口的楼梯下 */
+  enterStation(station: number, entrance: number) {
+    const it = this.interior
+    if (!it || this.ride) return
+    const e = this.metro!.data.entrances[entrance]
+    this.cityAnchor = e ? { x: e.pos[0], z: e.pos[1] } : { x: this.player.pos.x, z: this.player.pos.z }
+    this.placeInside(it.enter(station, entrance))
+  }
+
+  /** 站内操作（交互点的 go）：换场景就把玩家放到新场景的出生点；出站、打开线路图交给界面 */
+  interiorAction(go: string): InteriorResult {
+    const it = this.interior
+    if (!it?.active) return {}
+    const before = it.scene
+    const r = it.handle(go, this.money)
+    if (r.spawn) this.placeInside(r.spawn, it.scene !== before)
+    // 换了车站（坐车到了别的站）就更新城市里的落脚点
+    const st = it.station
+    if (st !== null) {
+      const s = this.metro!.data.stations[st]!
+      const e = s.exits[0] !== undefined ? this.metro!.data.entrances[s.exits[0]]! : null
+      this.cityAnchor = e ? { x: e.pos[0], z: e.pos[1] } : { x: s.pos[0], z: s.pos[1] }
+    }
+    return r
+  }
+
+  /** 从站厅的出口回到街上（可能已经坐车到了很远的站，先预建那里的分块） */
+  async leaveStation(entrance: number, onProgress?: (text: string) => void): Promise<string> {
+    const metro = this.metro
+    if (!metro || !this.chunks || !this.playerWorld) return ''
+    const e = metro.data.entrances[entrance]!
+    const st = metro.data.stations[e.station]!
+    this.exitInterior()
+    const [x, z] = e.pos
+    this.traveling = true
+    this.player.pos.set(x, 0, z)
+    try {
+      await this.chunks.prebuild(x, z, (d, t) => onProgress?.(`出站 ${d}/${t}`))
+      this.landmarks?.update(x, z)
+      this.player.spawn(x, z, this.playerWorld)
+      this.player.model.position.copy(this.player.pos)
+    } finally {
+      this.traveling = false
+    }
+    this.saveNow()
+    return `${st.name}站 ${e.ref ? `${e.ref} 号口` : ''}出站`
+  }
+
+  /** 玩家在城市地图上的位置（在地铁站里时是这个站的出入口） */
+  get mapPos(): { x: number; z: number } {
+    return this.cityAnchor ?? this.player.pos
+  }
+
+  private exitInterior() {
+    if (this.carView) {
+      this.carView = false
+      this.rig.mode = 'third'
+      this.rig.pitch = 0.3
+    }
+    this.interior?.leave()
+    this.scene.add(this.player.model)
+    this.cityAnchor = null
+    this.prompt = null
+  }
+
+  private placeInside(s: { x: number; z: number; facing: number }, turn = true) {
+    const it = this.interior!
+    it.scene!.scene.add(this.player.model)
+    this.player.spawn(s.x, s.z, it.world)
+    this.player.model.position.copy(this.player.pos)
+    if (turn) {
+      this.player.facing = this.player.model.rotation.y = s.facing
+      this.rig.yaw = s.facing
+      // 车厢很窄，第三人称的相机会贴在墙上：上车自动换第一人称，下车换回来
+      const inCar = it.place?.kind === 'car'
+      if (inCar && this.rig.mode === 'third') {
+        this.carView = true
+        this.rig.mode = 'first'
+        this.rig.pitch = 0
+      } else if (!inCar && this.carView) {
+        this.carView = false
+        this.rig.mode = 'third'
+        this.rig.pitch = 0.3
+      }
+    }
+    this.prompt = null
+  }
+
+  // 地铁事件：到访车站、乘车次数、出站扣费（docs/04 第 8 节）
+  private onMetroEvent(e: MetroEvent) {
+    const stations = this.metro!.data.stations
+    if (e.type === 'metroEnter' || e.type === 'metroTransfer') this.metroStats.visited.add(stations[e.station]!.id)
+    if (e.type === 'metroExit') {
+      this.money -= e.fare
+      this.metroStats.visited.add(stations[e.station]!.id)
+      if (e.trip.legs.length) this.metroStats.rides++
+    }
+    this.onMetro?.(e)
+    this.saveNow()
   }
 
   /** 坐船时跳过航程：时钟直接到靠岸 */
@@ -449,10 +568,12 @@ export class Game {
     const district = this.districts?.at(this.player.pos.x, this.player.pos.z)?.id
     const place = (district && this.city.config.districts[district]?.name) ?? ''
     const time = this.clock.format()
+    const inside = this.interior?.active ? this.interior.status()?.where.split(' · ')[0] : null
     const shot = await this.photo.shoot(
       this.photoFilter,
-      (names) => [this.city.config.name, names.slice(0, 3).join('、') || place, time].filter(Boolean).join(' · '),
-      (id) => this.landmarkName(id)
+      (names) => [this.city.config.name, names.slice(0, 3).join('、') || inside || place, time].filter(Boolean).join(' · '),
+      (id) => this.landmarkName(id),
+      !inside
     )
     const id = newPhotoId()
     let saved = false
@@ -492,7 +613,8 @@ export class Game {
   saveNow() {
     if (!this.persist || this.devCamera || !this.world) return
     // 坐船时存下船的码头，读档不会掉进江里
-    const p = this.ride ? { x: this.ride.to.land[0], y: 0, z: this.ride.to.land[1] } : this.player.pos
+    // 在地铁站里存出入口的位置
+    const p = this.ride ? { x: this.ride.to.land[0], y: 0, z: this.ride.to.land[1] } : this.cityAnchor ? { ...this.cityAnchor, y: 0 } : this.player.pos
     const r = this.rig
     writeSave(localStorage, {
       city: this.city.config.id,
@@ -529,8 +651,24 @@ export class Game {
   private frame(now: number) {
     const dt = Math.min(0.1, (now - this.last) / 1000)
     this.last = now
-    this.clock.tick(dt)
+    // 乘地铁时时钟由站内流程按真实运行分钟推进
+    if (!this.interior?.timeControlled) this.clock.tick(dt)
     this.sky.update(this.clock.daySeconds)
+    const it = this.interior
+    if (it?.active && !this.devCamera) {
+      // 站内：城市场景暂停更新，只渲染站内场景
+      this.updatePlayer(dt, now)
+      it.update(dt)
+      if (it.scene) this.renderer.render(it.scene.scene, this.camera)
+      this.photo?.afterRender()
+      this.afterRender?.()
+      this.updateStats(now, this.cityAnchor ?? this.player.pos)
+      if (now - this.savedAt > AUTOSAVE_MS) {
+        this.savedAt = now
+        this.saveNow()
+      }
+      return
+    }
     const f = this.devCamera ? this.updateDev(dt) : this.updatePlayer(dt, now)
     this.chunks?.update(f.x, f.z)
     this.landmarks?.update(f.x, f.z, this.camera.position.x, this.camera.position.z)
@@ -562,7 +700,8 @@ export class Game {
   }
 
   private updatePlayer(dt: number, now: number) {
-    const world = this.playerWorld
+    const inside = this.interior?.active ? this.interior : null
+    const world = inside ? inside.world : this.playerWorld
     if (!world || this.traveling) return this.player.pos
     if (this.ride) {
       this.updateRide(this.ride)
@@ -579,8 +718,9 @@ export class Game {
     this.input.moveLocked = this.rig.selfie
     this.rig.update(this.camera, this.player, this.input, world)
     const p = this.player.pos
-    this.prompt = this.interact.nearest(p.x, p.z, p.y)
+    this.prompt = (inside ? inside.scene!.interact : this.interact).nearest(p.x, p.z, p.y)
     if (this.input.consumeInteract() && this.prompt) this.onInteract?.(this.prompt)
+    if (inside) return p
     const found = this.landmarks?.discover(p.x, p.z, this.clock.seconds)
     if (found) {
       this.onDiscover?.(found)
@@ -650,6 +790,8 @@ export class Game {
       prompt: this.prompt ? { label: this.prompt.label, action: this.prompt.action } : null,
       found: this.landmarks?.found.size ?? 0,
       landmarks: this.landmarks?.placed.length ?? 0,
+      station: this.interior?.status() ?? null,
+      announce: this.interior?.announcement ?? null,
       ride: this.ride
         ? {
             name: this.ride.line.name,
@@ -680,6 +822,7 @@ export class Game {
     this.trains?.dispose()
     this.landmarks?.dispose()
     this.boats?.dispose()
+    this.interior?.dispose()
     this.album?.close()
     this.player.dispose()
     this.ground.geometry.dispose()

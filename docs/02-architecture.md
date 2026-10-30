@@ -67,7 +67,7 @@ block-shanghai/
     │   ├── metro/             地铁：数据格式、线网与路线规划、时刻表、轨道和车站建模、列车
     │   ├── landmarks/         LandmarkManager：景点按距离加载、远近两档细节、发现检测
     │   ├── transport/         船（boats.ts 航线和时刻表的纯函数、BoatSystem 码头和船）；以后加巴士
-    │   ├── interior/          独立室内场景（地铁站、车厢）
+    │   ├── interior/          地铁站内的独立场景（站厅、站台、车厢、换乘通道）、乘车流程
     │   ├── photo/             摄影、滤镜、景点识别
     │   ├── sky/               昼夜、天气、季节
     │   ├── state/             存档（save.ts）、store、事件与任务结算
@@ -163,7 +163,7 @@ export default {
 | `NPCManager` | 路人生成、行为、人群区域、对白 | ✅ |
 | `Transport` | 渡轮、游船（P3：`transport/boats.ts` 按游戏时间算船的位置，`BoatSystem` 开局建好码头的栈桥和趸船、每帧摆船、坐船时玩家站在甲板上跟着走、到站下船）；巴士、观光车以后加；观光电梯是景点的交互点 | ✅ |
 | `MetroSystem` | 线网、路线规划、按时刻表算列车位置（`metro/MetroSystem.ts`）；`TrainRenderer` 负责高架列车渲染（`metro/trains.ts`）；乘车流程（P4） | ✅ |
-| `InteriorManager` | 站厅、站台、车厢等独立场景的构建与切换 | 在室内时 |
+| `InteriorManager` | 站厅、站台、车厢、换乘通道等独立场景的构建与切换；乘车时间轴（按真实运行分钟推进时钟）、报站、出站计费，发出 `metroEnter` / `metroExit` / `metroRide` / `metroTransfer` 事件（P4） | 在室内时 |
 | `PhotoSystem` | 按快门那一帧渲染完从画布取图；滤镜按城市包参数逐像素处理（`photo/filters.ts`，取景时用 CSS filter 近似预览，像素风降低渲染分辨率）；识别景点（`photo/recognize.ts`：瞄准点在画面中间 90%、在 `photoR` 以内、视线没被碰撞盒挡住）；照片存 IndexedDB（`photo/album.ts`） | 拍照时 |
 | `Sky` | 昼夜、天气、季节、夜间材质 | ✅ |
 | `store` | 响应式 UI 状态 + 存档 + 事件 → 任务结算 | — |

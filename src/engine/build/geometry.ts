@@ -63,6 +63,11 @@ export class GeoBuilder {
     this.quad([x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [0, 0, -1], c)
   }
 
+  /** 底面（朝下）：站内的天花板、雨棚从下面看得见 */
+  bottom(x0: number, y0: number, z0: number, x1: number, z1: number, c: RGB) {
+    this.quad([x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1], [0, -1, 0], c)
+  }
+
   /**
    * 任意朝向的方块（不含底面）：中心 (cx, cz)，沿 angle 方向（atan2(dz, dx)）长 len、横向宽 wid，高度 y0..y1。
    * 用于地铁桥墩盖梁、隧道口、车站等沿轨道方向的构件

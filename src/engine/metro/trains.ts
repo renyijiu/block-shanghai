@@ -6,7 +6,7 @@ import type { MetroSystem, VisibleTrain } from './MetroSystem.ts'
 
 export const TRAIN = { cars: 3, carLength: 14, gap: 1, width: 3, height: 3.6, max: 12, lateral: 1.6 }
 
-type CarKind = 'head' | 'middle' | 'tail'
+export type CarKind = 'head' | 'middle' | 'tail'
 
 interface Slot {
   group: THREE.Group
@@ -16,7 +16,7 @@ interface Slot {
 }
 
 // 一节车厢的几何（局部坐标：x 沿车长、z 横向、y 向上，车底在 y = 0）
-function carGeometry(kind: CarKind, lineColor: number) {
+export function carGeometry(kind: CarKind, lineColor: number) {
   const g = new GeoBuilder()
   const L = TRAIN.carLength / 2
   const W = TRAIN.width / 2
