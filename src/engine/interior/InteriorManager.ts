@@ -1,6 +1,7 @@
 // 站内流程（docs/04 第 7 节）：街道 → 站厅 → 过闸 → 站台 → 车厢（逐站行驶、报站、可跳过）→ 站台 / 换乘通道 → 站厅 → 出口。
 // 场景按需建、换场景时销毁；乘车时游戏时钟按真实运行分钟推进，跟展示时长无关
 import type { PlayerWorld } from '../actors/Player.ts'
+import type { MetroEvent, Trip } from '../metro/collection.ts'
 import type { MetroStation } from '../metro/data.ts'
 import type { MetroSystem } from '../metro/MetroSystem.ts'
 import { routeFare } from '../metro/network.ts'
@@ -16,18 +17,7 @@ export type Place =
   | { kind: 'car'; line: string }
   | { kind: 'corridor'; station: number; from: string; to: string }
 
-/** 一次进站到出站：进站的车站和坐过的每一段 */
-export interface Trip {
-  entry: number
-  legs: { line: string; from: number; to: number }[]
-}
-
-/** 地铁事件（docs/04 第 8 节），Game 拿来记到访车站、乘车次数，以后结算成就和任务 */
-export type MetroEvent =
-  | { type: 'metroEnter'; station: number }
-  | { type: 'metroExit'; station: number; exit: string; fare: number; trip: Trip }
-  | { type: 'metroRide'; line: string; from: number; to: number; stations: number[] }
-  | { type: 'metroTransfer'; station: number; from: string; to: string }
+export type { MetroEvent, Trip } from '../metro/collection.ts'
 
 /** 乘车中的列车：哪一班、在第几站、正在停站还是行驶 */
 interface Ride {
@@ -41,8 +31,9 @@ interface Ride {
   /** 本阶段开始、结束时的游戏时间 */
   g0: number
   g1: number
-  /** 上车的车站（车站序号）、从上车起经过的车站 */
+  /** 上车的车站（车站序号）、上车时的游戏时间、从上车起经过的车站 */
   boarded: number
+  t0: number
   passed: number[]
   /** 窗外景物累计滚动（格） */
   scroll: number
@@ -259,7 +250,7 @@ export class InteriorManager {
     const car = new CarScene(this.mats, { line: this.line(line), crowd: this.crowd(line) }, this.seed++)
     this.setScene(car, { kind: 'car', line })
     const t = this.clock.seconds
-    this.ride = { call, stop: call.stop, phase: 'dwell', elapsed: 0, duration: 2, g0: t, g1: Math.max(t, call.depart), boarded: station, passed: [station], scroll: 0, scroll0: 0, span: 0 }
+    this.ride = { call, stop: call.stop, phase: 'dwell', elapsed: 0, duration: 2, g0: t, g1: Math.max(t, call.depart), boarded: station, t0: t, passed: [station], scroll: 0, scroll0: 0, span: 0 }
     this.timeControlled = true
     car.setDoors(true)
     this.refreshCar()
@@ -273,7 +264,7 @@ export class InteriorManager {
     const line = r.call.rt.line.id
     if (station !== r.boarded) {
       this.trip?.legs.push({ line, from: r.boarded, to: station })
-      this.onEvent?.({ type: 'metroRide', line, from: r.boarded, to: station, stations: r.passed })
+      this.onEvent?.({ type: 'metroRide', line, from: r.boarded, to: station, stations: r.passed, t0: r.t0 })
     }
     // 下车：目的站的站台，列车停在这一侧开着门，过一会儿开走
     const sides = platformSides(this.metro, station, line)

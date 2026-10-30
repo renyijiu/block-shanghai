@@ -4,11 +4,16 @@
       <div class="tabs">
         <button :class="{ on: tab === 'codex' }" @click="tab = 'codex'">图鉴 {{ shotCount }}/{{ total }}</button>
         <button :class="{ on: tab === 'album' }" @click="tab = 'album'">相册 {{ photos.length }}</button>
+        <button v-if="game.metro" :class="{ on: tab === 'metro' }" @click="tab = 'metro'">地铁</button>
       </div>
       <button class="close" title="关闭（Esc）" @click="emit('close')">✕</button>
     </div>
 
-    <div v-if="tab === 'codex'" class="body">
+    <div v-if="tab === 'metro'" class="body">
+      <MetroCollection :game="game" />
+    </div>
+
+    <div v-else-if="tab === 'codex'" class="body">
       <p class="intro">走近景点会自动“发现”；拍照时景点在画面里、没被挡住，就会解锁图鉴。外滩、豫园、人民广场的子景点可以单独拍。</p>
       <section v-for="g in grades" :key="g.grade">
         <h3>{{ g.title }}</h3>
@@ -66,11 +71,12 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Game } from '../engine/Game.ts'
 import { formatClock } from '../engine/state/clock.ts'
+import MetroCollection from './MetroCollection.vue'
 
-const props = defineProps<{ game: Game; initialTab?: 'codex' | 'album' }>()
+const props = defineProps<{ game: Game; initialTab?: 'codex' | 'album' | 'metro' }>()
 const emit = defineEmits<{ close: [] }>()
 const game = props.game
-const tab = ref<'codex' | 'album'>(props.initialTab ?? 'codex')
+const tab = ref<'codex' | 'album' | 'metro'>(props.initialTab ?? 'codex')
 watch(
   () => props.initialTab,
   (t) => t && (tab.value = t)

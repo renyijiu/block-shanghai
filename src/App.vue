@@ -62,6 +62,7 @@ import PhotoMode from './components/PhotoMode.vue'
 import TouchControls from './components/TouchControls.vue'
 import { Game, type GameStats } from './engine/Game.ts'
 import type { Route } from './engine/metro/network.ts'
+import { ACHIEVEMENTS, DAILY_REWARD } from './engine/metro/collection.ts'
 import type { InteractPoint } from './engine/world/interact.ts'
 import type { Pier } from './engine/transport/BoatSystem.ts'
 import { QUALITY_ORDER, QUALITY_PRESETS, type QualityLevel } from './engine/quality.ts'
@@ -83,7 +84,7 @@ const mapSize = touch ? 112 : 160
 const metroPanel = ref<{ from: number | null; inStation: boolean } | null>(null)
 // 拍照模式（游戏照常跑）和图鉴 / 相册面板
 const photoOpen = ref(false)
-const codexTab = ref<'codex' | 'album' | null>(null)
+const codexTab = ref<'codex' | 'album' | 'metro' | null>(null)
 // 码头的船票面板：码头名
 const boatPanel = ref<string | null>(null)
 const panelOpen = computed(() => mapOpen.value || !!metroPanel.value || !!codexTab.value || !!boatPanel.value)
@@ -266,6 +267,15 @@ onMounted(async () => {
       else if (p.kind === 'boat' && p.pier) boatPanel.value = p.pier
     }
     g.onRideEnd = (message) => showNotice(message)
+    // 地铁成就、线路徽章、每日任务
+    g.onProgress = (gain) => {
+      const parts = [
+        ...gain.achievements.map((id) => `🏅 达成成就：${ACHIEVEMENTS.find((a) => a.id === id)?.name ?? id}`),
+        ...gain.badges.map((id) => `点亮线路徽章：${g.metro?.lineById.get(id)?.name ?? id}`),
+        ...gain.daily.map((id) => `每日任务完成：${g.dailyTasks().find((t) => t.id === id)?.title ?? id} +¥${DAILY_REWARD}`)
+      ]
+      if (parts.length) showNotice(parts.join('　'))
+    }
     g.onDiscover = ({ def }) => showDiscover({ id: def.id, name: def.name, grade: def.grade, district: config.districts[def.district as DistrictId]?.name ?? '', desc: def.desc, tip: def.tip ?? '' })
     g.start()
     // 引擎状态按 5 Hz 同步到界面（docs/07 第 5 节）
@@ -294,7 +304,7 @@ onMounted(async () => {
         return notice.value
       },
       __skipRide: () => skipRide(),
-      __codex: (tab: 'codex' | 'album' | null) => (codexTab.value = tab),
+      __codex: (tab: 'codex' | 'album' | 'metro' | null) => (codexTab.value = tab),
       __face: (x: number, y: number, z: number) => {
         // 测试用：让相机朝向某个点（第三人称时相机在人身后）
         const p = g.player.pos
@@ -450,7 +460,9 @@ onBeforeUnmount(() => {
   color: #fff;
   font-size: 15px;
   pointer-events: none;
-  white-space: nowrap;
+  max-width: calc(100% - 32px);
+  width: max-content;
+  text-align: center;
 }
 
 .fade-enter-active,

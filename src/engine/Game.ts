@@ -19,7 +19,8 @@ import type { Route } from './metro/network.ts'
 import { Sky } from './sky/Sky.ts'
 import { GameClock } from './state/clock.ts'
 import { BoatSystem, type Pier, type Ride } from './transport/BoatSystem.ts'
-import { InteriorManager, type InteriorResult, type MetroEvent, type StationStatus } from './interior/InteriorManager.ts'
+import { InteriorManager, type InteriorResult, type StationStatus } from './interior/InteriorManager.ts'
+import { DAILY_REWARD, dailyTasks, newProgress, recheck, record, type DailyTask, type ExitTarget, type Gain, type MetroEvent, type MetroProgress } from './metro/collection.ts'
 import type { Announcement } from './interior/trip.ts'
 import { ChunkManager } from './world/ChunkManager.ts'
 import { CHUNK_SIZE } from './world/chunks.ts'
@@ -37,6 +38,12 @@ export type RenderBackend = 'WebGPU' | 'WebGL 2'
 const SKY = 0x9cc4e4
 /** 自动存档间隔（毫秒） */
 const AUTOSAVE_MS = 10_000
+
+/** 现实日期 YYYY-MM-DD（每日任务按它刷新） */
+const today = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 export interface GameStats {
   fps: number
@@ -136,7 +143,11 @@ export class Game {
   photoMode = false
   photoFilter: PhotoFilter
   money = NEW_GAME.money
-  readonly metroStats = { rides: 0, visited: new Set<string>() }
+  /** 地铁收集进度：到访车站、坐过的区间、成就、每日任务（metro/collection.ts） */
+  metroProgress: MetroProgress = newProgress()
+  /** 达成成就、点亮徽章、完成每日任务时调用（界面提示） */
+  onProgress: ((g: Gain) => void) | null = null
+  private exitTargets: ExitTarget[] | null = null
   /** 附近的交互点 */
   prompt: InteractPoint | null = null
   /** 按 E / 点按钮触发交互时调用（界面打开地铁面板） */
@@ -281,8 +292,8 @@ export class Game {
         Object.assign(this.rig, save.camera)
         this.clock.seconds = save.time
         this.money = save.money
-        this.metroStats.rides = save.metro.rides
-        this.metroStats.visited = new Set(save.metro.visited)
+        this.metroProgress = structuredClone(save.metro)
+        recheck(metro.data, this.metroProgress, this.clock.seconds)
         for (const [id, t] of Object.entries(save.codex.found)) this.landmarks.found.set(id, t)
         this.codexShot = { ...save.codex.shot }
       }
@@ -336,17 +347,19 @@ export class Game {
     if (this.interior?.active) this.exitInterior()
     const stations = metro.data.stations
     const dest = stations[route.to]!
-    this.money -= route.fare
+    // 快速到达也按地铁事件记：进站、各段乘车、换乘、出站扣费（docs/04 第 8 节）
+    const t0 = this.clock.seconds
+    this.onMetroEvent({ type: 'metroEnter', station: route.from })
+    route.legs.forEach((l, i) => {
+      if (i) this.onMetroEvent({ type: 'metroTransfer', station: l.from, from: route.legs[i - 1]!.line, to: l.line })
+      this.onMetroEvent({ type: 'metroRide', line: l.line, from: l.from, to: l.to, stations: l.stations, t0 })
+    })
     this.clock.addMinutes(route.minutes + 4)
-    this.metroStats.rides++
-    // 进站、出站、换乘的车站都算到访（docs/04 第 8 节）
-    for (const l of route.legs) {
-      this.metroStats.visited.add(stations[l.from]!.id)
-      this.metroStats.visited.add(stations[l.to]!.id)
-    }
+    this.onMetroEvent({ type: 'metroExit', station: route.to, exit: '', fare: route.fare, trip: { entry: route.from, legs: route.legs } })
     // 出口：编号最小的那个；没有出入口数据就在车站中心
-    const exits = dest.exits.map((i) => metro.data.entrances[i]!).sort((a, b) => a.ref.localeCompare(b.ref, 'zh', { numeric: true }))
-    const exit = exits[0]
+    const exitIdx = [...dest.exits].sort((a, b) => metro.data.entrances[a]!.ref.localeCompare(metro.data.entrances[b]!.ref, 'zh', { numeric: true }))[0]
+    const exit = exitIdx !== undefined ? metro.data.entrances[exitIdx]! : undefined
+    if (exitIdx !== undefined) this.onMetroEvent({ type: 'metroLeave', station: route.to, entrance: exitIdx })
     const [x, z] = exit ? exit.pos : dest.pos
     // 先把玩家（也就是分块加载的焦点）挪到目的地：否则渲染循环还按旧位置加载分块，和预建互相卸载、永远建不完
     this.traveling = true
@@ -434,6 +447,7 @@ export class Game {
     const e = metro.data.entrances[entrance]!
     const st = metro.data.stations[e.station]!
     this.exitInterior()
+    this.onMetroEvent({ type: 'metroLeave', station: e.station, entrance })
     const [x, z] = e.pos
     this.traveling = true
     this.player.pos.set(x, 0, z)
@@ -489,17 +503,33 @@ export class Game {
     this.prompt = null
   }
 
-  // 地铁事件：到访车站、乘车次数、出站扣费（docs/04 第 8 节）
+  // 地铁事件：出站扣费，记到访车站、区间、成就、每日任务（docs/04 第 8 节）；每日任务完成给奖励
   private onMetroEvent(e: MetroEvent) {
-    const stations = this.metro!.data.stations
-    if (e.type === 'metroEnter' || e.type === 'metroTransfer') this.metroStats.visited.add(stations[e.station]!.id)
-    if (e.type === 'metroExit') {
-      this.money -= e.fare
-      this.metroStats.visited.add(stations[e.station]!.id)
-      if (e.trip.legs.length) this.metroStats.rides++
-    }
+    if (e.type === 'metroExit') this.money -= e.fare
+    const gain = record(this.metro!.data, this.metroProgress, e, this.clock.seconds, today(), this.dailyTasks())
+    this.money += gain.daily.length * DAILY_REWARD
     this.onMetro?.(e)
+    if (gain.achievements.length || gain.badges.length || gain.daily.length) this.onProgress?.(gain)
     this.saveNow()
+  }
+
+  /** 今天的每日任务（“从指定出口出站去某个景点”在离景点最近的出入口里按日期挑一个） */
+  dailyTasks(): DailyTask[] {
+    const metro = this.metro
+    if (!metro || !this.landmarks) return []
+    this.exitTargets ??= this.landmarks.placed.flatMap((p) => {
+      let best = -1
+      let bestD = 300
+      metro.data.entrances.forEach((e, i) => {
+        const d = Math.hypot(e.pos[0] - p.x, e.pos[1] - p.z)
+        if (d < bestD) {
+          bestD = d
+          best = i
+        }
+      })
+      return best < 0 ? [] : [{ landmark: p.def.name, entrance: best }]
+    })
+    return dailyTasks(metro.data, today(), this.exitTargets)
   }
 
   /** 坐船时跳过航程：时钟直接到靠岸 */
@@ -623,7 +653,7 @@ export class Game {
       settings: { quality: this.quality },
       time: this.clock.seconds,
       money: this.money,
-      metro: { rides: this.metroStats.rides, visited: [...this.metroStats.visited] },
+      metro: this.metroProgress,
       codex: { found: Object.fromEntries(this.landmarks?.found ?? []), shot: this.codexShot }
     })
   }

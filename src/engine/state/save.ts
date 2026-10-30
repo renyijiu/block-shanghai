@@ -1,7 +1,9 @@
 // 存档：localStorage，key 带结构版本；结构变化时提升版本并在 MIGRATIONS 里写迁移函数（docs/02 第 6 节）。
 // 照片存 IndexedDB（photo/album.ts），存档里只存 id。本模块不依赖浏览器 API，Node 里也能测
 
-export const SAVE_SCHEMA = 3
+import { newProgress, type MetroProgress } from '../metro/collection.ts'
+
+export const SAVE_SCHEMA = 4
 const PREFIX = 'block-shanghai:save:v'
 export const saveKey = (schema = SAVE_SCHEMA) => PREFIX + schema
 
@@ -19,8 +21,8 @@ export interface SaveData {
   time: number
   /** 钱包（元） */
   money: number
-  /** 地铁：乘车次数、到访过的车站（车站 id；进站、出站或换乘算到访） */
-  metro: { rides: number; visited: string[] }
+  /** 地铁：乘车次数、到访车站（集站图鉴）、坐过的区间（线路徽章）、换乘过的车站、成就、每日任务（metro/collection.ts） */
+  metro: MetroProgress
   /**
    * 景点图鉴：found 是发现过的景点 → 发现时的游戏时间（秒）；
    * shot 是拍到过的景点或子景点 → 第一张照片的 id（照片本身在 IndexedDB 相册里）
@@ -29,7 +31,7 @@ export interface SaveData {
 }
 
 /** 新游戏的初始值 */
-export const NEW_GAME = { time: 8.5 * 3600, money: 200, metro: { rides: 0, visited: [] as string[] }, codex: { found: {}, shot: {} } }
+export const NEW_GAME = { time: 8.5 * 3600, money: 200, metro: newProgress(), codex: { found: {}, shot: {} } }
 
 /** 只用到的 Storage 接口，测试时可以传假的 */
 export type SaveStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
@@ -42,7 +44,13 @@ const MIGRATIONS: Record<number, (s: Record<string, unknown>) => Record<string, 
   // v1 → v2（P2）：加游戏时间、钱包、地铁统计
   1: (s) => ({ ...s, schema: 2, time: NEW_GAME.time, money: NEW_GAME.money, metro: { rides: 0, visited: [] } }),
   // v2 → v3（P3）：加景点图鉴
-  2: (s) => ({ ...s, schema: 3, codex: { found: {}, shot: {} } })
+  2: (s) => ({ ...s, schema: 3, codex: { found: {}, shot: {} } }),
+  // v3 → v4（P4）：地铁统计扩成收集进度；到访过的车站保留，到访时间记成存档时的游戏时间
+  3: (s) => {
+    const old = (s.metro ?? {}) as { rides?: number; visited?: string[] }
+    const t = typeof s.time === 'number' ? s.time : NEW_GAME.time
+    return { ...s, schema: 4, metro: { ...newProgress(), rides: old.rides ?? 0, visits: Object.fromEntries((old.visited ?? []).map((id) => [id, t])) } }
+  }
 }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
@@ -59,8 +67,24 @@ function valid(s: Record<string, unknown>): s is SaveData & Record<string, unkno
     !!c && isNum(c.yaw) && isNum(c.pitch) && isNum(c.distance) && (c.mode === 'third' || c.mode === 'first') &&
     !!st && ['low', 'mid', 'high'].includes(st.quality) &&
     isNum(s.time) && isNum(s.money) &&
-    !!s.metro && isNum((s.metro as SaveData['metro']).rides) && Array.isArray((s.metro as SaveData['metro']).visited) &&
+    validMetro(s.metro) &&
     !!s.codex && isRecord((s.codex as SaveData['codex']).found, isNum) && isRecord((s.codex as SaveData['codex']).shot, (v) => typeof v === 'string')
+  )
+}
+
+function validMetro(v: unknown): v is MetroProgress {
+  const m = v as MetroProgress | undefined
+  return (
+    !!m &&
+    isNum(m.rides) &&
+    isRecord(m.visits, isNum) &&
+    Array.isArray(m.segments) &&
+    Array.isArray(m.transfers) &&
+    isRecord(m.achievements, isNum) &&
+    !!m.daily &&
+    typeof m.daily.date === 'string' &&
+    Array.isArray(m.daily.lines) &&
+    Array.isArray(m.daily.done)
   )
 }
 
