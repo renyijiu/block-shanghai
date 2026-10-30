@@ -17,8 +17,8 @@ export interface InteractPoint {
   /** 电梯：目标位置（世界坐标，y 是脚底高度）和到达后的提示 */
   target?: { x: number; y: number; z: number }
   arrive?: string
-  /** 船：航线 id */
-  route?: string
+  /** 船：码头名 */
+  pier?: string
 }
 
 export class InteractRegistry {

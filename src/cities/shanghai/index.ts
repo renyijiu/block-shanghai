@@ -1,5 +1,6 @@
 // 上海城市包。数据文件按地址引用（?url），由引擎在运行时加载，不打进 JS 包
 import type { CityPackage } from '../../engine/city.ts'
+import { boats } from './boats.ts'
 import { buildings } from './buildings.ts'
 import config from './config.ts'
 import { landmarks } from './landmarks.ts'
@@ -16,5 +17,6 @@ export default {
   // 人民广场北侧的绿地（原点在延安高架和南北高架的立交下面，不适合出生）
   spawns: [{ id: 'peoplessquare', name: '人民广场', lat: 31.2325, lon: 121.4712 }],
   buildings,
-  landmarks
+  landmarks,
+  boats
 } satisfies CityPackage

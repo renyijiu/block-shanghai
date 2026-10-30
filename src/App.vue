@@ -20,7 +20,11 @@
           <button title="地铁线路图" @click="openMetro(null)">🚇 地铁</button>
           <button title="切换画质" @click="cycleQuality">画质 {{ QUALITY_PRESETS[quality].label }}</button>
         </div>
-        <div v-if="stats.prompt" class="prompt">
+        <div v-if="stats.ride" class="prompt ride">
+          ⛴ {{ stats.ride.name }} · {{ stats.ride.to }} · {{ stats.ride.sailing ? `还有 ${stats.ride.minutes} 分钟` : '马上开船' }}
+          <button @click="skipRide">跳过</button>
+        </div>
+        <div v-else-if="stats.prompt" class="prompt">
           <b v-if="!touch">E</b> {{ stats.prompt.action }} · {{ stats.prompt.label }}
         </div>
       </template>
@@ -30,6 +34,7 @@
     <DistrictToast :name="toast.name" :theme="toast.theme" />
     <DiscoverToast :landmark="discovered" />
     <BigMap v-if="mapOpen" :game="game" :title="config.name" :here="districtName" @close="mapOpen = false" />
+    <BoatPanel v-if="boatPanel" :game="game" :pier="boatPanel" @close="boatPanel = null" @board="board" />
     <CodexPanel v-if="codexTab" :game="game" :initial-tab="codexTab" @close="codexTab = null" />
     <MetroPanel v-if="metroPanel" :game="game" :initial-from="metroPanel.from" :in-station="metroPanel.inStation" @close="metroPanel = null" @travel="travel" />
     <Transition name="fade">
@@ -45,6 +50,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import BigMap from './components/BigMap.vue'
+import BoatPanel from './components/BoatPanel.vue'
 import CodexPanel from './components/CodexPanel.vue'
 import DiscoverToast, { type DiscoverInfo } from './components/DiscoverToast.vue'
 import DistrictToast from './components/DistrictToast.vue'
@@ -55,6 +61,7 @@ import TouchControls from './components/TouchControls.vue'
 import { Game, type GameStats } from './engine/Game.ts'
 import type { Route } from './engine/metro/network.ts'
 import type { InteractPoint } from './engine/world/interact.ts'
+import type { Pier } from './engine/transport/BoatSystem.ts'
 import { QUALITY_ORDER, QUALITY_PRESETS, type QualityLevel } from './engine/quality.ts'
 import { CITIES, DEFAULT_CITY } from './cities/index.ts'
 
@@ -63,7 +70,7 @@ const config = city.config
 const container = ref<HTMLDivElement | null>(null)
 const backend = ref('')
 const loading = ref('初始化渲染器…')
-const stats = reactive<GameStats>({ fps: 0, drawCalls: 0, triangles: 0, chunks: 0, pending: 0, buildAvg: 0, buildMax: 0, x: 0, z: 0, mode: 'player', view: 'third', district: null, time: '', money: 0, prompt: null, found: 0, landmarks: 0 })
+const stats = reactive<GameStats>({ fps: 0, drawCalls: 0, triangles: 0, chunks: 0, pending: 0, buildAvg: 0, buildMax: 0, x: 0, z: 0, mode: 'player', view: 'third', district: null, time: '', money: 0, prompt: null, found: 0, landmarks: 0, ride: null })
 // 触屏设备显示摇杆和按钮
 const touch = matchMedia('(pointer: coarse)').matches
 const game = shallowRef<Game | null>(null)
@@ -75,7 +82,9 @@ const metroPanel = ref<{ from: number | null; inStation: boolean } | null>(null)
 // 拍照模式（游戏照常跑）和图鉴 / 相册面板
 const photoOpen = ref(false)
 const codexTab = ref<'codex' | 'album' | null>(null)
-const panelOpen = computed(() => mapOpen.value || !!metroPanel.value || !!codexTab.value)
+// 码头的船票面板：码头名
+const boatPanel = ref<string | null>(null)
+const panelOpen = computed(() => mapOpen.value || !!metroPanel.value || !!codexTab.value || !!boatPanel.value)
 function openAlbum() {
   photoOpen.value = false
   codexTab.value = 'album'
@@ -112,6 +121,27 @@ async function travel(route: Route) {
     travelText.value = ''
   }
   Object.assign(stats, g.stats, { time: g.clock.format(), money: g.money })
+}
+
+// 坐船：关面板 → 淡出（要等船时显示“等船”）→ 站到船上 → 淡入
+async function board(berth: Pier) {
+  const g = game.value
+  if (!g) return
+  boatPanel.value = null
+  travelText.value = '上船…'
+  await new Promise((r) => setTimeout(r, 700))
+  const r = g.boardBoat(berth)
+  travelText.value = ''
+  showNotice(r.message)
+}
+
+async function skipRide() {
+  const g = game.value
+  if (!g?.ride) return
+  travelText.value = '船靠岸了…'
+  g.skipRide()
+  await new Promise((r) => setTimeout(r, 800))
+  travelText.value = ''
 }
 
 // 观光电梯：淡出 → 上下 → 淡入
@@ -196,7 +226,9 @@ onMounted(async () => {
     g.onInteract = (p) => {
       if (p.kind === 'metro') openMetro(p.station ?? null, true)
       else if (p.kind === 'elevator') void rideElevator(p)
+      else if (p.kind === 'boat' && p.pier) boatPanel.value = p.pier
     }
+    g.onRideEnd = (message) => showNotice(message)
     g.onDiscover = ({ def }) => showDiscover({ id: def.id, name: def.name, grade: def.grade, district: config.districts[def.district as DistrictId]?.name ?? '', desc: def.desc, tip: def.tip ?? '' })
     g.start()
     // 引擎状态按 5 Hz 同步到界面（docs/07 第 5 节）
@@ -212,6 +244,12 @@ onMounted(async () => {
       __interact: () => g.prompt && g.onInteract?.(g.prompt),
       __discovered: () => discovered.value?.name ?? null,
       __photo: (on: boolean) => (photoOpen.value = on),
+      __board: async (pier: string, line: string) => {
+        const berth = g.boats?.linesAt(pier).find((b) => b.line.id === line)
+        if (berth) await board(berth)
+        return notice.value
+      },
+      __skipRide: () => skipRide(),
       __codex: (tab: 'codex' | 'album' | null) => (codexTab.value = tab),
       __face: (x: number, y: number, z: number) => {
         // 测试用：让相机朝向某个点（第三人称时相机在人身后）
@@ -319,6 +357,21 @@ onBeforeUnmount(() => {
   font-size: 14px;
   white-space: nowrap;
   pointer-events: none;
+}
+
+.prompt.ride {
+  pointer-events: auto;
+}
+
+.prompt.ride button {
+  margin-left: 8px;
+  padding: 2px 10px;
+  border: none;
+  border-radius: 8px;
+  background: #fff;
+  color: #000;
+  font-family: inherit;
+  cursor: pointer;
 }
 
 .prompt b {

@@ -142,4 +142,28 @@ export interface CityPackage {
   spawns: SpawnPoint[]
   buildings: CityBuildings
   landmarks: LandmarkDef[]
+  /** 渡轮和游船（P3） */
+  boats: BoatLineDef[]
+}
+
+/** 一条船线：渡轮在两个码头之间来回，游船从码头出发开到折返点再开回来 */
+export interface BoatLineDef {
+  id: string
+  name: string
+  kind: 'ferry' | 'cruise'
+  /** 票价（元） */
+  fare: number
+  /** 航线（WGS-84 [lat, lon]）：渡轮从码头 0 到码头 1，首尾是码头外的江面；游船从出发码头到折返点 */
+  path: [lat: number, lon: number][]
+  /** 码头名：渡轮两个，游船一个 */
+  piers: string[]
+  /** 航速（格 / 游戏秒） */
+  speed: number
+  /** 首班、末班（游戏时刻“06:00”） */
+  first: string
+  last: string
+  /** 渡轮两头靠岸停留、游船发船前上客的时间（游戏分钟） */
+  dwellMin: number
+  /** 游船发船间隔（游戏分钟） */
+  headwayMin?: number
 }

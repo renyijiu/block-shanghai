@@ -18,6 +18,7 @@ import { TrainRenderer } from './metro/trains.ts'
 import type { Route } from './metro/network.ts'
 import { Sky } from './sky/Sky.ts'
 import { GameClock } from './state/clock.ts'
+import { BoatSystem, type Pier, type Ride } from './transport/BoatSystem.ts'
 import { ChunkManager } from './world/ChunkManager.ts'
 import { CHUNK_SIZE } from './world/chunks.ts'
 import { DistrictIndex } from './world/districts.ts'
@@ -59,6 +60,8 @@ export interface GameStats {
   /** 已发现的景点数 / 总数 */
   found: number
   landmarks: number
+  /** 坐船中：线名、开往哪里、还有几分钟（游戏时间）、开没开 */
+  ride: { name: string; to: string; minutes: number; sailing: boolean } | null
 }
 
 /** 拍照的结果，给界面显示 */
@@ -96,7 +99,7 @@ export class Game {
   devCamera: DevCamera | null = null
   districts: DistrictIndex | null = null
   world: WorldData | null = null
-  readonly stats: GameStats = { fps: 0, drawCalls: 0, triangles: 0, chunks: 0, pending: 0, buildAvg: 0, buildMax: 0, x: 0, z: 0, mode: 'player', view: 'third', district: null, time: '', money: 0, prompt: null, found: 0, landmarks: 0 }
+  readonly stats: GameStats = { fps: 0, drawCalls: 0, triangles: 0, chunks: 0, pending: 0, buildAvg: 0, buildMax: 0, x: 0, z: 0, mode: 'player', view: 'third', district: null, time: '', money: 0, prompt: null, found: 0, landmarks: 0, ride: null }
   readonly clock = new GameClock()
   readonly sky: Sky
   readonly interact = new InteractRegistry()
@@ -107,6 +110,11 @@ export class Game {
   codexShot: Record<string, string> = {}
   /** 走近新景点时调用（界面弹出“发现景点”） */
   onDiscover: ((p: PlacedLandmark) => void) | null = null
+  boats: BoatSystem | null = null
+  /** 正在坐的船 */
+  ride: Ride | null = null
+  /** 下船时调用（界面提示到达） */
+  onRideEnd: ((message: string) => void) | null = null
   photo: PhotoSystem | null = null
   /** 相册（IndexedDB）；打不开时为 null，照片不能保存 */
   album: Album | null = null
@@ -194,6 +202,8 @@ export class Game {
     this.districts = new DistrictIndex(world.districts)
     this.landmarks = new LandmarkManager(this.city.landmarks, this.proj, this.materials, this.collision, this.interact)
     this.scene.add(this.landmarks.root)
+    this.boats = new BoatSystem(this.city.boats, this.proj, world, this.materials, this.collision, this.interact)
+    this.scene.add(this.boats.root)
     this.photo = new PhotoSystem(this.renderer, this.camera, this.collision, this.landmarks)
     Album.open()
       .then((a) => (this.disposed ? a.close() : (this.album = a)))
@@ -208,7 +218,7 @@ export class Game {
         proj: this.proj,
         metro: metro.data,
         interact: this.interact,
-        landmarks: this.landmarks.footprints
+        landmarks: [...this.landmarks.footprints, ...this.boats.footprints]
       },
       { radius: QUALITY_PRESETS[this.quality].viewDistance, budgetMs: 6 }
     )
@@ -352,6 +362,53 @@ export class Game {
     return p.arrive ?? ''
   }
 
+  /**
+   * 坐船：在码头泊位 berth 坐下一班。下一班还要等一会儿就快进时钟（界面淡出“等船”），
+   * 然后站到船的顶层甲板上，船按时刻表开；到站自动下船
+   */
+  boardBoat(berth: Pier): TravelResult {
+    const boats = this.boats
+    if (!boats || this.ride) return { ok: false, message: '现在不能上船' }
+    const line = berth.line
+    if (this.money < line.fare) return { ok: false, message: `余额不足：船票 ${line.fare} 元，钱包里只有 ${this.money} 元` }
+    const ride = boats.board(berth, this.clock.seconds)
+    // 等船：快进到开船前半分钟
+    const wait = ride.dep - this.clock.seconds
+    if (wait > 60) this.clock.seconds = ride.dep - 30
+    this.money -= line.fare
+    this.ride = ride
+    this.prompt = null
+    this.saveNow()
+    const to = line.kind === 'ferry' ? `开往${ride.to.name}` : '黄浦江往返'
+    return { ok: true, message: `${line.name} · ${to} · ${line.fare} 元${wait > 60 ? ` · 等了 ${Math.round(wait / 60)} 分钟` : ''}` }
+  }
+
+  /** 坐船时跳过航程：时钟直接到靠岸 */
+  skipRide() {
+    if (this.ride) this.clock.seconds = Math.max(this.clock.seconds, this.ride.arrive)
+  }
+
+  // 坐船：玩家跟着船走，到站下船
+  private updateRide(ride: Ride) {
+    const t = this.clock.seconds
+    if (t >= ride.arrive + 5) {
+      this.ride = null
+      const [x, z] = ride.to.land
+      this.player.spawn(x, z, this.playerWorld!)
+      this.player.model.position.copy(this.player.pos)
+      this.saveNow()
+      this.onRideEnd?.(ride.line.kind === 'ferry' ? `到达 ${ride.to.name}` : `${ride.line.name}结束，回到${ride.to.name}`)
+      return
+    }
+    const s = this.boats!.seat(ride, t)
+    this.player.pos.set(s.x, s.y, s.z)
+    this.player.vy = 0
+    this.player.model.position.copy(this.player.pos)
+    // 面朝船头；自拍时转向镜头
+    this.player.facing = this.rig.selfie ? this.rig.yaw : -s.angle - Math.PI / 2
+    this.player.model.rotation.y = this.player.facing
+  }
+
   /** 景点或子景点的名字 */
   landmarkName(id: string): string {
     for (const p of this.landmarks?.placed ?? []) {
@@ -434,7 +491,8 @@ export class Game {
   /** 立即存档（玩家模式且不是测试参数时） */
   saveNow() {
     if (!this.persist || this.devCamera || !this.world) return
-    const p = this.player.pos
+    // 坐船时存下船的码头，读档不会掉进江里
+    const p = this.ride ? { x: this.ride.to.land[0], y: 0, z: this.ride.to.land[1] } : this.player.pos
     const r = this.rig
     writeSave(localStorage, {
       city: this.city.config.id,
@@ -477,6 +535,7 @@ export class Game {
     this.chunks?.update(f.x, f.z)
     this.landmarks?.update(f.x, f.z, this.camera.position.x, this.camera.position.z)
     this.trains?.update(this.clock.seconds, f.x, f.z, QUALITY_PRESETS[this.quality].viewDistance)
+    this.boats?.update(this.clock.seconds, f.x, f.z, QUALITY_PRESETS[this.quality].viewDistance)
     // 地面平面按分块对齐跟随
     this.ground.position.set(Math.round(f.x / CHUNK_SIZE) * CHUNK_SIZE, 0, Math.round(f.z / CHUNK_SIZE) * CHUNK_SIZE)
     this.renderer.render(this.scene, this.camera)
@@ -505,6 +564,13 @@ export class Game {
   private updatePlayer(dt: number, now: number) {
     const world = this.playerWorld
     if (!world || this.traveling) return this.player.pos
+    if (this.ride) {
+      this.updateRide(this.ride)
+      this.input.consumeJump()
+      this.input.consumeInteract()
+      this.rig.update(this.camera, this.player, this.input, world)
+      return this.player.pos
+    }
     const a = this.input.axes()
     const { fx, fz, rx, rz } = this.rig.basis()
     let move = { dx: fx * a.y + rx * a.x, dz: fz * a.y + rz * a.x, run: this.input.running }
@@ -583,7 +649,15 @@ export class Game {
       money: this.money,
       prompt: this.prompt ? { label: this.prompt.label, action: this.prompt.action } : null,
       found: this.landmarks?.found.size ?? 0,
-      landmarks: this.landmarks?.placed.length ?? 0
+      landmarks: this.landmarks?.placed.length ?? 0,
+      ride: this.ride
+        ? {
+            name: this.ride.line.name,
+            to: this.ride.line.kind === 'ferry' ? `开往${this.ride.to.name}` : `回到${this.ride.to.name}`,
+            minutes: Math.max(0, Math.ceil((this.ride.arrive - this.clock.seconds) / 60)),
+            sailing: this.clock.seconds >= this.ride.dep
+          }
+        : null
     })
     this.frames = 0
     this.statsAt = now
@@ -605,6 +679,7 @@ export class Game {
     this.chunks?.dispose()
     this.trains?.dispose()
     this.landmarks?.dispose()
+    this.boats?.dispose()
     this.album?.close()
     this.player.dispose()
     this.ground.geometry.dispose()

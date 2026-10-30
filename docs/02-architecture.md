@@ -66,7 +66,7 @@ block-shanghai/
     │   ├── actors/            玩家、角色皮肤、NPC
     │   ├── metro/             地铁：数据格式、线网与路线规划、时刻表、轨道和车站建模、列车
     │   ├── landmarks/         LandmarkManager：景点按距离加载、远近两档细节、发现检测
-    │   ├── transport/         巴士、船、电梯
+    │   ├── transport/         船（boats.ts 航线和时刻表的纯函数、BoatSystem 码头和船）；以后加巴士
     │   ├── interior/          独立室内场景（地铁站、车厢）
     │   ├── photo/             摄影、滤镜、景点识别
     │   ├── sky/               昼夜、天气、季节
@@ -98,6 +98,7 @@ export default {
   },
   buildings,     // 程序化建筑：mixAt(place) 风格权重、styles 各风格的建模函数、treeMixAt / trees 行道树（P1 起）
   landmarks,     // 景点定义数组
+  boats,         // 渡轮和游船：航线（经纬度）、码头名、票价、航速、首末班（P3）
   content,       // 美食 / 文化 / 纪念品 / 商店 / 任务 / 对白
   strings,       // UI 文案
   spawns         // 出生点
@@ -160,7 +161,7 @@ export default {
 | `CollisionWorld` | 碰撞盒和可站立平台，按 owner 增删。斜放的方块带 `obb`，查询时按实际朝向判断；`deck` 平台在水面上也能走 | 查询 |
 | `Player` | 移动、跳跃、骑乘、第一/第三人称、脚本动画（电梯等）。`actors/Input` 把键鼠和触屏统一成一份输入状态，`actors/CameraRig` 管跟随相机（撞墙拉近，碰撞盒带 `soft` 的只挡相机） | ✅ |
 | `NPCManager` | 路人生成、行为、人群区域、对白 | ✅ |
-| `Transport` | 巴士、渡轮、游船、观光车、电梯 | ✅ |
+| `Transport` | 渡轮、游船（P3：`transport/boats.ts` 按游戏时间算船的位置，`BoatSystem` 开局建好码头的栈桥和趸船、每帧摆船、坐船时玩家站在甲板上跟着走、到站下船）；巴士、观光车以后加；观光电梯是景点的交互点 | ✅ |
 | `MetroSystem` | 线网、路线规划、按时刻表算列车位置（`metro/MetroSystem.ts`）；`TrainRenderer` 负责高架列车渲染（`metro/trains.ts`）；乘车流程（P4） | ✅ |
 | `InteriorManager` | 站厅、站台、车厢等独立场景的构建与切换 | 在室内时 |
 | `PhotoSystem` | 按快门那一帧渲染完从画布取图；滤镜按城市包参数逐像素处理（`photo/filters.ts`，取景时用 CSS filter 近似预览，像素风降低渲染分辨率）；识别景点（`photo/recognize.ts`：瞄准点在画面中间 90%、在 `photoR` 以内、视线没被碰撞盒挡住）；照片存 IndexedDB（`photo/album.ts`） | 拍照时 |
