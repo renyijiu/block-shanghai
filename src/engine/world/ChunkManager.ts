@@ -30,6 +30,8 @@ export interface ChunkContext {
   proj: Projection
   metro: MetroData | null
   interact: InteractRegistry
+  /** 景点占地：程序化建筑和行道树避开 */
+  landmarks: Lot[]
 }
 
 /**
@@ -202,7 +204,7 @@ export class ChunkManager {
     const key = chunkKey(cx, cz)
     const roadsNear: RoadPiece[] = []
     const roadInfo = [...data.roads.roads, METRO_CORRIDOR]
-    const obstacles: Lot[] = []
+    const obstacles: Lot[] = this.ctx.landmarks.map((l) => ({ x0: l.x0 - 2, z0: l.z0 - 2, x1: l.x1 + 2, z1: l.z1 + 2 }))
     for (let dx = -1; dx <= 1; dx++) {
       for (let dz = -1; dz <= 1; dz++) {
         const k = chunkKey(cx + dx, cz + dz)

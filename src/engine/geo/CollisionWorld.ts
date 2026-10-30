@@ -1,5 +1,5 @@
-// 碰撞世界：轴对齐碰撞盒按网格做空间索引，按 owner（分块、景点）登记，卸载时一次清理。
-// 世界全是方块，自写 AABB 最简单（docs/07 第 7 节）
+// 碰撞世界：碰撞盒按网格做空间索引，按 owner（分块、景点）登记，卸载时一次清理。
+// 世界全是方块，自写 AABB 最简单（docs/07 第 7 节）；斜着摆的方块（外滩沿线、斜桥）带一个水平朝向的 obb，查询时精确判断
 export interface Box {
   x0: number
   y0: number
@@ -9,6 +9,43 @@ export interface Box {
   z1: number
   /** 只挡相机、不挡人（树冠） */
   soft?: boolean
+  /** 可站立的平台：水面上有它也能走（九曲桥、观光层） */
+  deck?: boolean
+  /** 水平方向斜放的方块：中心、长度方向单位向量、半长、半宽。x0..z1 是它的外接矩形 */
+  obb?: Obb
+}
+
+export interface Obb {
+  cx: number
+  cz: number
+  ux: number
+  uz: number
+  hl: number
+  hw: number
+}
+
+/** 斜放方块：外接矩形 + obb；接近轴对齐时不带 obb */
+export function orientedBox(cx: number, cz: number, angle: number, len: number, wid: number, y0: number, y1: number): Box {
+  const ux = Math.cos(angle)
+  const uz = Math.sin(angle)
+  const ex = (Math.abs(ux) * len + Math.abs(uz) * wid) / 2
+  const ez = (Math.abs(uz) * len + Math.abs(ux) * wid) / 2
+  const box: Box = { x0: cx - ex, y0, z0: cz - ez, x1: cx + ex, y1, z1: cz + ez }
+  if (Math.abs(Math.sin(2 * angle)) > 1e-3) box.obb = { cx, cz, ux, uz, hl: len / 2, hw: wid / 2 }
+  return box
+}
+
+/** 轴对齐矩形和 obb 是否相交（分离轴：外接矩形已经测过世界轴，这里只测 obb 自己的两个轴） */
+export function rectHitsObb(x0: number, z0: number, x1: number, z1: number, o: Obb) {
+  const rx = (x1 - x0) / 2
+  const rz = (z1 - z0) / 2
+  const dx = (x0 + x1) / 2 - o.cx
+  const dz = (z0 + z1) / 2 - o.cz
+  const ax = Math.abs(o.ux)
+  const az = Math.abs(o.uz)
+  // u 轴（长度方向）、v 轴（宽度方向，(-uz, ux)）
+  if (Math.abs(dx * o.ux + dz * o.uz) > o.hl + rx * ax + rz * az) return false
+  return Math.abs(-dx * o.uz + dz * o.ux) <= o.hw + rx * az + rz * ax
 }
 
 const CELL = 16
@@ -55,7 +92,7 @@ export class CollisionWorld {
     const out = new Set<Box>()
     for (let cx = Math.floor(x0 / CELL); cx <= Math.floor(x1 / CELL); cx++)
       for (let cz = Math.floor(z0 / CELL); cz <= Math.floor(z1 / CELL); cz++)
-        for (const b of this.cells.get(`${cx},${cz}`) ?? []) if (b.x1 > x0 && b.x0 < x1 && b.z1 > z0 && b.z0 < z1) out.add(b)
+        for (const b of this.cells.get(`${cx},${cz}`) ?? []) if (b.x1 > x0 && b.x0 < x1 && b.z1 > z0 && b.z0 < z1 && (!b.obb || rectHitsObb(x0, z0, x1, z1, b.obb))) out.add(b)
     return [...out]
   }
 

@@ -13,7 +13,8 @@ const sample = {
   settings: { quality: 'mid' as const },
   time: 9 * 3600,
   money: 180,
-  metro: { rides: 2, visited: ['peoples-square', 'lujiazui'] }
+  metro: { rides: 2, visited: ['peoples-square', 'lujiazui'] },
+  codex: { found: { bund: 32400, orientalpearl: 33000 }, shot: { orientalpearl: 'p-1' } }
 }
 
 test('写入再读出', () => {
@@ -23,6 +24,7 @@ test('写入再读出', () => {
   expect(loaded?.schema).toBe(SAVE_SCHEMA)
   expect(loaded?.player).toEqual(sample.player)
   expect(loaded?.settings.quality).toBe('mid')
+  expect(loaded?.codex).toEqual(sample.codex)
 })
 
 test('其他城市的存档不读', () => {
@@ -37,21 +39,36 @@ test('坏档、字段不全返回 null', () => {
   expect(loadSave(s, 'shanghai')).toBeNull()
   s.setItem(`block-shanghai:save:v${SAVE_SCHEMA}`, JSON.stringify({ ...sample, schema: SAVE_SCHEMA, player: { x: 1 } }))
   expect(loadSave(s, 'shanghai')).toBeNull()
+  s.setItem(`block-shanghai:save:v${SAVE_SCHEMA}`, JSON.stringify({ ...sample, schema: SAVE_SCHEMA, codex: { found: { bund: 'x' }, shot: {} } }))
+  expect(loadSave(s, 'shanghai')).toBeNull()
 })
 
 test('没有存档返回 null', () => {
   expect(loadSave(memory(), 'shanghai')).toBeNull()
 })
 
-test('v1 存档迁移到 v2：补上时间、钱包、地铁统计，写回新 key 并删掉旧的', () => {
+test('v1 存档逐级迁移到 v3：补上时间、钱包、地铁统计、图鉴，写回新 key 并删掉旧的', () => {
   const s = memory()
-  const { time: _t, money: _m, metro: _x, ...v1 } = sample
+  const { time: _t, money: _m, metro: _x, codex: _c, ...v1 } = sample
   s.setItem('block-shanghai:save:v1', JSON.stringify({ ...v1, schema: 1, savedAt: '2026-10-30T00:00:00Z' }))
   const loaded = loadSave(s, 'shanghai')!
-  expect(loaded.schema).toBe(2)
+  expect(loaded.schema).toBe(3)
   expect(loaded.player).toEqual(sample.player)
   expect(loaded.money).toBe(200)
   expect(loaded.metro).toEqual({ rides: 0, visited: [] })
+  expect(loaded.codex).toEqual({ found: {}, shot: {} })
   expect(s.data.has('block-shanghai:save:v1')).toBe(false)
-  expect(s.data.has('block-shanghai:save:v2')).toBe(true)
+  expect(s.data.has('block-shanghai:save:v3')).toBe(true)
+})
+
+test('v2 存档迁移到 v3：保留钱包和地铁统计，图鉴为空', () => {
+  const s = memory()
+  const { codex: _c, ...v2 } = sample
+  s.setItem('block-shanghai:save:v2', JSON.stringify({ ...v2, schema: 2, savedAt: '2026-10-31T00:00:00Z' }))
+  const loaded = loadSave(s, 'shanghai')!
+  expect(loaded.schema).toBe(3)
+  expect(loaded.money).toBe(180)
+  expect(loaded.metro.visited).toEqual(['peoples-square', 'lujiazui'])
+  expect(loaded.codex).toEqual({ found: {}, shot: {} })
+  expect(s.data.has('block-shanghai:save:v2')).toBe(false)
 })

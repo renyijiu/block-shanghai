@@ -1,5 +1,5 @@
 // 建模工具：城市包的建筑和树用它拼方块。普通方块和玻璃幕墙各合并成一个网格，同时登记碰撞盒（docs/02 第 5 节）
-import type { Box } from '../geo/CollisionWorld.ts'
+import { orientedBox, type Box } from '../geo/CollisionWorld.ts'
 import { GeoBuilder, rgb, type GeometryData } from './geometry.ts'
 
 export interface BoxOptions {
@@ -28,16 +28,16 @@ export class Builder {
     else if (c) this.colliders.push({ x0, y0, z0, x1, y1, z1 })
   }
 
-  /** 任意朝向的方块；碰撞登记它的外接 AABB（用于立柱等小构件） */
+  /** 任意朝向的方块；斜放的碰撞盒带 obb，按实际朝向判断 */
   orientedBox(cx: number, cz: number, angle: number, len: number, wid: number, y0: number, y1: number, color: number, o: BoxOptions = {}) {
     const g = o.glass ? this.glass : this.solid
     g.window = o.windows ?? 1
     g.orientedBox(cx, cz, angle, len, wid, y0, y1, rgb(color), rgb(o.top ?? color))
     const c = o.collide ?? y0 < 1
     if (c) {
-      const ex = (Math.abs(Math.cos(angle)) * len + Math.abs(Math.sin(angle)) * wid) / 2
-      const ez = (Math.abs(Math.sin(angle)) * len + Math.abs(Math.cos(angle)) * wid) / 2
-      this.colliders.push({ x0: cx - ex, y0, z0: cz - ez, x1: cx + ex, y1, z1: cz + ez, soft: c === 'camera' || undefined })
+      const box = orientedBox(cx, cz, angle, len, wid, y0, y1)
+      if (c === 'camera') box.soft = true
+      this.colliders.push(box)
     }
   }
 

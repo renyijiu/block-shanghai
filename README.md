@@ -4,7 +4,7 @@
 
 基于 **Vue 3 + Three.js（WebGPU，自动回退 WebGL 2）+ TypeScript**，纯前端运行。地理和地铁数据来自 OpenStreetMap，离线烘焙成游戏坐标。
 
-**当前阶段：P2 · 地铁第 1、2 层已完成**，下一步 P3 核心景点与黄浦江（路线图见 [docs/06-roadmap.md](./docs/06-roadmap.md)）
+**当前阶段：P3 · 核心景点与黄浦江（进行中）**：昼夜循环、首批 10 个景点和观光电梯已完成，下一步是摄影、图鉴和浦江游船（路线图见 [docs/06-roadmap.md](./docs/06-roadmap.md)）
 
 ---
 

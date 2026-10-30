@@ -61,6 +61,75 @@ export interface CityBuildings {
   treeSpacing: number
 }
 
+/** 景点部件的选项 */
+export interface PartOptions {
+  /** 景观灯：白天普通颜色，18:30–22:00 发光 */
+  light?: boolean
+  glass?: boolean
+  windows?: number
+  top?: number
+  collide?: boolean | 'camera'
+}
+
+/**
+ * 景点建模上下文（docs/02 第 4 节“景点定义”）。坐标是景点的局部坐标（格）：x 沿景点朝向 rot，z 是它的横向，
+ * y 向上（建筑尺度）。引擎负责换算到世界坐标、合并网格、登记碰撞和交互
+ */
+export interface LandmarkContext {
+  box(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, color: number, o?: PartOptions): void
+  /** 以 (cx, cz) 为中心、宽 w 深 d 的板块，可以额外绕中心转 twist 弧度（扭转塔身） */
+  slab(cx: number, cz: number, w: number, d: number, y0: number, y1: number, color: number, twist?: number, o?: PartOptions): void
+  /** 方块拼的球 */
+  ball(cx: number, cy: number, cz: number, r: number, color: number, o?: PartOptions): void
+  /** 八角柱（两个错开 45° 的方柱） */
+  column(cx: number, cz: number, r: number, y0: number, y1: number, color: number, o?: PartOptions): void
+  /** 可站立的平台（不渲染，只登记碰撞）：顶面在 y；水面上也能走 */
+  platform(x0: number, z0: number, x1: number, z1: number, y: number): void
+  /** 观光电梯：在 (x, z) 按 E 上到 (tx, ty, tz)，在顶上按 E 回来；deck 是观光层的名字（“263 米观光层”） */
+  elevator(x: number, z: number, tx: number, ty: number, tz: number, deck: string): void
+  /** 经纬度 → 本景点的局部坐标（用 OSM 坐标摆放附属建筑） */
+  local(lat: number, lon: number): [number, number]
+}
+
+export interface LandmarkSub {
+  id: string
+  name: string
+  /** 拍照识别的瞄准点（局部坐标） */
+  x: number
+  y: number
+  z: number
+}
+
+export interface LandmarkDef {
+  id: string
+  name: string
+  district: string
+  /** S 高度还原 / A 主要建筑 / B 区域氛围 */
+  grade: 'S' | 'A' | 'B'
+  /** WGS-84，来自 OSM */
+  lat: number
+  lon: number
+  /** 朝向：局部 x 轴的方向（弧度，atan2(dz, dx)） */
+  rot: number
+  /** 占地范围（局部坐标）：发现检测、远近细节按它算 */
+  rect: [x0: number, z0: number, x1: number, z1: number]
+  /**
+   * 程序化建筑和行道树要避让的范围（局部坐标，可以多块），默认就是 rect。
+   * 斜着摆的长条景点（外滩、南京路）分成几段，免得外接矩形占掉旁边一大片
+   */
+  footprint?: [x0: number, z0: number, x1: number, z1: number][]
+  /** 拍照识别：瞄准高度、最远距离（格） */
+  focusY: number
+  photoR: number
+  /** 加载半径（格），默认 900；超高层要远处也能看到 */
+  loadR?: number
+  /** 可以单独识别的子景点（如外滩的海关大楼、和平饭店） */
+  subs?: LandmarkSub[]
+  build(ctx: LandmarkContext): void
+  desc: string
+  tip?: string
+}
+
 /** 城市包：配置 + 烘焙数据的地址 + 出生点 + 程序化建筑（docs/02 第 4 节） */
 export interface CityPackage {
   config: CityConfig
@@ -69,4 +138,5 @@ export interface CityPackage {
   /** 第一个是默认出生点 */
   spawns: SpawnPoint[]
   buildings: CityBuildings
+  landmarks: LandmarkDef[]
 }

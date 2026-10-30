@@ -7,6 +7,7 @@ import type { CityPackage } from './city.ts'
 import { DevCamera } from './DevCamera.ts'
 import { CollisionWorld } from './geo/CollisionWorld.ts'
 import { createProjection, type Projection } from './geo/projection.ts'
+import { LandmarkManager, type PlacedLandmark } from './landmarks/LandmarkManager.ts'
 import type { InteractPoint } from './world/interact.ts'
 import { InteractRegistry } from './world/interact.ts'
 import { MetroSystem } from './metro/MetroSystem.ts'
@@ -50,8 +51,11 @@ export interface GameStats {
   /** 游戏时刻“08:30” */
   time: string
   money: number
-  /** 附近可交互的点（地铁口）：提示文字和按钮文字 */
+  /** 附近可交互的点（地铁口、电梯）：提示文字和按钮文字 */
   prompt: { label: string; action: string } | null
+  /** 已发现的景点数 / 总数 */
+  found: number
+  landmarks: number
 }
 
 /** 快速到达的结果，给界面提示用 */
@@ -77,12 +81,17 @@ export class Game {
   devCamera: DevCamera | null = null
   districts: DistrictIndex | null = null
   world: WorldData | null = null
-  readonly stats: GameStats = { fps: 0, drawCalls: 0, triangles: 0, chunks: 0, pending: 0, buildAvg: 0, buildMax: 0, x: 0, z: 0, mode: 'player', view: 'third', district: null, time: '', money: 0, prompt: null }
+  readonly stats: GameStats = { fps: 0, drawCalls: 0, triangles: 0, chunks: 0, pending: 0, buildAvg: 0, buildMax: 0, x: 0, z: 0, mode: 'player', view: 'third', district: null, time: '', money: 0, prompt: null, found: 0, landmarks: 0 }
   readonly clock = new GameClock()
   readonly sky: Sky
   readonly interact = new InteractRegistry()
   metro: MetroSystem | null = null
   trains: TrainRenderer | null = null
+  landmarks: LandmarkManager | null = null
+  /** 图鉴：拍到过的景点 / 子景点 → 第一张照片 id（发现记录在 landmarks.found） */
+  codexShot: Record<string, string> = {}
+  /** 走近新景点时调用（界面弹出“发现景点”） */
+  onDiscover: ((p: PlacedLandmark) => void) | null = null
   money = NEW_GAME.money
   readonly metroStats = { rides: 0, visited: new Set<string>() }
   /** 附近的交互点 */
@@ -161,8 +170,20 @@ export class Game {
     this.world = world
     this.metro = metro
     this.districts = new DistrictIndex(world.districts)
+    this.landmarks = new LandmarkManager(this.city.landmarks, this.proj, this.materials, this.collision, this.interact)
+    this.scene.add(this.landmarks.root)
     this.chunks = new ChunkManager(
-      { data: world, materials: this.materials, buildings: this.city.buildings, districts: this.districts, collision: this.collision, proj: this.proj, metro: metro.data, interact: this.interact },
+      {
+        data: world,
+        materials: this.materials,
+        buildings: this.city.buildings,
+        districts: this.districts,
+        collision: this.collision,
+        proj: this.proj,
+        metro: metro.data,
+        interact: this.interact,
+        landmarks: this.landmarks.footprints
+      },
       { radius: QUALITY_PRESETS[this.quality].viewDistance, budgetMs: 6 }
     )
     this.scene.add(this.chunks.root)
@@ -170,7 +191,8 @@ export class Game {
     this.scene.add(this.trains.root)
     this.playerWorld = {
       boxes: (x0, z0, x1, z1) => this.collision.query(x0, z0, x1, z1),
-      walkable: (x, z) => walkable(world, x, z)
+      // 九曲桥、江边平台这类架在水上的平台也能走
+      walkable: (x, z) => walkable(world, x, z, (px, pz) => this.collision.query(px - 0.01, pz - 0.01, px + 0.01, pz + 0.01).some((b) => b.deck))
     }
 
     const params = new URLSearchParams(location.search)
@@ -209,6 +231,8 @@ export class Game {
         this.money = save.money
         this.metroStats.rides = save.metro.rides
         this.metroStats.visited = new Set(save.metro.visited)
+        for (const [id, t] of Object.entries(save.codex.found)) this.landmarks.found.set(id, t)
+        this.codexShot = { ...save.codex.shot }
       }
       this.route = (params.get('walk') ?? '')
         .split(';')
@@ -217,6 +241,7 @@ export class Game {
       this.autopilot.active = this.route.length > 0
     }
 
+    this.landmarks.update(focus.x, focus.z)
     await this.chunks.prebuild(focus.x, focus.z, (d, t) => onProgress?.(`生成城市 ${d}/${t}`))
     // 碰撞盒随分块建好以后再放人，被占着就找最近的空位
     if (!this.devCamera) {
@@ -272,6 +297,7 @@ export class Game {
     // 先把玩家（也就是分块加载的焦点）挪到目的地：否则渲染循环还按旧位置加载分块，和预建互相卸载、永远建不完
     this.traveling = true
     this.player.pos.set(x, 0, z)
+    this.landmarks?.update(x, z)
     try {
       await this.chunks.prebuild(x, z, (d, t) => onProgress?.(`前往 ${dest.name}站 ${d}/${t}`))
       this.player.spawn(x, z, this.playerWorld)
@@ -282,6 +308,22 @@ export class Game {
     this.saveNow()
     const exitName = exit?.ref ? ` ${exit.ref} 号口` : ''
     return { ok: true, message: `到达 ${dest.name}站${exitName} · 用时 ${Math.round(route.minutes)} 分钟 · ${route.fare} 元` }
+  }
+
+  /**
+   * 观光电梯：淡出期间调用，把玩家放到电梯另一头，时钟推进 1 分钟。
+   * 返回给界面的提示文字
+   */
+  rideElevator(p: InteractPoint): string {
+    const t = p.target
+    if (!t) return ''
+    this.player.pos.set(t.x, t.y, t.z)
+    this.player.vy = 0
+    this.player.model.position.copy(this.player.pos)
+    this.clock.addMinutes(1)
+    this.prompt = null
+    this.saveNow()
+    return p.arrive ?? ''
   }
 
   /** 立即存档（玩家模式且不是测试参数时） */
@@ -296,7 +338,8 @@ export class Game {
       settings: { quality: this.quality },
       time: this.clock.seconds,
       money: this.money,
-      metro: { rides: this.metroStats.rides, visited: [...this.metroStats.visited] }
+      metro: { rides: this.metroStats.rides, visited: [...this.metroStats.visited] },
+      codex: { found: Object.fromEntries(this.landmarks?.found ?? []), shot: this.codexShot }
     })
   }
 
@@ -327,6 +370,7 @@ export class Game {
     this.sky.update(this.clock.daySeconds)
     const f = this.devCamera ? this.updateDev(dt) : this.updatePlayer(dt, now)
     this.chunks?.update(f.x, f.z)
+    this.landmarks?.update(f.x, f.z, this.camera.position.x, this.camera.position.z)
     this.trains?.update(this.clock.seconds, f.x, f.z, QUALITY_PRESETS[this.quality].viewDistance)
     // 地面平面按分块对齐跟随
     this.ground.position.set(Math.round(f.x / CHUNK_SIZE) * CHUNK_SIZE, 0, Math.round(f.z / CHUNK_SIZE) * CHUNK_SIZE)
@@ -361,9 +405,15 @@ export class Game {
     if (this.autopilot.active) move = this.steer(now)
     this.player.update(dt, { ...move, jump: this.input.consumeJump() }, world)
     this.rig.update(this.camera, this.player, this.input, world)
-    this.prompt = this.interact.nearest(this.player.pos.x, this.player.pos.z)
+    const p = this.player.pos
+    this.prompt = this.interact.nearest(p.x, p.z, p.y)
     if (this.input.consumeInteract() && this.prompt) this.onInteract?.(this.prompt)
-    return this.player.pos
+    const found = this.landmarks?.discover(p.x, p.z, this.clock.seconds)
+    if (found) {
+      this.onDiscover?.(found)
+      this.saveNow()
+    }
+    return p
   }
 
   // 自动跑：朝当前路点直线前进，被树干、桥墩挡住时横移绕开；到了换下一个；3 秒没挪动算卡住
@@ -424,7 +474,9 @@ export class Game {
       district: this.districts?.at(f.x, f.z)?.id ?? null,
       time: this.clock.format(),
       money: this.money,
-      prompt: this.prompt ? { label: this.prompt.label, action: this.prompt.action } : null
+      prompt: this.prompt ? { label: this.prompt.label, action: this.prompt.action } : null,
+      found: this.landmarks?.found.size ?? 0,
+      landmarks: this.landmarks?.placed.length ?? 0
     })
     this.frames = 0
     this.statsAt = now
@@ -445,6 +497,7 @@ export class Game {
     this.devCamera?.dispose()
     this.chunks?.dispose()
     this.trains?.dispose()
+    this.landmarks?.dispose()
     this.player.dispose()
     this.ground.geometry.dispose()
     this.materials.dispose()

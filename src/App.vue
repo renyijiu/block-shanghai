@@ -4,7 +4,7 @@
     <div class="title">{{ config.name }}<span v-if="!touch"> · {{ config.nameEn }}</span></div>
     <div v-if="loading">{{ loading }}</div>
     <template v-else>
-      <div class="status">🕘 {{ stats.time }} · ¥{{ stats.money }}</div>
+      <div class="status">🕘 {{ stats.time }} · ¥{{ stats.money }} · 景点 {{ stats.found }}/{{ stats.landmarks }}</div>
       <div>{{ backend }} · {{ stats.fps }} fps<span v-if="!touch"> · {{ stats.drawCalls }} 次绘制 · {{ (stats.triangles / 1000).toFixed(0) }}k 三角形</span></div>
       <div v-if="!touch">分块：{{ stats.chunks }}（待建 {{ stats.pending }}）· 位置：{{ stats.x }}, {{ stats.z }} 格</div>
       <div v-if="!touch" class="hint">{{ stats.mode === 'dev' ? 'WASD 移动 · Q/E 升降 · Shift 加速 · 拖动旋转 · 滚轮缩放' : 'WASD 移动 · Shift 奔跑 · 空格跳 · 拖动转视角 · 滚轮远近 · V 切换视角 · M 地图 · E 交互' }}</div>
@@ -23,6 +23,7 @@
       </div>
     </template>
     <DistrictToast :name="toast.name" :theme="toast.theme" />
+    <DiscoverToast :landmark="discovered" />
     <BigMap v-if="mapOpen" :game="game" :title="config.name" :here="districtName" @close="mapOpen = false" />
     <MetroPanel v-if="metroPanel" :game="game" :initial-from="metroPanel.from" :in-station="metroPanel.inStation" @close="metroPanel = null" @travel="travel" />
     <Transition name="fade">
@@ -38,12 +39,14 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import BigMap from './components/BigMap.vue'
+import DiscoverToast, { type DiscoverInfo } from './components/DiscoverToast.vue'
 import DistrictToast from './components/DistrictToast.vue'
 import MetroPanel from './components/MetroPanel.vue'
 import MiniMap from './components/MiniMap.vue'
 import TouchControls from './components/TouchControls.vue'
 import { Game, type GameStats } from './engine/Game.ts'
 import type { Route } from './engine/metro/network.ts'
+import type { InteractPoint } from './engine/world/interact.ts'
 import { QUALITY_ORDER, QUALITY_PRESETS, type QualityLevel } from './engine/quality.ts'
 import { CITIES, DEFAULT_CITY } from './cities/index.ts'
 
@@ -52,7 +55,7 @@ const config = city.config
 const container = ref<HTMLDivElement | null>(null)
 const backend = ref('')
 const loading = ref('初始化渲染器…')
-const stats = reactive<GameStats>({ fps: 0, drawCalls: 0, triangles: 0, chunks: 0, pending: 0, buildAvg: 0, buildMax: 0, x: 0, z: 0, mode: 'player', view: 'third', district: null, time: '', money: 0, prompt: null })
+const stats = reactive<GameStats>({ fps: 0, drawCalls: 0, triangles: 0, chunks: 0, pending: 0, buildAvg: 0, buildMax: 0, x: 0, z: 0, mode: 'player', view: 'third', district: null, time: '', money: 0, prompt: null, found: 0, landmarks: 0 })
 // 触屏设备显示摇杆和按钮
 const touch = matchMedia('(pointer: coarse)').matches
 const game = shallowRef<Game | null>(null)
@@ -94,6 +97,31 @@ async function travel(route: Route) {
     travelText.value = ''
   }
   Object.assign(stats, g.stats, { time: g.clock.format(), money: g.money })
+}
+
+// 观光电梯：淡出 → 上下 → 淡入
+async function rideElevator(p: InteractPoint) {
+  const g = game.value
+  if (!g || travelText.value) return
+  travelText.value = p.action === '下楼' ? '电梯下行…' : '电梯上行…'
+  await new Promise((r) => setTimeout(r, 900))
+  const text = g.rideElevator(p)
+  travelText.value = ''
+  if (text) showNotice(text)
+}
+
+// 发现景点：弹出景点卡片；同时发现好几个时排队，一个接一个弹
+const discovered = ref<DiscoverInfo | null>(null)
+const discoverQueue: DiscoverInfo[] = []
+let discoverTimer = 0
+function showDiscover(info: DiscoverInfo) {
+  if (discoverTimer) return void discoverQueue.push(info)
+  discovered.value = info
+  discoverTimer = window.setTimeout(() => {
+    discoverTimer = 0
+    const next = discoverQueue.shift()
+    if (next) showDiscover(next)
+  }, 4500)
 }
 
 // 画质：低 → 中 → 高 循环，切换后立即存档
@@ -147,8 +175,10 @@ onMounted(async () => {
     loading.value = ''
     // 走到地铁口按 E（或点“进站”）打开地铁面板，起点是这个站
     g.onInteract = (p) => {
-      if (p.kind === 'metro') openMetro(p.station, true)
+      if (p.kind === 'metro') openMetro(p.station ?? null, true)
+      else if (p.kind === 'elevator') void rideElevator(p)
     }
+    g.onDiscover = ({ def }) => showDiscover({ id: def.id, name: def.name, grade: def.grade, district: config.districts[def.district as DistrictId]?.name ?? '', desc: def.desc, tip: def.tip ?? '' })
     g.start()
     // 引擎状态按 5 Hz 同步到界面（docs/07 第 5 节）
     timer = window.setInterval(() => Object.assign(stats, g.stats), 200)
@@ -159,6 +189,8 @@ onMounted(async () => {
       __probe: () => ({ backend: backend.value, ...g.stats, player: [+p.x.toFixed(1), +p.y.toFixed(2), +p.z.toFixed(1)], autopilot: g.autopilot, toast: toast.name, trains: g.trains?.visible.length ?? 0 }),
       __openMap: () => (mapOpen.value = true),
       __openMetro: (from: number | null, inStation: boolean) => openMetro(from, inStation),
+      __interact: () => g.prompt && g.onInteract?.(g.prompt),
+      __discovered: () => discovered.value?.name ?? null,
       __travel: async (from: string, to: string, mode: 'fastest' | 'fewest' = 'fastest') => {
         const m = g.metro!
         const idx = (n: string) => m.data.stations.findIndex((s) => s.name === n)
@@ -177,6 +209,7 @@ onBeforeUnmount(() => {
   removeEventListener('keydown', onKey)
   clearInterval(timer)
   clearTimeout(noticeTimer)
+  clearTimeout(discoverTimer)
   game.value?.dispose()
   game.value = null
 })

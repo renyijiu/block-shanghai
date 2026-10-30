@@ -65,6 +65,7 @@ block-shanghai/
     │   ├── build/             Builder（方块合并网格 + 碰撞登记）、通用构件
     │   ├── actors/            玩家、角色皮肤、NPC
     │   ├── metro/             地铁：数据格式、线网与路线规划、时刻表、轨道和车站建模、列车
+    │   ├── landmarks/         LandmarkManager：景点按距离加载、远近两档细节、发现检测
     │   ├── transport/         巴士、船、电梯
     │   ├── interior/          独立室内场景（地铁站、车厢）
     │   ├── photo/             摄影、滤镜、景点识别
@@ -77,7 +78,7 @@ block-shanghai/
         └── shanghai/
             ├── config.ts      投影、尺度、区划、OSM 范围
             ├── data/          烘焙产物（water / roads / parks / districts / metro）
-            ├── landmarks/     景点建模，按区分文件
+            ├── landmarks.ts   景点定义和建模（景点多了再按区拆成目录）
             ├── content.ts     美食、文化、纪念品、商店、任务、对白
             └── strings.ts     UI 文案
 ```
@@ -119,24 +120,30 @@ export default {
 
 ### 景点定义
 
+类型是 `src/engine/city.ts` 的 `LandmarkDef`，上海的定义在 `src/cities/shanghai/landmarks.ts`（P3）。
+
 ```js
 {
   id: 'orientalpearl',
   name: '东方明珠',
-  alias: '',
   district: 'pudong',
   grade: 'S',                    // S 高度还原 / A 主要建筑 / B 区域氛围
-  lat: 0, lon: 0,                // WGS-84，由 tools 从 OSM 查出后人工校对
-  rot: 0,                        // 朝向（弧度）
-  rect: [hw, hd],                // 程序化建筑避让范围（半宽、半深，格）
-  focusY: 0,                     // 拍照识别时的瞄准高度
-  photoR: 0,                     // 可被拍到的最大距离
-  loadR: 0,                      // 加载半径，默认 750
-  lod: (b) => {},                // 远景简模（可选）
-  build: (b, ctx) => {},         // 精细模型；ctx 提供 interact / platform / crowd / onUpdate 等
+  lat: 31.2419, lon: 121.49527,  // 锚点（WGS-84），取 OSM 建筑轮廓中心或关键点
+  rot: 0,                        // 局部 x 轴的朝向（弧度，atan2(dz, dx)）
+  rect: [-16, -16, 16, 16],      // 占地范围（局部坐标 x0, z0, x1, z1），发现检测和远近细节按它算
+  footprint: [[...]],            // 程序化建筑和行道树的避让范围，可分几块；默认就是 rect
+  focusY: 100,                   // 拍照识别时的瞄准高度
+  photoR: 1300,                  // 可被拍到的最大距离（格）
+  loadR: 2600,                   // 加载半径，默认 900；超高层要远处也能看到
+  subs: [{ id, name, x, y, z }], // 可单独识别的子景点（外滩的海关大楼、和平饭店等），局部坐标
+  build: (c) => {},              // 建模，c 是 LandmarkContext（见下）
   desc: '', tip: ''
 }
 ```
+
+`build` 拿到的 `LandmarkContext` 都用局部坐标：`box` / `slab`（可绕中心扭转，上海中心的扭转塔身）/ `ball` / `column` 拼方块，选项 `light` 是夜景灯（18:30–22:00 发光）、`glass` 进玻璃网格、`collide` 控制碰撞；`platform` 登记可站立的平台（水面上也能走：九曲桥、外白渡桥、观光层）；`elevator` 登记观光电梯的上下两个交互点；`local(lat, lon)` 把 OSM 坐标换成局部坐标，用来摆附属建筑。
+
+远近细节不用单独写简模：`LandmarkManager` 建模时同时收集最长边 ≥ 3 格的构件做远景网格，相机离占地 450 格以外只画它。玩家走到占地 30 格以内算“发现”，记进存档。
 
 ### 内容数据
 
@@ -150,7 +157,7 @@ export default {
 | `ChunkManager` | 按玩家位置加载/卸载 240×240 格分块：地面、建筑、行道树、地铁口、高架段。每个分块的公园、水面、地面道路、高架各合并成一个网格（`world/chunkMesh.ts`，纯函数） | ✅（有时间预算） |
 | `LandmarkManager` | 景点按距离加载、LOD、发现检测 | ✅ |
 | `InteractRegistry` | 交互点，按 owner 增删；分块和景点卸载时一并清理（`world/interact.ts`，P2 起地铁口） | 查询 |
-| `CollisionWorld` | 碰撞盒和可站立平台，按 owner 增删 | 查询 |
+| `CollisionWorld` | 碰撞盒和可站立平台，按 owner 增删。斜放的方块带 `obb`，查询时按实际朝向判断；`deck` 平台在水面上也能走 | 查询 |
 | `Player` | 移动、跳跃、骑乘、第一/第三人称、脚本动画（电梯等）。`actors/Input` 把键鼠和触屏统一成一份输入状态，`actors/CameraRig` 管跟随相机（撞墙拉近，碰撞盒带 `soft` 的只挡相机） | ✅ |
 | `NPCManager` | 路人生成、行为、人群区域、对白 | ✅ |
 | `Transport` | 巴士、渡轮、游船、观光车、电梯 | ✅ |
@@ -176,7 +183,7 @@ export default {
 
 - key：`block-shanghai:save:v<schema>`，存档里记着城市 id，换城市不读。结构变化时提升 `SAVE_SCHEMA` 并在 `MIGRATIONS` 里写迁移函数；读档时找不到当前版本，就从新到旧找旧版本、逐级迁移后写回新 key。坏档、字段不全一律当没有存档。
 - 时机：每 10 秒、切走页面（`visibilitychange`）、关闭页面（`pagehide`）自动存；测试参数（`?cam` / `?walk` / `?start`）下不读不写。
-- P1 已存：位置、朝向、相机（朝向、俯仰、距离、视角）、画质。
+- P1 已存：位置、朝向、相机（朝向、俯仰、距离、视角）、画质。P2（v2）加游戏时间、钱包、地铁统计；P3（v3）加景点图鉴 `codex`：发现过的景点（发现时的游戏时间）、拍到过的景点和子景点（第一张照片的 id）。
 - 内容：角色外观、金钱、位置、已发现景点、图鉴、背包、任务进度、统计（步行距离、乘车次数、到访车站等）、设置。
 - 照片存 IndexedDB，存档里只存照片 id。
 

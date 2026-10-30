@@ -28,10 +28,10 @@ export function onGroundRoad(data: WorldData, x: number, z: number) {
   return false
 }
 
-/** 玩家能不能站在 (x, z)：世界范围内，不在水里（水上的地面道路、小桥可以走） */
-export function walkable(data: WorldData, x: number, z: number) {
+/** 玩家能不能站在 (x, z)：世界范围内，不在水里（水上的地面道路、小桥、景点平台可以走）；onDeck 查景点平台 */
+export function walkable(data: WorldData, x: number, z: number, onDeck: (x: number, z: number) => boolean = () => false) {
   const c = data.meta.chunks
   const s = data.meta.chunkSize
   if (x < c.minX * s || x >= (c.maxX + 1) * s || z < c.minZ * s || z >= (c.maxZ + 1) * s) return false
-  return !isWater(data, x, z) || onGroundRoad(data, x, z)
+  return !isWater(data, x, z) || onGroundRoad(data, x, z) || onDeck(x, z)
 }

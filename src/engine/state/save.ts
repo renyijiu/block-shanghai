@@ -1,7 +1,7 @@
 // 存档：localStorage，key 带结构版本；结构变化时提升版本并在 MIGRATIONS 里写迁移函数（docs/02 第 6 节）。
-// 照片以后存 IndexedDB，存档里只存 id。本模块不依赖浏览器 API，Node 里也能测
+// 照片存 IndexedDB（photo/album.ts），存档里只存 id。本模块不依赖浏览器 API，Node 里也能测
 
-export const SAVE_SCHEMA = 2
+export const SAVE_SCHEMA = 3
 const PREFIX = 'block-shanghai:save:v'
 export const saveKey = (schema = SAVE_SCHEMA) => PREFIX + schema
 
@@ -21,10 +21,15 @@ export interface SaveData {
   money: number
   /** 地铁：乘车次数、到访过的车站（车站 id；进站、出站或换乘算到访） */
   metro: { rides: number; visited: string[] }
+  /**
+   * 景点图鉴：found 是发现过的景点 → 发现时的游戏时间（秒）；
+   * shot 是拍到过的景点或子景点 → 第一张照片的 id（照片本身在 IndexedDB 相册里）
+   */
+  codex: { found: Record<string, number>; shot: Record<string, string> }
 }
 
 /** 新游戏的初始值 */
-export const NEW_GAME = { time: 8.5 * 3600, money: 200, metro: { rides: 0, visited: [] as string[] } }
+export const NEW_GAME = { time: 8.5 * 3600, money: 200, metro: { rides: 0, visited: [] as string[] }, codex: { found: {}, shot: {} } }
 
 /** 只用到的 Storage 接口，测试时可以传假的 */
 export type SaveStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
@@ -35,10 +40,13 @@ export type SaveStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
  */
 const MIGRATIONS: Record<number, (s: Record<string, unknown>) => Record<string, unknown>> = {
   // v1 → v2（P2）：加游戏时间、钱包、地铁统计
-  1: (s) => ({ ...s, schema: 2, time: NEW_GAME.time, money: NEW_GAME.money, metro: { rides: 0, visited: [] } })
+  1: (s) => ({ ...s, schema: 2, time: NEW_GAME.time, money: NEW_GAME.money, metro: { rides: 0, visited: [] } }),
+  // v2 → v3（P3）：加景点图鉴
+  2: (s) => ({ ...s, schema: 3, codex: { found: {}, shot: {} } })
 }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+const isRecord = (v: unknown, item: (x: unknown) => boolean) => !!v && typeof v === 'object' && !Array.isArray(v) && Object.values(v).every(item)
 
 function valid(s: Record<string, unknown>): s is SaveData & Record<string, unknown> {
   const p = s.player as SaveData['player'] | undefined
@@ -51,7 +59,8 @@ function valid(s: Record<string, unknown>): s is SaveData & Record<string, unkno
     !!c && isNum(c.yaw) && isNum(c.pitch) && isNum(c.distance) && (c.mode === 'third' || c.mode === 'first') &&
     !!st && ['low', 'mid', 'high'].includes(st.quality) &&
     isNum(s.time) && isNum(s.money) &&
-    !!s.metro && isNum((s.metro as SaveData['metro']).rides) && Array.isArray((s.metro as SaveData['metro']).visited)
+    !!s.metro && isNum((s.metro as SaveData['metro']).rides) && Array.isArray((s.metro as SaveData['metro']).visited) &&
+    !!s.codex && isRecord((s.codex as SaveData['codex']).found, isNum) && isRecord((s.codex as SaveData['codex']).shot, (v) => typeof v === 'string')
   )
 }
 
