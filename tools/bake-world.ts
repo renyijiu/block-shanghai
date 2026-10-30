@@ -18,7 +18,8 @@ import {
   type WorldMeta
 } from '../src/engine/world/data.ts'
 import { buildSea } from './lib/coastline.ts'
-import { bounds, clipPolyline, clipRing, densify, labelPoint, mergeLines, pathLength, pointInRing, ringArea, simplify, simplifyRing, type Pt, type Rect } from './lib/geom.ts'
+import { bounds, clipPolyline, clipRing, densify, labelPoint, mergeLines, pointInRing, ringArea, simplify, simplifyRing, type Pt, type Rect } from './lib/geom.ts'
+import { rampHeights } from './lib/heights.ts'
 import { CACHE, parseOpl, polygonsOf, readSeq } from './lib/osm.ts'
 
 const OUT = join(import.meta.dirname, '..', 'src', 'cities', 'shanghai', 'data')
@@ -175,66 +176,6 @@ interface RawRoad {
   oneway: boolean
 }
 
-// 给道路的每个顶点算高度：高架按层抬高；不同高度的道路首尾相接处是匝道，在 RAMP_LEN 内平滑过渡
-function roadHeights(lines: { pts: Pt[]; base: number }[]): Pt[][] {
-  const key = (p: Pt) => `${p[0]!.toFixed(2)},${p[1]!.toFixed(2)}`
-  const atNode = new Map<string, number[]>()
-  lines.forEach((l, i) => {
-    for (const p of [l.pts[0]!, l.pts[l.pts.length - 1]!]) (atNode.get(key(p)) ?? atNode.set(key(p), []).get(key(p))!).push(i)
-  })
-  // 节点高度：接到地面道路就落地，否则取相接高架里最高的
-  const nodeHeight = (p: Pt, self: number) => {
-    const hs = atNode.get(key(p))!.filter((i) => i !== self).map((i) => lines[i]!.base)
-    if (!hs.length) return null
-    return hs.includes(0) ? 0 : Math.max(...hs)
-  }
-  return lines.map((l, i) => {
-    const pts = l.pts
-    const total = pathLength(pts)
-    if (l.base === 0 || total === 0) return pts.map((p) => [p[0]!, p[1]!, 0])
-    const ends = [nodeHeight(pts[0]!, i), nodeHeight(pts[pts.length - 1]!, i)]
-    // 在坡道终点处补一个顶点，坡度才准确
-    let withRamp = pts
-    for (const [e, h] of ends.entries()) {
-      if (h === null || h === l.base || total <= RAMP_LEN) continue
-      const d = e === 0 ? RAMP_LEN : total - RAMP_LEN
-      withRamp = insertAt(withRamp, d)
-    }
-    const dist = cumulative(withRamp)
-    const len = dist[dist.length - 1]!
-    const smooth = (t: number) => t * t * (3 - 2 * t)
-    return withRamp.map((p, k) => {
-      let h = l.base
-      const fromStart = dist[k]!
-      const fromEnd = len - dist[k]!
-      const span = Math.min(RAMP_LEN, len)
-      if (ends[0] !== null && ends[0] !== l.base && fromStart < span) h += (ends[0]! - l.base) * (1 - smooth(fromStart / span))
-      if (ends[1] !== null && ends[1] !== l.base && fromEnd < span) h += (ends[1]! - l.base) * (1 - smooth(fromEnd / span))
-      return [p[0]!, p[1]!, Math.max(0, h)]
-    })
-  })
-}
-
-function cumulative(pts: Pt[]) {
-  const d = [0]
-  for (let i = 1; i < pts.length; i++) d.push(d[i - 1]! + Math.hypot(pts[i]![0]! - pts[i - 1]![0]!, pts[i]![1]! - pts[i - 1]![1]!))
-  return d
-}
-
-function insertAt(pts: Pt[], at: number): Pt[] {
-  const d = cumulative(pts)
-  for (let i = 1; i < pts.length; i++) {
-    if (d[i]! > at + 1e-6) {
-      if (at - d[i - 1]! < 1e-6) return pts
-      const t = (at - d[i - 1]!) / (d[i]! - d[i - 1]!)
-      const a = pts[i - 1]!
-      const b = pts[i]!
-      return [...pts.slice(0, i), [a[0]! + (b[0]! - a[0]!) * t, a[1]! + (b[1]! - a[1]!) * t], ...pts.slice(i)]
-    }
-  }
-  return pts
-}
-
 function bakeRoads() {
   const raw: RawRoad[] = []
   let tunnels = 0
@@ -265,7 +206,7 @@ function bakeRoads() {
     infos.push({ name: r.name, class: r.cls, width: round1(width), level, bridge: r.bridge && !elevated })
     lines.push({ pts: simplify(r.pts.map(project), TOL.roads), base: level * LEVEL_HEIGHT })
   }
-  const withH = roadHeights(lines)
+  const withH = rampHeights(lines, RAMP_LEN)
 
   const layer: RoadLayer = { version: WORLD_DATA_VERSION, roads: infos, chunks: {} }
   withH.forEach((pts, idx) => {

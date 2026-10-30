@@ -35,33 +35,54 @@ export interface OplRelation {
   members: { type: string; ref: number; role: string }[]
 }
 
+export interface OplNode {
+  lon: number
+  lat: number
+  tags: Record<string, string>
+}
+
+function parseTags(field: string) {
+  const tags: Record<string, string> = {}
+  for (const kv of field ? field.split(',') : []) {
+    const i = kv.indexOf('=')
+    tags[decodeOpl(kv.slice(0, i))] = decodeOpl(kv.slice(i + 1))
+  }
+  return tags
+}
+
 /**
  * 解析 osmium add-locations-to-ways 之后 cat 出来的 OPL：way 的节点带经纬度（n123x121.4y31.2）。
- * 用来自己组装行政区边界：osmium export 遇到成员不全的 relation 会整个跳过（宝山区就是这样）
+ * 区界要自己组装（osmium export 遇到成员不全的 relation 会整个跳过，宝山区就是这样）；
+ * 地铁线路要保留 relation 成员的顺序，GeoJSON 做不到
  */
-export function parseOpl(text: string): { ways: Map<number, Pt[]>; relations: OplRelation[] } {
+export function parseOpl(text: string): { ways: Map<number, Pt[]>; wayTags: Map<number, Record<string, string>>; nodes: Map<number, OplNode>; relations: OplRelation[] } {
   const ways = new Map<number, Pt[]>()
+  const wayTags = new Map<number, Record<string, string>>()
+  const nodes = new Map<number, OplNode>()
   const relations: OplRelation[] = []
   for (const line of text.split('\n')) {
     const kind = line[0]
-    if (kind !== 'w' && kind !== 'r') continue
+    if (kind !== 'w' && kind !== 'r' && kind !== 'n') continue
     const fields = line.split(' ')
     const id = Number(fields[0]!.slice(1))
     const tagField = fields.find((f) => f[0] === 'T')?.slice(1) ?? ''
-    if (kind === 'w') {
-      const nodes = fields.find((f) => f[0] === 'N')?.slice(1) ?? ''
+    if (kind === 'n') {
+      // 只保留带标签的节点（停靠点、出入口）；轨道上的普通节点坐标已经写在 way 里
+      if (!tagField) continue
+      const x = fields.find((f) => f[0] === 'x')
+      const y = fields.find((f) => f[0] === 'y')
+      if (x && y) nodes.set(id, { lon: Number(x.slice(1)), lat: Number(y.slice(1)), tags: parseTags(tagField) })
+    } else if (kind === 'w') {
+      if (tagField) wayTags.set(id, parseTags(tagField))
+      const nodeField = fields.find((f) => f[0] === 'N')?.slice(1) ?? ''
       const coords: Pt[] = []
-      for (const n of nodes.split(',')) {
+      for (const n of nodeField.split(',')) {
         const m = /x(-?[\d.]+)y(-?[\d.]+)/.exec(n)
         if (m) coords.push([Number(m[1]), Number(m[2])])
       }
       ways.set(id, coords)
     } else {
-      const tags: Record<string, string> = {}
-      for (const kv of tagField ? tagField.split(',') : []) {
-        const i = kv.indexOf('=')
-        tags[decodeOpl(kv.slice(0, i))] = decodeOpl(kv.slice(i + 1))
-      }
+      const tags = parseTags(tagField)
       const memberField = fields.find((f) => f[0] === 'M')?.slice(1) ?? ''
       const members = memberField
         ? memberField.split(',').map((m) => {
@@ -72,5 +93,5 @@ export function parseOpl(text: string): { ways: Map<number, Pt[]>; relations: Op
       relations.push({ id, tags, members })
     }
   }
-  return { ways, relations }
+  return { ways, wayTags, nodes, relations }
 }

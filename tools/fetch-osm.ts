@@ -25,7 +25,9 @@ const LAYERS = {
     geometry: 'linestring'
   },
   parks: { filters: ['wr/leisure=park,garden', 'wr/landuse=forest,grass'], geometry: 'polygon' },
-  boundaries: { filters: ['r/admin_level=6'], geometry: 'opl' }
+  boundaries: { filters: ['r/admin_level=6'], geometry: 'opl', types: ['way', 'relation'] },
+  // 地铁：线路关系（保留成员顺序）、轨道、停靠点和出入口节点，都要 OPL（docs/04 第 3.2 节）
+  metro: { filters: ['r/route=subway,light_rail,monorail', 'n/railway=subway_entrance'], geometry: 'opl', types: ['node', 'way', 'relation'] }
 } as const
 
 const osmium = (...args: string[]) => execFileSync('osmium', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] })
@@ -80,7 +82,7 @@ async function main() {
       const located = join(CACHE, `${name}.located.osm.pbf`)
       osmium('add-locations-to-ways', pbf, '-o', located, '--overwrite')
       const out = join(CACHE, `${name}.opl`)
-      osmium('cat', located, '-t', 'way', '-t', 'relation', '-f', 'opl,locations_on_ways=true', '-o', out, '--overwrite')
+      osmium('cat', located, ...layer.types.flatMap((t) => ['-t', t]), '-f', 'opl,locations_on_ways=true', '-o', out, '--overwrite')
       console.log(`  ${name}: ${(statSync(out).size / 1048576).toFixed(1)} MB`)
       continue
     }

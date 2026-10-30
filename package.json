@@ -15,7 +15,7 @@
     "test": "vitest run",
     "bench": "node bench/run-bench.ts",
     "fetch-osm": "node tools/fetch-osm.ts",
-    "bake": "node tools/bake-world.ts"
+    "bake": "node tools/bake-world.ts && node tools/bake-metro.ts"
   },
   "dependencies": {
     "lil-gui": "0.21.0",

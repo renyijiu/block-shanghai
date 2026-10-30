@@ -1,0 +1,57 @@
+{
+  "//": "地铁数据的人工修正（docs/04 第 3.2 节第 8 步）。bake-metro.ts 读取；规则数值上线前对照上海地铁官网核对",
+  "rules": {
+    "fare": {
+      "baseKm": 6,
+      "baseYuan": 3,
+      "stepKm": 10,
+      "stepYuan": 1
+    },
+    "maglevFare": 50,
+    "avgSpeedKmh": {
+      "subway": 35,
+      "apm": 25,
+      "maglev": 220
+    },
+    "dwellSec": 40,
+    "headwayMin": {
+      "peak": 3,
+      "offpeak": 6,
+      "express": 20
+    },
+    "peakHours": [
+      [
+        7,
+        9.5
+      ],
+      [
+        17,
+        19.5
+      ]
+    ],
+    "serviceHours": [
+      5.5,
+      23
+    ]
+  },
+  "lines": {},
+  "stationName": {
+    "市光路站": "市光路",
+    "地铁14号线临洮路站": "临洮路"
+  },
+  "stationNameEn": {
+    "通南路": "Tongnan Road",
+    "长江西路": "West Changjiang Road",
+    "爱辉路": "Aihui Road"
+  },
+  "transferMin": {
+    "人民广场": 6,
+    "世纪大道": 5,
+    "徐家汇": 6,
+    "上海火车站": 7,
+    "虹桥火车站": 6,
+    "龙阳路": 6,
+    "陕西南路": 6
+  },
+  "wayStructure": {}
+}
