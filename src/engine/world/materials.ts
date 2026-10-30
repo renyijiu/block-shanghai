@@ -6,7 +6,8 @@ import { abs, attribute, color, float, fract, mix, mx_noise_float, normalWorld, 
 export const WORLD_COLORS = {
   ground: 0xc4bca8,
   water: { deep: 0x3f7cab, light: 0x8cc0e0 },
-  parks: { park: 0x7fb069, garden: 0x8cc078, forest: 0x5f9a52, grass: 0x9ccc7a } as Record<string, number>,
+  // 公园里常套着草坪、花园，几个面重叠又共面：颜色一致才不会在远处出现条纹闪烁
+  parks: { park: 0x7fb069, garden: 0x7fb069, grass: 0x7fb069, forest: 0x6aa25a } as Record<string, number>,
   park: 0x7fb069
 }
 

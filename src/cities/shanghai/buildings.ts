@@ -222,8 +222,9 @@ const suburban: BuildingStyle = (b, l, rng) => {
 
 const trunk = (b: Builder, x: number, z: number, w: number, h: number, color: number) =>
   b.box(x - w / 2, 0, z - w / 2, x + w / 2, h, z + w / 2, color, { windows: 0, collide: true })
+// 树冠只挡相机：人能从树下走过，第三人称相机不会钻进树冠
 const crown = (b: Builder, x: number, z: number, w: number, y0: number, y1: number, color: number) =>
-  b.box(x - w / 2, y0, z - w / 2, x + w / 2, y1, z + w / 2, color, { windows: 0, collide: false })
+  b.box(x - w / 2, y0, z - w / 2, x + w / 2, y1, z + w / 2, color, { windows: 0, collide: 'camera' })
 
 // 法国梧桐：斑驳的浅色树干，宽而扁的树冠
 const plane: TreeStyle = (b, x, z, rng) => {

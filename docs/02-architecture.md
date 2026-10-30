@@ -147,7 +147,7 @@ export default {
 | `LandmarkManager` | 景点按距离加载、LOD、发现检测 | ✅ |
 | `InteractRegistry` | 交互点，按 owner 增删；分块和景点卸载时一并清理 | 查询 |
 | `CollisionWorld` | 碰撞盒和可站立平台，按 owner 增删 | 查询 |
-| `Player` | 移动、跳跃、骑乘、第一/第三人称、脚本动画（电梯等） | ✅ |
+| `Player` | 移动、跳跃、骑乘、第一/第三人称、脚本动画（电梯等）。`actors/Input` 把键鼠和触屏统一成一份输入状态，`actors/CameraRig` 管跟随相机（撞墙拉近，碰撞盒带 `soft` 的只挡相机） | ✅ |
 | `NPCManager` | 路人生成、行为、人群区域、对白 | ✅ |
 | `Transport` | 巴士、渡轮、游船、观光车、电梯 | ✅ |
 | `MetroSystem` | 线网、路线规划、按时刻表算列车位置、高架列车渲染、乘车流程 | ✅ |

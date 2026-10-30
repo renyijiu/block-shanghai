@@ -9,8 +9,8 @@ export interface BoxOptions {
   glass?: boolean
   /** 墙面窗户强度 0–1，默认 1；屋顶构件、树、围墙传 0 */
   windows?: number
-  /** 是否登记碰撞盒；默认贴地（y0 < 1）的方块登记 */
-  collide?: boolean
+  /** 是否登记碰撞盒；默认贴地（y0 < 1）的方块登记。'camera' 只挡相机不挡人（树冠） */
+  collide?: boolean | 'camera'
 }
 
 export class Builder {
@@ -23,7 +23,9 @@ export class Builder {
     const g = o.glass ? this.glass : this.solid
     g.window = o.windows ?? 1
     g.box(x0, y0, z0, x1, y1, z1, rgb(color), rgb(o.top ?? color))
-    if (o.collide ?? y0 < 1) this.colliders.push({ x0, y0, z0, x1, y1, z1 })
+    const c = o.collide ?? y0 < 1
+    if (c === 'camera') this.colliders.push({ x0, y0, z0, x1, y1, z1, soft: true })
+    else if (c) this.colliders.push({ x0, y0, z0, x1, y1, z1 })
   }
 
   /**

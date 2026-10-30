@@ -2,6 +2,7 @@
 // 坐标是游戏格；道路宽度、高架尺寸按人物尺度（docs/03 第 3 节）
 import { ShapeUtils, Vector2 } from 'three/webgpu'
 import { GeoBuilder, rgb as hex, type GeometryData, type RGB } from '../build/geometry.ts'
+import type { Box } from '../geo/CollisionWorld.ts'
 import type { AreaPiece, RoadInfo, RoadPiece } from './data.ts'
 
 export type { GeometryData }
@@ -175,8 +176,8 @@ function addParapets(g: GeoBuilder, f: Frame, bottomDrop: number, deckY: number 
   }
 }
 
-/** 高架：桥面（含厚度、底面）、护栏、桥墩，合并成一个网格 */
-export function buildElevated(pieces: RoadPiece[], roads: RoadInfo[]): GeometryData | null {
+/** 高架：桥面（含厚度、底面）、护栏、桥墩，合并成一个网格；桥墩的碰撞盒写进 colliders */
+export function buildElevated(pieces: RoadPiece[], roads: RoadInfo[], colliders?: Box[]): GeometryData | null {
   const s = ROAD_STYLE
   const g = new GeoBuilder()
   const concrete = hex(s.colors.concrete)
@@ -213,6 +214,7 @@ export function buildElevated(pieces: RoadPiece[], roads: RoadInfo[]): GeometryD
           const pz = az! + (bz! - az!) * t
           const hs = s.pierSize / 2
           g.box(px - hs, 0, pz - hs, px + hs, h, pz + hs, concrete)
+          colliders?.push({ x0: px - hs, y0: 0, z0: pz - hs, x1: px + hs, y1: h, z1: pz + hs })
         }
         d += s.pierSpacing
       }

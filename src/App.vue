@@ -6,14 +6,16 @@
     <template v-else>
       <div>渲染：{{ backend }} · {{ stats.fps }} fps · {{ stats.drawCalls }} 次绘制 · {{ (stats.triangles / 1000).toFixed(0) }}k 三角形</div>
       <div>分块：{{ stats.chunks }}（待建 {{ stats.pending }}）· 位置：{{ stats.x }}, {{ stats.z }} 格</div>
-      <div class="hint">WASD 移动 · Q/E 升降 · Shift 加速 · 拖动旋转 · 滚轮缩放</div>
+      <div v-if="!touch" class="hint">{{ stats.mode === 'dev' ? 'WASD 移动 · Q/E 升降 · Shift 加速 · 拖动旋转 · 滚轮缩放' : 'WASD 移动 · Shift 奔跑 · 空格跳 · 拖动转视角 · 滚轮远近 · V 切换视角' }}</div>
     </template>
   </div>
+  <TouchControls v-if="touch && game && !loading && stats.mode === 'player'" :input="game.input" />
   <div class="credit">© OpenStreetMap contributors</div>
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { onBeforeUnmount, onMounted, reactive, ref, shallowRef } from 'vue'
+import TouchControls from './components/TouchControls.vue'
 import { Game, type GameStats } from './engine/Game.ts'
 import { CITIES, DEFAULT_CITY } from './cities/index.ts'
 
@@ -22,14 +24,16 @@ const config = city.config
 const container = ref<HTMLDivElement | null>(null)
 const backend = ref('')
 const loading = ref('初始化渲染器…')
-const stats = reactive<GameStats>({ fps: 0, drawCalls: 0, triangles: 0, chunks: 0, pending: 0, buildAvg: 0, buildMax: 0, x: 0, z: 0 })
-let game: Game | null = null
+const stats = reactive<GameStats>({ fps: 0, drawCalls: 0, triangles: 0, chunks: 0, pending: 0, buildAvg: 0, buildMax: 0, x: 0, z: 0, mode: 'player', view: 'third' })
+// 触屏设备显示摇杆和按钮
+const touch = matchMedia('(pointer: coarse)').matches
+const game = shallowRef<Game | null>(null)
 let timer = 0
 
 onMounted(async () => {
   if (!container.value) return
   const g = new Game(container.value, city)
-  game = g
+  game.value = g
   try {
     backend.value = await g.init((text) => (loading.value = text))
     loading.value = ''
@@ -37,7 +41,11 @@ onMounted(async () => {
     // 引擎状态按 5 Hz 同步到界面（docs/07 第 5 节）
     timer = window.setInterval(() => Object.assign(stats, g.stats), 200)
     // 截图脚本用
-    Object.assign(window, { __ready: true, __probe: () => ({ backend: backend.value, ...g.stats }) })
+    const p = g.player.pos
+    Object.assign(window, {
+      __ready: true,
+      __probe: () => ({ backend: backend.value, ...g.stats, player: [+p.x.toFixed(1), +p.y.toFixed(2), +p.z.toFixed(1)], autopilot: g.autopilot })
+    })
   } catch (e) {
     loading.value = '初始化失败：' + (e instanceof Error ? e.message : String(e))
     console.error(e)
@@ -46,8 +54,8 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   clearInterval(timer)
-  game?.dispose()
-  game = null
+  game.value?.dispose()
+  game.value = null
 })
 </script>
 

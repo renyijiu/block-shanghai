@@ -5,7 +5,7 @@ import * as THREE from 'three/webgpu'
 import { Builder } from '../build/Builder.ts'
 import { chunkSeed, mulberry32, pick } from '../build/random.ts'
 import type { CityBuildings, Place } from '../city.ts'
-import type { CollisionWorld } from '../geo/CollisionWorld.ts'
+import type { Box, CollisionWorld } from '../geo/CollisionWorld.ts'
 import type { Projection } from '../geo/projection.ts'
 import { CHUNK_SIZE, chunkKey } from './chunks.ts'
 import { buildAreas, buildElevated, buildGroundRoads, type GeometryData } from './chunkMesh.ts'
@@ -147,11 +147,12 @@ export class ChunkManager {
     add(buildAreas(src.parks, 0.02, WORLD_COLORS.parks, WORLD_COLORS.park), this.materials.parks, 'parks')
     add(buildAreas(src.water, 0.03, {}, 0xffffff), this.materials.water, 'water')
     add(buildGroundRoads(src.roads, roads), this.materials.roads, 'roads')
-    add(buildElevated(src.roads, roads), this.materials.elevated, 'elevated')
+    const piers: Box[] = []
+    add(buildElevated(src.roads, roads, piers), this.materials.elevated, 'elevated')
     const built = this.buildCity(cx, cz, src.roads)
     add(built.solid, this.materials.buildings, 'buildings')
     add(built.glass, this.materials.glass, 'glass')
-    this.ctx.collision.add(key, built.colliders)
+    this.ctx.collision.add(key, [...built.colliders, ...piers])
     this.root.add(group)
     this.loaded.set(key, { key, group })
     this.buildMs.push(performance.now() - t0)

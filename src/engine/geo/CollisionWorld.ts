@@ -7,6 +7,8 @@ export interface Box {
   x1: number
   y1: number
   z1: number
+  /** 只挡相机、不挡人（树冠） */
+  soft?: boolean
 }
 
 const CELL = 16
