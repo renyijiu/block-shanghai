@@ -40,6 +40,8 @@ export interface GameStats {
   /** 玩家模式还是开发相机 */
   mode: 'player' | 'dev'
   view: ViewMode
+  /** 所在区 id；市界外为 null */
+  district: string | null
 }
 
 export class Game {
@@ -56,7 +58,7 @@ export class Game {
   devCamera: DevCamera | null = null
   districts: DistrictIndex | null = null
   world: WorldData | null = null
-  readonly stats: GameStats = { fps: 0, drawCalls: 0, triangles: 0, chunks: 0, pending: 0, buildAvg: 0, buildMax: 0, x: 0, z: 0, mode: 'player', view: 'third' }
+  readonly stats: GameStats = { fps: 0, drawCalls: 0, triangles: 0, chunks: 0, pending: 0, buildAvg: 0, buildMax: 0, x: 0, z: 0, mode: 'player', view: 'third', district: null }
   private readonly ro: ResizeObserver
   private readonly materials: WorldMaterials
   private readonly ground: THREE.Mesh
@@ -161,7 +163,11 @@ export class Game {
 
     await this.chunks.prebuild(focus.x, focus.z, (d, t) => onProgress?.(`生成城市 ${d}/${t}`))
     // 碰撞盒随分块建好以后再放人，被占着就找最近的空位
-    if (!this.devCamera) this.player.spawn(focus.x, focus.z, this.playerWorld)
+    if (!this.devCamera) {
+      this.player.spawn(focus.x, focus.z, this.playerWorld)
+      // 人和相机朝同一方向
+      this.player.facing = this.player.model.rotation.y = this.rig.yaw
+    }
     return this.backend
   }
 
@@ -275,7 +281,8 @@ export class Game {
       pending: this.chunks?.pendingCount ?? 0,
       x: Math.round(f.x),
       z: Math.round(f.z),
-      view: this.rig.mode
+      view: this.rig.mode,
+      district: this.districts?.at(f.x, f.z)?.id ?? null
     })
     this.frames = 0
     this.statsAt = now

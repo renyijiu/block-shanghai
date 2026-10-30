@@ -55,11 +55,12 @@ block-shanghai/
     ├── main.ts
     ├── App.vue
     ├── style.css
-    ├── components/            Menu / GameView / Panels / MetroMap …
+    ├── components/            MiniMap / BigMap / DistrictToast / TouchControls / Menu / Panels / MetroMap …
     ├── engine/
     │   ├── Game.ts            主循环、系统调度
     │   ├── city.ts            城市包契约（类型）
-    │   ├── geo/               projection、空间索引、水陆判定
+    │   ├── geo/               projection、碰撞世界（CollisionWorld）
+    │   ├── map/               2D 地图绘制（小地图、大地图、俯视预览共用）
     │   ├── world/             分块（chunks.ts）、烘焙数据格式（data.ts）、地面、水面、道路、高架、分块管理
     │   ├── build/             Builder（方块合并网格 + 碰撞登记）、通用构件
     │   ├── actors/            玩家、角色皮肤、NPC

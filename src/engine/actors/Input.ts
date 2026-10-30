@@ -11,6 +11,8 @@ export class Input {
   private viewQueued = false
   /** 触屏的奔跑开关 */
   runToggle = false
+  /** 打开大地图等面板时暂停移动输入 */
+  enabled = true
   private readonly dom: HTMLElement
   private drag: { id: number; x: number; y: number } | null = null
 
@@ -80,6 +82,7 @@ export class Input {
 
   /** 移动方向：x 向右、y 向前，长度不超过 1 */
   axes() {
+    if (!this.enabled) return { x: 0, y: 0 }
     const k = this.keys
     let x = this.stick.x + (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0)
     let y = this.stick.y + (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0)
@@ -109,7 +112,7 @@ export class Input {
   }
 
   consumeJump() {
-    const j = this.jumpQueued
+    const j = this.jumpQueued && this.enabled
     this.jumpQueued = false
     return j
   }
