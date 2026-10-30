@@ -12,6 +12,7 @@ import { InteractRegistry } from './world/interact.ts'
 import { MetroSystem } from './metro/MetroSystem.ts'
 import { TrainRenderer } from './metro/trains.ts'
 import type { Route } from './metro/network.ts'
+import { Sky } from './sky/Sky.ts'
 import { GameClock } from './state/clock.ts'
 import { ChunkManager } from './world/ChunkManager.ts'
 import { CHUNK_SIZE } from './world/chunks.ts'
@@ -78,6 +79,7 @@ export class Game {
   world: WorldData | null = null
   readonly stats: GameStats = { fps: 0, drawCalls: 0, triangles: 0, chunks: 0, pending: 0, buildAvg: 0, buildMax: 0, x: 0, z: 0, mode: 'player', view: 'third', district: null, time: '', money: 0, prompt: null }
   readonly clock = new GameClock()
+  readonly sky: Sky
   readonly interact = new InteractRegistry()
   metro: MetroSystem | null = null
   trains: TrainRenderer | null = null
@@ -128,10 +130,10 @@ export class Game {
 
     this.scene.background = new THREE.Color(SKY)
     this.scene.fog = new THREE.Fog(SKY, 500, 1000)
-    this.scene.add(new THREE.HemisphereLight(0xe4f0ff, 0x8a8170, 1.5))
+    const hemi = new THREE.HemisphereLight(0xe4f0ff, 0x8a8170, 1.5)
     const sun = new THREE.DirectionalLight(0xfff4e0, 1.6)
-    sun.position.set(-400, 900, 500)
-    this.scene.add(sun)
+    this.scene.add(hemi, sun)
+    this.sky = new Sky(this.scene, sun, hemi)
 
     this.materials = createWorldMaterials()
     // 地面：跟着焦点移动的大平面，各图层贴在它上面；按最高画质的视距准备
@@ -322,6 +324,7 @@ export class Game {
     const dt = Math.min(0.1, (now - this.last) / 1000)
     this.last = now
     this.clock.tick(dt)
+    this.sky.update(this.clock.daySeconds)
     const f = this.devCamera ? this.updateDev(dt) : this.updatePlayer(dt, now)
     this.chunks?.update(f.x, f.z)
     this.trains?.update(this.clock.seconds, f.x, f.z, QUALITY_PRESETS[this.quality].viewDistance)

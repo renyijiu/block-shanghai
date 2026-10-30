@@ -1,7 +1,10 @@
 // 世界共用的材质。贴地图层（公园、水面、道路）和地面几乎共面，用材质的深度偏移（polygonOffset）
 // 决定谁在上面：偏移按深度缓冲精度计算，远处也不会闪烁，WebGPU 和 WebGL 2 回退都支持
 import * as THREE from 'three/webgpu'
-import { abs, attribute, color, float, fract, mix, mx_noise_float, normalWorld, positionWorld, reflector, smoothstep, step, time, vec3 } from 'three/tsl'
+import { abs, attribute, color, dot, float, floor, fract, mix, mx_noise_float, normalWorld, positionWorld, reflector, sin, smoothstep, step, time, uniform, vec2, vec3 } from 'three/tsl'
+
+/** 昼夜参数（sky/Sky.ts 每帧写入）：night 0 白天–1 夜晚；lights 景观灯亮度 0–1 */
+export const SKY_UNIFORMS = { night: uniform(0), lights: uniform(0) }
 
 export const WORLD_COLORS = {
   ground: 0xc4bca8,
@@ -17,6 +20,8 @@ export interface WorldMaterials {
   water: THREE.MeshPhongNodeMaterial
   roads: THREE.MeshLambertMaterial
   elevated: THREE.MeshLambertMaterial
+  /** 景点的灯光部件：白天是普通颜色，景观灯时段发光 */
+  lights: THREE.MeshLambertNodeMaterial
   /** 建筑和行道树（顶点颜色，墙面画窗户） */
   buildings: THREE.MeshLambertNodeMaterial
   /** 玻璃幕墙（高光，横向分层） */
@@ -25,6 +30,9 @@ export interface WorldMaterials {
   setReflection(on: boolean, scene: THREE.Scene): void
   dispose(): void
 }
+
+// 自发光：NodeMaterial 基类运行时都支持 emissiveNode，类型声明只写在 MeshStandardNodeMaterial 上
+const setEmissive = (m: THREE.NodeMaterial, node: THREE.Node) => Object.assign(m, { emissiveNode: node })
 
 const overlay = (factor: number, units: number) => ({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: factor, polygonOffsetUnits: units })
 
@@ -44,9 +52,17 @@ export function createWorldMaterials(): WorldMaterials {
   const pane = step(0.32, fy).mul(step(fy, 0.8)).mul(step(0.25, fx)).mul(step(fx, 0.75))
   const buildings = new THREE.MeshLambertNodeMaterial({ vertexColors: true })
   buildings.colorNode = vec3(mix(float(1), float(0.55), pane.mul(wall).mul(win)))
+  // 夜里约一半的窗户亮暖黄灯：按窗格坐标取伪随机数决定亮不亮
+  const cell = vec2(floor(along.div(2)), floor(positionWorld.y.div(1.2)).add(floor(positionWorld.x.add(positionWorld.z).div(97))))
+  const rnd = fract(sin(dot(cell, vec2(12.9898, 78.233))).mul(43758.5453))
+  const lit = pane.mul(wall).mul(win).mul(step(0.45, rnd)).mul(SKY_UNIFORMS.night)
+  setEmissive(buildings, color(0xffcf7a).mul(lit).mul(0.9))
+  const lights = new THREE.MeshLambertNodeMaterial({ vertexColors: true })
+  setEmissive(lights, attribute<'vec3'>('color').mul(SKY_UNIFORMS.lights.mul(1.6)))
   // 玻璃幕墙：每层一道浅色的层间带
   const glass = new THREE.MeshPhongNodeMaterial({ vertexColors: true, shininess: 70, specular: new THREE.Color(0xb8c8d8) })
   glass.colorNode = vec3(mix(float(1), float(1.35), step(0.84, fy).mul(wall).mul(win)))
+  setEmissive(glass, color(0xdff0ff).mul(step(0.3, fy).mul(step(fy, 0.8)).mul(wall).mul(win).mul(step(0.4, rnd)).mul(SKY_UNIFORMS.night).mul(0.6)))
 
   // 水面：两层不同尺度的噪声缓慢流动，混合深浅两种蓝，配合高光形成波光
   const water = new THREE.MeshPhongNodeMaterial({ shininess: 90, specular: new THREE.Color(0x9fb4c8), polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 })
@@ -62,6 +78,7 @@ export function createWorldMaterials(): WorldMaterials {
     water,
     roads,
     elevated,
+    lights,
     buildings,
     glass,
     setReflection(on, scene) {
@@ -81,7 +98,7 @@ export function createWorldMaterials(): WorldMaterials {
     },
     dispose() {
       mirror?.dispose()
-      for (const m of [ground, parks, water, roads, elevated, buildings, glass]) m.dispose()
+      for (const m of [ground, parks, water, roads, elevated, lights, buildings, glass]) m.dispose()
     }
   }
 }
