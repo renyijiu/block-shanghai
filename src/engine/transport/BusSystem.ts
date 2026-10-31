@@ -8,8 +8,10 @@ import { toMesh } from '../landmarks/LandmarkManager.ts'
 import type { InteractPoint, InteractRegistry } from '../world/interact.ts'
 import type { Lot } from '../world/lots.ts'
 import type { WorldMaterials } from '../world/materials.ts'
+import { nearestGroundRoad } from '../world/queries.ts'
+import type { WorldData } from '../world/WorldData.ts'
 import { Polyline } from './boats.ts'
-import { BUS_LANE, busesAt, busPose, nextBus, tripTime, type BusLine } from './buses.ts'
+import { busesAt, busPose, nextBus, stopOffset, tripTime, type BusLine } from './buses.ts'
 import { tr } from '../../i18n/core.ts'
 
 const parseClock = (s: string) => {
@@ -71,7 +73,7 @@ export class BusSystem {
   private readonly pool: { group: THREE.Group; key: string | null }[] = []
   private readonly geos: THREE.BufferGeometry[] = []
 
-  constructor(defs: BusLineDef[], proj: Projection, materials: WorldMaterials, interact: InteractRegistry) {
+  constructor(defs: BusLineDef[], proj: Projection, world: WorldData, materials: WorldMaterials, interact: InteractRegistry) {
     this.root.name = 'buses'
     const b = new Builder()
     const lights = new GeoBuilder()
@@ -99,11 +101,11 @@ export class BusSystem {
       })
       const line: BusLine = { id: d.id, name: d.name, fare: d.fare, path, stops, speed: d.speed, first: parseClock(d.first), last: parseClock(d.last), headway: d.headwayMin * 60, dwell: d.dwellSec }
       this.lines.push(line)
-      // 站牌：在顺行方向的右边（车靠右停在这一侧）
+      // 站牌：在顺行方向的右边（车靠右停在这一侧），立在路缘外的人行道上
       stops.forEach((st, i) => {
         const [x, z] = path.at(st.s)
         const h = path.heading(st.s, 6)
-        const off = BUS_LANE + 3.2
+        const off = stopOffset(nearestGroundRoad(world, x, z, 20), x, z, h)
         const sx = x - Math.sin(h) * off
         const sz = z + Math.cos(h) * off
         b.orientedBox(sx, sz, h, 0.2, 0.2, 0, 3, 0x4a4d52, { windows: 0 })

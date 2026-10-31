@@ -26,6 +26,19 @@ export interface BusPose {
 const DAY = 86400
 /** 靠右行驶：车偏到前进方向右侧这么多格（不撞高架的桥墩、来回两个方向错开） */
 export const BUS_LANE = 2.4
+/** 站牌离路线的默认距离（找不到路的时候）和最远距离 */
+export const STOP_OFFSET = BUS_LANE + 3.2
+
+/**
+ * 站牌离路线多远：立在这一侧路缘外 1.5 格的人行道上，窄路宽路都贴着路边，人站在站牌下就能扫共享单车。
+ * road 是离路线上这一点最近的地面道路（中线上的点、路宽、走向），h 是路线走向（弧度），站牌在 (-sin h, cos h) 一侧；
+ * 路和路线不顺着（路口的横路）或者没找到路时用默认距离。最近不压到车身（车顶高过候车亭），最远是默认距离
+ */
+export function stopOffset(road: { x: number; z: number; width: number; dir: number } | null, x: number, z: number, h: number) {
+  if (!road || Math.abs(Math.sin(road.dir - h)) > 0.5) return STOP_OFFSET
+  const c = (road.x - x) * -Math.sin(h) + (road.z - z) * Math.cos(h)
+  return Math.min(STOP_OFFSET, Math.max(BUS_LANE + 2, c + road.width / 2 + 1.5))
+}
 
 /** 方向 dir（0 顺着路线，1 反过来）上各站的弧长，按经过的顺序 */
 function order(l: BusLine, dir: 0 | 1) {

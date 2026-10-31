@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 import { Polyline } from '../src/engine/transport/boats.ts'
-import { arriveAt, BUS_LANE, busesAt, busPose, nextBus, tripTime, type BusLine } from '../src/engine/transport/buses.ts'
+import { arriveAt, BUS_LANE, busesAt, busPose, nextBus, STOP_OFFSET, stopOffset, tripTime, type BusLine } from '../src/engine/transport/buses.ts'
 
 // 一条 300 格的直路，三个站：0、100、300；车速 1 格/秒，每站停 30 秒，8 点到 10 点每 10 分钟一班
 const line: BusLine = {
@@ -64,4 +64,18 @@ test('路上同时跑着的车：两个方向都有', () => {
   expect(buses.some((b) => b.dir === 0)).toBe(true)
   expect(buses.some((b) => b.dir === 1)).toBe(true)
   expect(busesAt(line, 6 * 3600)).toEqual([])
+})
+
+test('站牌立在路缘外 1.5 格：窄路往里收，宽路不超过默认距离，横路和找不到路用默认距离', () => {
+  // 路线朝 +x（h = 0），站牌在 +z 一侧；路中线就在路线上
+  const road = (width: number, z = 0, dir = 0) => ({ x: 0, z, width, dir })
+  expect(stopOffset(road(6), 0, 0, 0)).toBeCloseTo(4.5)
+  // 路中线偏到站牌这一侧 0.5 格，路缘也跟着外移
+  expect(stopOffset(road(6, 0.5), 0, 0, 0)).toBeCloseTo(5)
+  // 反方向的路（dir = π）也算顺着路线
+  expect(stopOffset(road(6, 0, Math.PI), 0, 0, 0)).toBeCloseTo(4.5)
+  expect(stopOffset(road(14), 0, 0, 0)).toBe(STOP_OFFSET)
+  expect(stopOffset(road(2), 0, 0, 0)).toBe(BUS_LANE + 2)
+  expect(stopOffset(road(6, 0, Math.PI / 2), 0, 0, 0)).toBe(STOP_OFFSET)
+  expect(stopOffset(null, 0, 0, 0)).toBe(STOP_OFFSET)
 })

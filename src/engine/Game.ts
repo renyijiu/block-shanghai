@@ -287,7 +287,7 @@ export class Game {
     this.scene.add(this.landmarks.root)
     this.boats = new BoatSystem(this.city.boats, this.proj, world, this.materials, this.collision, this.interact)
     this.scene.add(this.boats.root)
-    this.buses = new BusSystem(this.city.buses, this.proj, this.materials, this.interact)
+    this.buses = new BusSystem(this.city.buses, this.proj, world, this.materials, this.interact)
     this.scene.add(this.buses.root)
     this.walks = new WalkSystem(this.city.content, this.proj, this.materials, this.collision, this.interact)
     this.scene.add(this.walks.root)
