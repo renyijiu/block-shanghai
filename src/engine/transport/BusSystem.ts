@@ -11,7 +11,7 @@ import type { WorldMaterials } from '../world/materials.ts'
 import { nearestGroundRoad } from '../world/queries.ts'
 import type { WorldData } from '../world/WorldData.ts'
 import { Polyline } from './boats.ts'
-import { busesAt, busPose, nextBus, stopOffset, tripTime, type BusLine } from './buses.ts'
+import { busesAt, busPose, nextBus, placeStop, tripTime, type BusLine } from './buses.ts'
 import { tr } from '../../i18n/core.ts'
 
 const parseClock = (s: string) => {
@@ -73,7 +73,8 @@ export class BusSystem {
   private readonly pool: { group: THREE.Group; key: string | null }[] = []
   private readonly geos: THREE.BufferGeometry[] = []
 
-  constructor(defs: BusLineDef[], proj: Projection, world: WorldData, materials: WorldMaterials, interact: InteractRegistry) {
+  /** blocked：一点有没有被别的东西占着（地铁出入口、景点的房子……），站牌和候车亭避开 */
+  constructor(defs: BusLineDef[], proj: Projection, world: WorldData, blocked: (x: number, z: number) => boolean, materials: WorldMaterials, interact: InteractRegistry) {
     this.root.name = 'buses'
     const b = new Builder()
     const lights = new GeoBuilder()
@@ -101,19 +102,35 @@ export class BusSystem {
       })
       const line: BusLine = { id: d.id, name: d.name, fare: d.fare, path, stops, speed: d.speed, first: parseClock(d.first), last: parseClock(d.last), headway: d.headwayMin * 60, dwell: d.dwellSec }
       this.lines.push(line)
-      // 站牌：在顺行方向的右边（车靠右停在这一侧），立在路缘外的人行道上
+      // 站牌：在顺行方向的右边（车靠右停在这一侧），立在路缘外的人行道上；离路口近的往前后挪到直路段，车也停在这儿
+      const at = (s: number) => {
+        const [x, z] = path.at(s)
+        return { x, z, h: path.heading(s, 6) }
+      }
+      const roadAt = (x: number, z: number) => nearestGroundRoad(world, x, z, 20)
+      const edgeAt = (x: number, z: number) => nearestGroundRoad(world, x, z, 12)?.edge ?? Infinity
       stops.forEach((st, i) => {
-        const [x, z] = path.at(st.s)
-        const h = path.heading(st.s, 6)
-        const off = stopOffset(nearestGroundRoad(world, x, z, 20), x, z, h)
-        const sx = x - Math.sin(h) * off
-        const sz = z + Math.cos(h) * off
+        let placed = placeStop(st.s, path.length, at, roadAt, edgeAt, blocked)
+        // 终点站两个方向的车都停：这一侧立不下（外滩的楼贴着马路），就立到对面——到站的车停在那一侧
+        if (!placed.clear && (i === 0 || i === stops.length - 1)) {
+          const L = path.length
+          const back = (s: number) => {
+            const p = at(L - s)
+            return { ...p, h: p.h + Math.PI }
+          }
+          const other = placeStop(L - st.s, L, back, roadAt, edgeAt, blocked)
+          if (other.clear) placed = { ...other, s: L - other.s }
+        }
+        st.s = placed.s
+        const { x: sx, z: sz, h } = placed
         b.orientedBox(sx, sz, h, 0.2, 0.2, 0, 3, 0x4a4d52, { windows: 0 })
         lights.window = 0
         lights.orientedBox(sx, sz, h, 1.4, 0.24, 2, 3, rgb(0xc8282a), rgb(0xc8282a))
-        // 候车亭
-        b.orientedBox(sx - Math.sin(h) * 0.8, sz + Math.cos(h) * 0.8, h, 3.6, 0.15, 0, 2.6, 0x9fc3d6, { glass: true, collide: false })
-        b.orientedBox(sx - Math.sin(h) * 0.3, sz + Math.cos(h) * 0.3, h, 3.8, 1.4, 2.6, 2.75, 0xe8e2d4, { windows: 0, collide: false })
+        // 候车亭（人行道太窄的地方只有站牌）
+        if (placed.shelter) {
+          b.orientedBox(sx - Math.sin(h) * 0.8, sz + Math.cos(h) * 0.8, h, 3.6, 0.15, 0, 2.6, 0x9fc3d6, { glass: true, collide: false })
+          b.orientedBox(sx - Math.sin(h) * 0.3, sz + Math.cos(h) * 0.3, h, 3.8, 1.4, 2.6, 2.75, 0xe8e2d4, { windows: 0, collide: false })
+        }
         this.stops.push({ line, index: i, name: st.name, x: sx, z: sz })
         points.push({ x: sx, z: sz, r: 4, label: tr('{line} · {stop}站', { line: d.name, stop: st.name }), action: '坐车', kind: 'bus', bus: d.id, stop: i })
         this.footprints.push({ x0: sx - 3, z0: sz - 3, x1: sx + 3, z1: sz + 3 })

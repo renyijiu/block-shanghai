@@ -261,6 +261,14 @@ export class LandmarkManager {
     return best
   }
 
+  /** 一个景点的碰撞盒（不建网格；还没加载的也能取）：摆巴士站牌这类东西时避开景点的房子 */
+  colliders(p: PlacedLandmark): Box[] {
+    const lb = new LandmarkBuilder(p, this.proj)
+    p.def.build(lb)
+    this.extras?.(p, lb)
+    return lb.b.colliders
+  }
+
   private load(p: PlacedLandmark) {
     const lb = new LandmarkBuilder(p, this.proj)
     p.def.build(lb)

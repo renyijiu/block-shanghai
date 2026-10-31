@@ -19,6 +19,8 @@ import { PhotoSystem } from './photo/PhotoSystem.ts'
 import type { InteractPoint } from './world/interact.ts'
 import { InteractRegistry } from './world/interact.ts'
 import { MetroSystem } from './metro/MetroSystem.ts'
+import { entranceFootprint } from './metro/structures.ts'
+import type { MetroData } from './metro/data.ts'
 import { TrainRenderer } from './metro/trains.ts'
 import type { Route } from './metro/network.ts'
 import { Sky } from './sky/Sky.ts'
@@ -287,7 +289,7 @@ export class Game {
     this.scene.add(this.landmarks.root)
     this.boats = new BoatSystem(this.city.boats, this.proj, world, this.materials, this.collision, this.interact)
     this.scene.add(this.boats.root)
-    this.buses = new BusSystem(this.city.buses, this.proj, world, this.materials, this.interact)
+    this.buses = new BusSystem(this.city.buses, this.proj, world, this.busStopBlocked(metro.data, this.landmarks, this.boats), this.materials, this.interact)
     this.scene.add(this.buses.root)
     this.walks = new WalkSystem(this.city.content, this.proj, this.materials, this.collision, this.interact)
     this.scene.add(this.walks.root)
@@ -680,6 +682,26 @@ export class Game {
     }
     this.saveNow()
     return e.ref ? tr('{station}站 {ref} 号口出站', { station: nameOf(st), ref: e.ref }) : tr('{station}站出站', { station: nameOf(st) })
+  }
+
+  /**
+   * 巴士站牌和候车亭要避开的东西：地铁出入口、码头、小店的占地，景点里高过台阶的房子和压在头顶上的屋檐（6 格以下）。
+   * 景点的占地是外接矩形（连马路都框进去了），所以用景点真正的碰撞盒：问到哪个景点的范围才现建一份
+   */
+  private busStopBlocked(metro: MetroData, landmarks: LandmarkManager, boats: BoatSystem): (x: number, z: number) => boolean {
+    const lots = [...boats.footprints, ...lifeFootprints(this.city.content, landmarks.placed, this.proj), ...metro.entrances.map((_, i) => entranceFootprint(metro, i))]
+    const boxes = new CollisionWorld()
+    const built = new Set<string>()
+    return (x, z) => {
+      if (lots.some((o) => x > o.x0 - 0.3 && x < o.x1 + 0.3 && z > o.z0 - 0.3 && z < o.z1 + 0.3)) return true
+      for (const p of landmarks.placed) {
+        const b = p.bounds
+        if (built.has(p.def.id) || x < b.x0 || x > b.x1 || z < b.z0 || z > b.z1) continue
+        built.add(p.def.id)
+        boxes.add(p.def.id, landmarks.colliders(p))
+      }
+      return boxes.query(x - 0.3, z - 0.3, x + 0.3, z + 0.3).some((b) => !b.soft && b.y1 > 0.5 && b.y0 < 6)
+    }
   }
 
   /** 玩家在城市地图上的位置（在地铁站里时是这个站的出入口） */
