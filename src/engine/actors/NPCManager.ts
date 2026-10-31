@@ -40,6 +40,8 @@ interface Npc {
 
 /** 和玩家说话的结果 */
 export interface Talk {
+  /** 路人类型 id */
+  type: string
   name: string
   speech: NpcType['speech']
   line: NpcLine
@@ -439,7 +441,7 @@ export class NPCManager {
     const w = this.content.weatherLines[weather]
     if (local && w?.length && Math.random() < 0.6) line = pick(w)
     else if (local && nearBund && (h >= 18 || h < 1) && Math.random() < 0.5) line = pick(this.content.nightLines)
-    return { name: n.type.name, speech: n.type.speech, line }
+    return { type: n.type.id, name: n.type.name, speech: n.type.speech, line }
   }
 
   /** 拍照模式：玩家 (x, z) 附近的人转向镜头摆姿势；cam 为 null 时恢复 */

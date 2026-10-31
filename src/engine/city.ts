@@ -147,6 +147,66 @@ export interface CityPackage {
   boats: BoatLineDef[]
   /** 路人：类型、穿着、对白（P5） */
   people: NpcContent
+  /** 美食、纪念品、商店、文化图鉴（P5） */
+  content: LifeContent
+}
+
+/** 景点局部坐标里的一个位置：x、z 是局部坐标；y 是地面高度（摆在平台上时）；face 是转角（弧度，和景点 rot 同向），0 时店面朝局部 +z */
+export interface Anchor {
+  landmark: string
+  x: number
+  z: number
+  y?: number
+  face?: number
+}
+
+export interface FoodDef {
+  id: string
+  name: string
+  /** 价格（元） */
+  price: number
+  desc: string
+  /** 只在这些月份卖（季节限定，按真实日期）；不写就是全年 */
+  months?: number[]
+  /** 只在这些游戏时刻卖（[开始, 结束) 小时），如早点 */
+  hours?: [number, number]
+}
+
+export interface SouvenirDef {
+  id: string
+  name: string
+  desc: string
+  /** 可以在店里买：价格（元） */
+  price?: number
+  /** 自动获得：metro 第一次坐地铁、maglev 坐磁浮、cruise 坐完浦江游览、deck:<景点 id> 登上观光层 */
+  auto?: string
+}
+
+export interface ShopDef {
+  id: string
+  name: string
+  kind: 'food' | 'gift' | 'coffee'
+  at: Anchor
+  /** 卖的东西：美食或纪念品 id */
+  items: string[]
+}
+
+/** 文化图鉴怎么解锁：看展板、和某类路人聊天（wu 是任一说上海话的人）、用某个滤镜拍照、拍到某个景点、买到某件东西、走完一条 Citywalk */
+export type CultureUnlock = { plaque: Anchor } | { talk: string } | { filter: string } | { photo: string } | { item: string } | { citywalk: true }
+
+export interface CultureDef {
+  id: string
+  name: string
+  /** 一段 100 字左右的介绍 */
+  text: string
+  unlock: CultureUnlock
+}
+
+export interface LifeContent {
+  foods: FoodDef[]
+  souvenirs: SouvenirDef[]
+  shops: ShopDef[]
+  culture: CultureDef[]
 }
 
 /** 一句对白；方言句子带普通话意思 */

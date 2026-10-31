@@ -3,6 +3,7 @@ import type { CityPackage } from '../../engine/city.ts'
 import { boats } from './boats.ts'
 import { buildings } from './buildings.ts'
 import config from './config.ts'
+import { content } from './content.ts'
 import { landmarks } from './landmarks.ts'
 import { people } from './people.ts'
 import world from './data/world.json?url'
@@ -20,5 +21,6 @@ export default {
   buildings,
   landmarks,
   boats,
-  people
+  people,
+  content
 } satisfies CityPackage

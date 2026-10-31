@@ -58,7 +58,7 @@ export class LandmarkBuilder implements LandmarkContext {
   readonly farLights = new GeoBuilder()
   readonly points: InteractPoint[] = []
   readonly decks: Box[] = []
-  private readonly p: PlacedLandmark
+  readonly p: PlacedLandmark
   private readonly proj: Projection
 
   constructor(p: PlacedLandmark, proj: Projection) {
@@ -119,9 +119,10 @@ export class LandmarkBuilder implements LandmarkContext {
     const [bx, bz] = this.p.toWorld(x, z)
     const [wx, wz] = this.p.toWorld(tx, tz)
     const kind = 'elevator'
-    this.points.push({ x: bx, z: bz, r: 5, label: `${name} · 电梯去${deck}`, action: '乘电梯', kind, target: { x: wx, y: ty, z: wz }, arrive: `${name} · ${deck}` })
+    const landmark = this.p.def.id
+    this.points.push({ x: bx, z: bz, r: 5, label: `${name} · 电梯去${deck}`, action: '乘电梯', kind, landmark, target: { x: wx, y: ty, z: wz }, arrive: `${name} · ${deck}` })
     // 顶上的电梯口：回到地面
-    this.points.push({ x: wx, z: wz, r: 6, y: ty, label: `${name} · 电梯回地面`, action: '下楼', kind, target: { x: bx, y: 0, z: bz }, arrive: `${name} · 回到地面` })
+    this.points.push({ x: wx, z: wz, r: 6, y: ty, label: `${name} · 电梯回地面`, action: '下楼', kind, landmark, target: { x: bx, y: 0, z: bz }, arrive: `${name} · 回到地面` })
   }
 
   local(lat: number, lon: number): [number, number] {
@@ -159,13 +160,16 @@ export class LandmarkManager {
   private readonly materials: WorldMaterials
   private readonly collision: CollisionWorld
   private readonly interact: InteractRegistry
+  /** 景点建好后再往上加东西（街边小店、文化牌） */
+  private readonly extras: ((p: PlacedLandmark, lb: LandmarkBuilder) => void) | null
 
-  constructor(defs: LandmarkDef[], proj: Projection, materials: WorldMaterials, collision: CollisionWorld, interact: InteractRegistry) {
+  constructor(defs: LandmarkDef[], proj: Projection, materials: WorldMaterials, collision: CollisionWorld, interact: InteractRegistry, extras: ((p: PlacedLandmark, lb: LandmarkBuilder) => void) | null = null) {
     this.placed = defs.map((d) => placeLandmark(d, proj))
     this.proj = proj
     this.materials = materials
     this.collision = collision
     this.interact = interact
+    this.extras = extras
     this.root.name = 'landmarks'
   }
 
@@ -224,6 +228,7 @@ export class LandmarkManager {
   private load(p: PlacedLandmark) {
     const lb = new LandmarkBuilder(p, this.proj)
     p.def.build(lb)
+    this.extras?.(p, lb)
     const built = lb.b.build()
     const far = lb.far.build()
     const group = new THREE.Group()

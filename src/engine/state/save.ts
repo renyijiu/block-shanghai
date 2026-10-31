@@ -1,9 +1,10 @@
 // 存档：localStorage，key 带结构版本；结构变化时提升版本并在 MIGRATIONS 里写迁移函数（docs/02 第 6 节）。
 // 照片存 IndexedDB（photo/album.ts），存档里只存 id。本模块不依赖浏览器 API，Node 里也能测
 
+import { newLife, type LifeProgress } from '../life/progress.ts'
 import { newProgress, type MetroProgress } from '../metro/collection.ts'
 
-export const SAVE_SCHEMA = 4
+export const SAVE_SCHEMA = 5
 const PREFIX = 'block-shanghai:save:v'
 export const saveKey = (schema = SAVE_SCHEMA) => PREFIX + schema
 
@@ -28,10 +29,12 @@ export interface SaveData {
    * shot 是拍到过的景点或子景点 → 第一张照片的 id（照片本身在 IndexedDB 相册里）
    */
   codex: { found: Record<string, number>; shot: Record<string, string> }
+  /** 生活进度：美食、背包、文化图鉴、咖啡地图、Citywalk、任务、计数器（life/progress.ts） */
+  life: LifeProgress
 }
 
 /** 新游戏的初始值 */
-export const NEW_GAME = { time: 8.5 * 3600, money: 200, metro: newProgress(), codex: { found: {}, shot: {} } }
+export const NEW_GAME = { time: 8.5 * 3600, money: 200, metro: newProgress(), codex: { found: {}, shot: {} }, life: newLife() }
 
 /** 只用到的 Storage 接口，测试时可以传假的 */
 export type SaveStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
@@ -50,7 +53,9 @@ const MIGRATIONS: Record<number, (s: Record<string, unknown>) => Record<string, 
     const old = (s.metro ?? {}) as { rides?: number; visited?: string[] }
     const t = typeof s.time === 'number' ? s.time : NEW_GAME.time
     return { ...s, schema: 4, metro: { ...newProgress(), rides: old.rides ?? 0, visits: Object.fromEntries((old.visited ?? []).map((id) => [id, t])) } }
-  }
+  },
+  // v4 → v5（P5）：加生活进度
+  4: (s) => ({ ...s, schema: 5, life: newLife() })
 }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
@@ -68,7 +73,24 @@ function valid(s: Record<string, unknown>): s is SaveData & Record<string, unkno
     !!st && ['low', 'mid', 'high'].includes(st.quality) &&
     isNum(s.time) && isNum(s.money) &&
     validMetro(s.metro) &&
+    validLife(s.life) &&
     !!s.codex && isRecord((s.codex as SaveData['codex']).found, isNum) && isRecord((s.codex as SaveData['codex']).shot, (v) => typeof v === 'string')
+  )
+}
+
+function validLife(v: unknown): v is LifeProgress {
+  const l = v as LifeProgress | undefined
+  const walk = (x: unknown) => !!x && typeof x === 'object' && isNum((x as { next: unknown }).next)
+  const quest = (x: unknown) => !!x && typeof x === 'object' && isNum((x as { step: unknown }).step)
+  return (
+    !!l &&
+    isRecord(l.foods, isNum) &&
+    isRecord(l.items, isNum) &&
+    isRecord(l.culture, isNum) &&
+    isRecord(l.coffee, isNum) &&
+    isRecord(l.walks, walk) &&
+    isRecord(l.quests, quest) &&
+    isRecord(l.stats, isNum)
   )
 }
 

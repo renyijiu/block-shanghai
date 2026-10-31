@@ -5,12 +5,17 @@
         <button :class="{ on: tab === 'codex' }" @click="tab = 'codex'">图鉴 {{ shotCount }}/{{ total }}</button>
         <button :class="{ on: tab === 'album' }" @click="tab = 'album'">相册 {{ photos.length }}</button>
         <button v-if="game.metro" :class="{ on: tab === 'metro' }" @click="tab = 'metro'">地铁</button>
+        <button :class="{ on: tab === 'life' }" @click="tab = 'life'">收藏</button>
       </div>
       <button class="close" title="关闭（Esc）" @click="emit('close')">✕</button>
     </div>
 
     <div v-if="tab === 'metro'" class="body">
       <MetroCollection :game="game" />
+    </div>
+
+    <div v-else-if="tab === 'life'" class="body">
+      <LifeCollection :game="game" />
     </div>
 
     <div v-else-if="tab === 'codex'" class="body">
@@ -71,12 +76,15 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Game } from '../engine/Game.ts'
 import { formatClock } from '../engine/state/clock.ts'
+import LifeCollection from './LifeCollection.vue'
 import MetroCollection from './MetroCollection.vue'
 
-const props = defineProps<{ game: Game; initialTab?: 'codex' | 'album' | 'metro' }>()
+export type CodexTab = 'codex' | 'album' | 'metro' | 'life'
+
+const props = defineProps<{ game: Game; initialTab?: CodexTab }>()
 const emit = defineEmits<{ close: [] }>()
 const game = props.game
-const tab = ref<'codex' | 'album' | 'metro'>(props.initialTab ?? 'codex')
+const tab = ref<CodexTab>(props.initialTab ?? 'codex')
 watch(
   () => props.initialTab,
   (t) => t && (tab.value = t)

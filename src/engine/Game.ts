@@ -4,11 +4,13 @@ import { CameraRig, type ViewMode } from './actors/CameraRig.ts'
 import { Input } from './actors/Input.ts'
 import { NPCManager, type Talk } from './actors/NPCManager.ts'
 import { Player, type PlayerWorld } from './actors/Player.ts'
-import type { CityPackage } from './city.ts'
+import type { CityPackage, CultureDef } from './city.ts'
 import { DevCamera } from './DevCamera.ts'
 import { CollisionWorld } from './geo/CollisionWorld.ts'
 import { createProjection, type Projection } from './geo/projection.ts'
 import { LandmarkManager, type PlacedLandmark } from './landmarks/LandmarkManager.ts'
+import { buildLife, lifeFootprints } from './life/kiosks.ts'
+import { foodAvailable, newLife, recordLife, type LifeEvent, type LifeGain, type LifeProgress } from './life/progress.ts'
 import { Album, newPhotoId } from './photo/album.ts'
 import { previewCss, type PhotoFilter } from './photo/filters.ts'
 import { PhotoSystem } from './photo/PhotoSystem.ts'
@@ -169,6 +171,10 @@ export class Game {
   /** 达成成就、点亮徽章、完成每日任务时调用（界面提示） */
   onProgress: ((g: Gain) => void) | null = null
   private exitTargets: ExitTarget[] | null = null
+  /** 生活进度：美食、背包、文化图鉴、咖啡地图、Citywalk、任务（life/progress.ts） */
+  life: LifeProgress = newLife()
+  /** 第一次吃到美食、得到纪念品、解锁文化图鉴时调用（界面提示） */
+  onLife: ((g: LifeGain) => void) | null = null
   /** 附近的交互点 */
   prompt: InteractPoint | null = null
   /** 按 E / 点按钮触发交互时调用（界面打开地铁面板） */
@@ -247,7 +253,7 @@ export class Game {
     this.world = world
     this.metro = metro
     this.districts = new DistrictIndex(world.districts)
-    this.landmarks = new LandmarkManager(this.city.landmarks, this.proj, this.materials, this.collision, this.interact)
+    this.landmarks = new LandmarkManager(this.city.landmarks, this.proj, this.materials, this.collision, this.interact, (p, lb) => buildLife(this.city.content, p, lb))
     this.scene.add(this.landmarks.root)
     this.boats = new BoatSystem(this.city.boats, this.proj, world, this.materials, this.collision, this.interact)
     this.scene.add(this.boats.root)
@@ -268,7 +274,7 @@ export class Game {
         proj: this.proj,
         metro: metro.data,
         interact: this.interact,
-        landmarks: [...this.landmarks.footprints, ...this.boats.footprints],
+        landmarks: [...this.landmarks.footprints, ...this.boats.footprints, ...lifeFootprints(this.city.content, this.landmarks.placed)],
         season: () => this.season
       },
       { radius: QUALITY_PRESETS[this.quality].viewDistance, budgetMs: 6 }
@@ -327,6 +333,7 @@ export class Game {
         recheck(metro.data, this.metroProgress, this.clock.seconds)
         for (const [id, t] of Object.entries(save.codex.found)) this.landmarks.found.set(id, t)
         this.codexShot = { ...save.codex.shot }
+        this.life = structuredClone(save.life)
       }
       this.route = (params.get('walk') ?? '')
         .split(';')
@@ -422,6 +429,8 @@ export class Game {
     this.player.model.position.copy(this.player.pos)
     this.clock.addMinutes(1)
     this.prompt = null
+    // 登上观光层：送纪念品
+    if (t.y > 0 && p.landmark) this.lifeEvent({ type: 'auto', key: `deck:${p.landmark}` })
     this.saveNow()
     return p.arrive ?? ''
   }
@@ -463,7 +472,44 @@ export class Game {
       const l = this.landmarks?.byId(k)
       return !!l && Math.hypot(l.x - p.x, l.z - p.z) < 450
     })
-    return this.npcs?.talk(id, p.x, p.z, this.weather, this.clock.daySeconds / 3600, near) ?? null
+    const t = this.npcs?.talk(id, p.x, p.z, this.weather, this.clock.daySeconds / 3600, near) ?? null
+    if (t) this.lifeEvent({ type: 'talk', speech: t.speech, npc: t.type })
+    return t
+  }
+
+  /** 记一个生活事件；有新收获就通知界面并存档 */
+  lifeEvent(e: LifeEvent): LifeGain {
+    const g = recordLife(this.city.content, this.life, e, this.clock.seconds)
+    if (g.foods.length || g.items.length || g.culture.length) {
+      this.onLife?.(g)
+      this.saveNow()
+    }
+    return g
+  }
+
+  /** 在小店买东西：美食当场吃掉记进美食图鉴，纪念品放进背包 */
+  buy(shopId: string, itemId: string): TravelResult {
+    const c = this.city.content
+    const shop = c.shops.find((s) => s.id === shopId)
+    const food = c.foods.find((f) => f.id === itemId)
+    const gift = c.souvenirs.find((s) => s.id === itemId)
+    const price = food?.price ?? gift?.price
+    if (!shop?.items.includes(itemId) || price === undefined) return { ok: false, message: '这家店不卖这个' }
+    if (food && !foodAvailable(food, new Date(), this.clock.daySeconds / 3600)) return { ok: false, message: `${food.name}现在不卖` }
+    if (this.money < price) return { ok: false, message: `余额不足：${price} 元，钱包里只有 ${this.money} 元` }
+    this.money -= price
+    if (food) this.lifeEvent({ type: 'eat', food: food.id, shop: shop.id })
+    else this.lifeEvent({ type: 'buy', item: itemId })
+    this.clock.addMinutes(food ? 10 : 2)
+    this.saveNow()
+    return { ok: true, message: food ? `吃了${food.name} · ${price} 元` : `买了${gift!.name} · ${price} 元，放进背包` }
+  }
+
+  /** 读文化牌：第一次读解锁文化图鉴 */
+  readPlaque(id: string): CultureDef | null {
+    const c = this.city.content.culture.find((x) => x.id === id) ?? null
+    if (c) this.lifeEvent({ type: 'plaque', culture: id })
+    return c
   }
 
   /** 天气预报式的说法：“⛅ 多云 · 秋” */
@@ -565,6 +611,8 @@ export class Game {
     if (e.type === 'metroExit') this.money -= e.fare
     const gain = record(this.metro!.data, this.metroProgress, e, this.clock.seconds, today(), this.dailyTasks())
     this.money += gain.daily.length * DAILY_REWARD
+    // 第一次坐地铁、坐磁浮：送纪念票卡
+    if (e.type === 'metroRide') this.lifeEvent({ type: 'auto', key: e.line === 'LMG' ? 'maglev' : 'metro' })
     this.onMetro?.(e)
     if (gain.achievements.length || gain.badges.length || gain.daily.length) this.onProgress?.(gain)
     this.saveNow()
@@ -602,6 +650,7 @@ export class Game {
       const [x, z] = ride.to.land
       this.player.spawn(x, z, this.playerWorld!)
       this.player.model.position.copy(this.player.pos)
+      if (ride.line.kind !== 'ferry') this.lifeEvent({ type: 'auto', key: 'cruise' })
       this.saveNow()
       this.onRideEnd?.(ride.line.kind === 'ferry' ? `到达 ${ride.to.name}` : `${ride.line.name}结束，回到${ride.to.name}`)
       return
@@ -693,6 +742,7 @@ export class Game {
         newly.push(lid)
       }
     }
+    this.lifeEvent({ type: 'photo', filter: this.photoFilter.id, recognized: inside ? [] : shot.recognized, people })
     this.saveNow()
     return { id, recognized: shot.recognized, newly, thumb: shot.thumb, saved, people }
   }
@@ -712,7 +762,8 @@ export class Game {
       time: this.clock.seconds,
       money: this.money,
       metro: this.metroProgress,
-      codex: { found: Object.fromEntries(this.landmarks?.found ?? []), shot: this.codexShot }
+      codex: { found: Object.fromEntries(this.landmarks?.found ?? []), shot: this.codexShot },
+      life: this.life
     })
   }
 

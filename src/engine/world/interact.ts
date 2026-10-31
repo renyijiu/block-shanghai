@@ -10,17 +10,22 @@ export interface InteractPoint {
   label: string
   /** 按钮上的短文字，如“进站” */
   action: string
-  kind: 'metro' | 'elevator' | 'boat' | 'interior' | 'npc'
+  kind: 'metro' | 'elevator' | 'boat' | 'interior' | 'npc' | 'shop' | 'culture'
   /** 地铁口：车站序号、出入口序号 */
   station?: number
   entrance?: number
   /** 电梯：目标位置（世界坐标，y 是脚底高度）和到达后的提示 */
   target?: { x: number; y: number; z: number }
   arrive?: string
+  /** 电梯属于哪个景点（登顶纪念品用） */
+  landmark?: string
   /** 船：码头名 */
   pier?: string
   /** 路人：NPCManager 里的编号 */
   npc?: number
+  /** 小店 id、文化牌对应的文化图鉴 id */
+  shop?: string
+  culture?: string
   /** 站内：要做的事（“gate:in”“platform:L2”“exit:12”“board:0”“alight”…），由 InteriorManager 处理 */
   go?: string
 }

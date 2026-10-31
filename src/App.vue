@@ -38,13 +38,15 @@
     <BigMap v-if="mapOpen" :game="game" :title="config.name" :here="districtName" @close="mapOpen = false" />
     <BoatPanel v-if="boatPanel" :game="game" :pier="boatPanel" @close="boatPanel = null" @board="board" />
     <CodexPanel v-if="codexTab" :game="game" :initial-tab="codexTab" @close="codexTab = null" />
+    <ShopPanel v-if="shopPanel" :game="game" :shop-id="shopPanel" @close="shopPanel = null" />
+    <CultureCard v-if="cultureCard" :entry="cultureCard" @close="cultureCard = null" />
     <MetroPanel v-if="metroPanel" :game="game" :initial-from="metroPanel.from" :in-station="metroPanel.inStation" @close="metroPanel = null" @travel="travel" />
     <Transition name="fade">
       <div v-if="travelText" class="travel">{{ travelText }}</div>
     </Transition>
-    <Transition name="fade">
-      <div v-if="notice" class="notice">{{ notice }}</div>
-    </Transition>
+    <TransitionGroup name="fade" tag="div" class="notices">
+      <div v-for="n in notices" :key="n.id" class="notice">{{ n.text }}</div>
+    </TransitionGroup>
   </template>
   <div v-if="!panelOpen" class="credit">© OpenStreetMap contributors</div>
 </template>
@@ -53,13 +55,15 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import BigMap from './components/BigMap.vue'
 import BoatPanel from './components/BoatPanel.vue'
-import CodexPanel from './components/CodexPanel.vue'
+import CodexPanel, { type CodexTab } from './components/CodexPanel.vue'
+import CultureCard from './components/CultureCard.vue'
 import DiscoverToast, { type DiscoverInfo } from './components/DiscoverToast.vue'
 import DistrictToast from './components/DistrictToast.vue'
 import MetroHud from './components/MetroHud.vue'
 import MetroPanel from './components/MetroPanel.vue'
 import MiniMap from './components/MiniMap.vue'
 import PhotoMode from './components/PhotoMode.vue'
+import ShopPanel from './components/ShopPanel.vue'
 import SpeechBubble from './components/SpeechBubble.vue'
 import type { Talk } from './engine/actors/NPCManager.ts'
 import TouchControls from './components/TouchControls.vue'
@@ -67,6 +71,7 @@ import { emptyStats, Game, type GameStats } from './engine/Game.ts'
 import type { Route } from './engine/metro/network.ts'
 import { ACHIEVEMENTS, DAILY_REWARD } from './engine/metro/collection.ts'
 import type { InteractPoint } from './engine/world/interact.ts'
+import type { CultureDef } from './engine/city.ts'
 import type { Pier } from './engine/transport/BoatSystem.ts'
 import { QUALITY_ORDER, QUALITY_PRESETS, type QualityLevel } from './engine/quality.ts'
 import { CITIES, DEFAULT_CITY } from './cities/index.ts'
@@ -87,17 +92,23 @@ const mapSize = touch ? 112 : 160
 const metroPanel = ref<{ from: number | null; inStation: boolean } | null>(null)
 // 拍照模式（游戏照常跑）和图鉴 / 相册面板
 const photoOpen = ref(false)
-const codexTab = ref<'codex' | 'album' | 'metro' | null>(null)
+const codexTab = ref<CodexTab | null>(null)
 // 码头的船票面板：码头名
 const boatPanel = ref<string | null>(null)
-const panelOpen = computed(() => mapOpen.value || !!metroPanel.value || !!codexTab.value || !!boatPanel.value)
+// 小店面板：店 id；文化牌：读到的文化图鉴条目
+const shopPanel = ref<string | null>(null)
+const cultureCard = ref<CultureDef | null>(null)
+const panelOpen = computed(() => mapOpen.value || !!metroPanel.value || !!codexTab.value || !!boatPanel.value || !!shopPanel.value || !!cultureCard.value)
 function openAlbum() {
   photoOpen.value = false
   codexTab.value = 'album'
 }
 const travelText = ref('')
-const notice = ref('')
-let noticeTimer = 0
+// 提示：同时来好几条（到站 + 得到纪念品）时叠着显示，每条 4 秒
+const notices = ref<{ id: number; text: string }[]>([])
+const notice = computed(() => notices.value.at(-1)?.text ?? '')
+let noticeId = 0
+const noticeTimers = new Set<number>()
 
 function openMetro(from: number | null, inStation = false) {
   const g = game.value
@@ -106,9 +117,13 @@ function openMetro(from: number | null, inStation = false) {
 }
 
 function showNotice(text: string) {
-  notice.value = text
-  clearTimeout(noticeTimer)
-  noticeTimer = window.setTimeout(() => (notice.value = ''), 4000)
+  const id = ++noticeId
+  notices.value = [...notices.value.filter((n) => n.text !== text), { id, text }].slice(-3)
+  const t = window.setTimeout(() => {
+    noticeTimers.delete(t)
+    notices.value = notices.value.filter((n) => n.id !== id)
+  }, 4000)
+  noticeTimers.add(t)
 }
 
 // 快速到达：关面板 → 淡出 → 推进时钟、扣票价、在目的站出口出站 → 淡入（docs/04 第 5 节）
@@ -249,7 +264,7 @@ function onKey(e: KeyboardEvent) {
   if (photoOpen.value || e.repeat) return
   if (e.code === 'KeyM' && !metroPanel.value && !codexTab.value) mapOpen.value = !mapOpen.value
   else if (e.code === 'KeyP' && !panelOpen.value) photoOpen.value = true
-  else if (e.code === 'KeyC' && !mapOpen.value && !metroPanel.value) codexTab.value = codexTab.value ? null : 'codex'
+  else if (e.code === 'KeyC' && !mapOpen.value && !metroPanel.value && !shopPanel.value && !cultureCard.value) codexTab.value = codexTab.value ? null : 'codex'
   else if (e.code === 'Escape') {
     mapOpen.value = false
     metroPanel.value = null
@@ -271,6 +286,8 @@ onMounted(async () => {
       else if (p.kind === 'interior' && p.go) void interiorGo(p.go)
       else if (p.kind === 'elevator') void rideElevator(p)
       else if (p.kind === 'boat' && p.pier) boatPanel.value = p.pier
+      else if (p.kind === 'shop' && p.shop) shopPanel.value = p.shop
+      else if (p.kind === 'culture' && p.culture) cultureCard.value = g.readPlaque(p.culture)
       else if (p.kind === 'npc' && p.npc !== undefined) {
         const t = g.talk(p.npc)
         if (t) speech.value = { talk: t, key: (speech.value?.key ?? 0) + 1 }
@@ -283,6 +300,16 @@ onMounted(async () => {
         ...gain.achievements.map((id) => `🏅 达成成就：${ACHIEVEMENTS.find((a) => a.id === id)?.name ?? id}`),
         ...gain.badges.map((id) => `点亮线路徽章：${g.metro?.lineById.get(id)?.name ?? id}`),
         ...gain.daily.map((id) => `每日任务完成：${g.dailyTasks().find((t) => t.id === id)?.title ?? id} +¥${DAILY_REWARD}`)
+      ]
+      if (parts.length) showNotice(parts.join('　'))
+    }
+    // 第一次吃到美食、得到纪念品、解锁文化图鉴
+    const content = city.content
+    g.onLife = (gain) => {
+      const parts = [
+        ...gain.foods.map((id) => `🥢 美食图鉴 +1：${content.foods.find((f) => f.id === id)?.name ?? id}`),
+        ...gain.items.map((id) => `🎒 得到纪念品：${content.souvenirs.find((s) => s.id === id)?.name ?? id}`),
+        ...gain.culture.map((id) => `📜 文化图鉴解锁：${content.culture.find((c) => c.id === id)?.name ?? id}`)
       ]
       if (parts.length) showNotice(parts.join('　'))
     }
@@ -314,7 +341,8 @@ onMounted(async () => {
         return notice.value
       },
       __skipRide: () => skipRide(),
-      __codex: (tab: 'codex' | 'album' | 'metro' | null) => (codexTab.value = tab),
+      __codex: (tab: CodexTab | null) => (codexTab.value = tab),
+      __notice: () => notice.value,
       __face: (x: number, y: number, z: number) => {
         // 测试用：让相机朝向某个点（第三人称时相机在人身后）
         const p = g.player.pos
@@ -339,7 +367,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   removeEventListener('keydown', onKey)
   clearInterval(timer)
-  clearTimeout(noticeTimer)
+  for (const t of noticeTimers) clearTimeout(t)
   clearTimeout(discoverTimer)
   game.value?.dispose()
   game.value = null
@@ -459,18 +487,26 @@ onBeforeUnmount(() => {
   justify-content: center;
 }
 
-.notice {
+.notices {
   position: fixed;
   left: 50%;
   top: 30%;
   transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: calc(100% - 32px);
+  pointer-events: none;
+}
+
+.notice {
   padding: 10px 18px;
   border-radius: 10px;
   background: rgba(0, 0, 0, 0.72);
   color: #fff;
   font-size: 15px;
-  pointer-events: none;
-  max-width: calc(100% - 32px);
+  max-width: 100%;
   width: max-content;
   text-align: center;
 }
