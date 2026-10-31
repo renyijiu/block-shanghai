@@ -15,6 +15,8 @@ export interface LifeProgress {
   walks: Record<string, { next: number; done?: number }>
   /** 正在走的 Citywalk（界面显示下一站） */
   activeWalk?: string
+  /** 今天的每日生活任务：日期、挑中的任务、当天开始时的计数器、做完的 */
+  daily?: { date: string; ids: string[]; base: Record<string, number>; done: string[] }
   /** 任务：任务 id → 当前步骤，完成记完成时间 */
   quests: Record<string, { step: number; done?: number }>
   /** 计数器：聊天次数、合影次数等 */
@@ -29,7 +31,7 @@ export type LifeEvent =
   | { type: 'buy'; item: string }
   | { type: 'auto'; key: string }
   | { type: 'talk'; speech: string; npc: string }
-  | { type: 'photo'; filter: string; recognized: string[]; people: number }
+  | { type: 'photo'; filter: string; recognized: string[]; people: number; hour: number; spot: string | null }
   | { type: 'plaque'; culture: string }
   | { type: 'citywalk'; route: string }
 
@@ -103,6 +105,9 @@ export function recordLife(content: LifeContent, p: LifeProgress, e: LifeEvent, 
       }
       if (e.food === 'coffee' && p.coffee[e.shop] === undefined) p.coffee[e.shop] = t
       count('eat')
+      count(`eat:${e.food}`)
+      count(`eat@${e.shop}`)
+      count(`eat:${e.food}@${e.shop}`)
       break
     case 'buy':
       give(e.item)
@@ -116,6 +121,15 @@ export function recordLife(content: LifeContent, p: LifeProgress, e: LifeEvent, 
     case 'photo':
       count('photo')
       if (e.people > 0) count('groupPhoto')
+      // 拍到了什么：夜景灯光时段（18:30–22:00）另记一笔；站在某个景点上拍的（环形天桥上拍三件套）也记
+      for (const id of e.recognized) {
+        count(`shot:${id}`)
+        if (e.hour >= 18.5 && e.hour < 22) count(`shot:${id}:night`)
+        if (e.spot) count(`shot@${e.spot}:${id}`)
+      }
+      break
+    case 'plaque':
+      count('plaque')
       break
   }
   for (const c of content.culture) {

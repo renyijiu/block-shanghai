@@ -8,7 +8,8 @@ import type { CityPackage, CultureDef } from './city.ts'
 import { DevCamera } from './DevCamera.ts'
 import { CollisionWorld } from './geo/CollisionWorld.ts'
 import { createProjection, type Projection } from './geo/projection.ts'
-import { LandmarkManager, type PlacedLandmark } from './landmarks/LandmarkManager.ts'
+import { distToRect, LandmarkManager, type PlacedLandmark } from './landmarks/LandmarkManager.ts'
+import { goalProgress, updateQuests, type QuestGain, type QuestWorld } from './life/quests.ts'
 import { anchorWorld, buildLife, isGeo, lifeFootprints } from './life/kiosks.ts'
 import { foodAvailable, newLife, recordLife, walkStep, type LifeEvent, type LifeGain, type LifeProgress } from './life/progress.ts'
 import { WalkSystem, type WalkRoute } from './life/WalkSystem.ts'
@@ -83,6 +84,8 @@ export interface GameStats {
   announce: (Announcement & { id: number }) | null
   /** 天气和季节：“⛅ 多云 · 秋” */
   weather: string
+  /** 新手任务还没做完时的当前一步 */
+  quest: { name: string; k: number; n: number; text: string } | null
   /** 正在走的 Citywalk：路线名、已到几站 / 共几站、下一站和距离（格） */
   walk: { name: string; k: number; n: number; next: string; dist: number } | null
   /** 附近的路人数 */
@@ -104,7 +107,7 @@ export interface PhotoResult {
 }
 
 /** 统计和界面状态的初始值 */
-export const emptyStats = (): GameStats => ({ fps: 0, drawCalls: 0, triangles: 0, chunks: 0, pending: 0, buildAvg: 0, buildMax: 0, x: 0, z: 0, mode: 'player', view: 'third', district: null, time: '', money: 0, prompt: null, found: 0, landmarks: 0, ride: null, station: null, announce: null, weather: '', npcs: 0, walk: null })
+export const emptyStats = (): GameStats => ({ fps: 0, drawCalls: 0, triangles: 0, chunks: 0, pending: 0, buildAvg: 0, buildMax: 0, x: 0, z: 0, mode: 'player', view: 'third', district: null, time: '', money: 0, prompt: null, found: 0, landmarks: 0, ride: null, station: null, announce: null, weather: '', npcs: 0, walk: null, quest: null })
 
 /** 快速到达的结果，给界面提示用 */
 export interface TravelResult {
@@ -183,6 +186,9 @@ export class Game {
   /** Citywalk 开始、打卡、走完时调用（界面弹卡片） */
   onWalk: ((e: { kind: 'start' | 'stop' | 'done'; route: WalkRoute; index: number }) => void) | null = null
   private walkCheck = 0
+  /** 完成任务、新手任务往前一步时调用（界面提示） */
+  onQuest: ((g: QuestGain) => void) | null = null
+  private questCheck = 0
   /** 附近的交互点 */
   prompt: InteractPoint | null = null
   /** 按 E / 点按钮触发交互时调用（界面打开地铁面板） */
@@ -354,6 +360,8 @@ export class Game {
     }
 
     this.landmarks.update(focus.x, focus.z)
+    // 开局先挑好今天的每日任务，第一件事也能算上
+    if (!this.devCamera) this.checkQuests()
     // 开局直接是当时的天气，不从晴天过渡
     this.weather = this.weatherOverride ?? weatherAt(new Date(), this.clock.seconds)
     this.weatherLook = lookOf(this.weather)
@@ -495,7 +503,45 @@ export class Game {
       this.onLife?.(g)
       this.saveNow()
     }
+    this.checkQuests()
     return g
+  }
+
+  /** 任务要看的世界状态：拍到、发现过的景点，坐地铁次数 */
+  get questWorld(): QuestWorld {
+    return { shot: (id) => !!this.codexShot[id], found: (id) => this.landmarks?.found.has(id) ?? false, metroRides: this.metroProgress.rides }
+  }
+
+  /** 按当前进度更新任务，完成的发奖励（docs/05 第 11 节） */
+  checkQuests() {
+    const g = updateQuests(this.city.content.quests, this.life, this.questWorld, this.clock.seconds, today())
+    if (!g.completed.length && !g.advanced.length) return
+    this.money += g.completed.reduce((a, q) => a + q.reward, 0)
+    this.onQuest?.(g)
+    this.saveNow()
+  }
+
+  /** 新手任务的当前一步（做完了就是 null） */
+  private questStats(): GameStats['quest'] {
+    const q = this.city.content.quests.find((d) => d.kind === 'novice')
+    if (!q || this.life.quests[q.id]?.done !== undefined) return null
+    const w = this.questWorld
+    const k = q.steps.findIndex((s) => {
+      const [a, b] = goalProgress(s.goal, this.life, w)
+      return a < b
+    })
+    return k < 0 ? null : { name: q.name, k, n: q.steps.length, text: q.steps[k]!.text }
+  }
+
+  /** 拍照时站在哪个景点上（占地最小的那个，环形天桥上拍三件套） */
+  private standingOn(x: number, z: number): string | null {
+    let best: PlacedLandmark | null = null
+    for (const p of this.landmarks?.placed ?? []) {
+      if (distToRect(x, z, p.bounds) > 0) continue
+      const area = (p.bounds.x1 - p.bounds.x0) * (p.bounds.z1 - p.bounds.z0)
+      if (!best || area < (best.bounds.x1 - best.bounds.x0) * (best.bounds.z1 - best.bounds.z0)) best = p
+    }
+    return best?.def.id ?? null
   }
 
   /** 在小店买东西：美食当场吃掉记进美食图鉴，纪念品放进背包 */
@@ -661,6 +707,7 @@ export class Game {
     if (e.type === 'metroRide') this.lifeEvent({ type: 'auto', key: e.line === 'LMG' ? 'maglev' : 'metro' })
     this.onMetro?.(e)
     if (gain.achievements.length || gain.badges.length || gain.daily.length) this.onProgress?.(gain)
+    this.checkQuests()
     this.saveNow()
   }
 
@@ -788,7 +835,8 @@ export class Game {
         newly.push(lid)
       }
     }
-    this.lifeEvent({ type: 'photo', filter: this.photoFilter.id, recognized: inside ? [] : shot.recognized, people })
+    const pos = this.player.pos
+    this.lifeEvent({ type: 'photo', filter: this.photoFilter.id, recognized: inside ? [] : shot.recognized, people, hour: this.clock.daySeconds / 3600, spot: inside ? null : this.standingOn(pos.x, pos.z) })
     this.saveNow()
     return { id, recognized: shot.recognized, newly, thumb: shot.thumb, saved, people }
   }
@@ -861,6 +909,11 @@ export class Game {
     this.trains?.update(this.clock.seconds, f.x, f.z, QUALITY_PRESETS[this.quality].viewDistance)
     this.precipitation.update(dt, this.camera.position, this.weatherLook)
     this.walks?.update(now / 1000, this.nextWalkStop()?.stop ?? null, f.x, f.z)
+    // 过了午夜换每日任务：10 秒查一次
+    if (now - this.questCheck > 10_000 && !this.devCamera) {
+      this.questCheck = now
+      this.checkQuests()
+    }
     if (this.npcs && !this.devCamera && !this.traveling) {
       const d = new Date()
       this.npcs.target = QUALITY_PRESETS[this.quality].npcs
@@ -928,6 +981,7 @@ export class Game {
     const found = this.landmarks?.discover(p.x, p.z, this.clock.seconds)
     if (found) {
       this.onDiscover?.(found)
+      this.checkQuests()
       this.saveNow()
     }
     return p
@@ -998,6 +1052,7 @@ export class Game {
       weather: this.weatherText,
       npcs: this.npcs?.count ?? 0,
       walk: this.walkStats(),
+      quest: this.questStats(),
       announce: this.interior?.announcement ?? null,
       ride: this.ride
         ? {

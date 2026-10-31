@@ -241,12 +241,47 @@ export interface CitywalkDef {
   stops: CitywalkStop[]
 }
 
+/**
+ * 任务目标（数据，不写函数）：拍到 / 发现这些景点，计数器达到 n（计数器见 life/progress.ts：talk、photo、groupPhoto、eat、
+ * eat:<美食>、eat@<店>、plaque、shot:<景点>、shot:<景点>:night、shot@<站在哪个景点>:<景点>），收集数量，走完某条 Citywalk，
+ * 解锁某条文化图鉴，得到某件纪念品，坐地铁次数
+ */
+export type QuestGoal =
+  | { shot: string[] }
+  | { found: string[] }
+  | { stat: string | string[]; n?: number }
+  | { count: 'foods' | 'culture' | 'coffee' | 'walks'; n: number }
+  | { walk: string }
+  | { culture: string }
+  | { item: string }
+  | { metro: number }
+
+export interface QuestStep {
+  text: string
+  goal: QuestGoal
+}
+
+/** 任务（docs/05 第 11 节）：新手任务按顺序做；区域、主题任务各步不分先后；每日任务每天从里面挑 3 个 */
+export interface QuestDef {
+  id: string
+  kind: 'novice' | 'area' | 'theme' | 'daily'
+  name: string
+  /** 区域任务所在的区一带：“黄浦 · 外滩” */
+  area?: string
+  /** 完成奖励（元） */
+  reward: number
+  /** 完成得到的徽章 */
+  badge?: string
+  steps: QuestStep[]
+}
+
 export interface LifeContent {
   foods: FoodDef[]
   souvenirs: SouvenirDef[]
   shops: ShopDef[]
   culture: CultureDef[]
   walks: CitywalkDef[]
+  quests: QuestDef[]
 }
 
 /** 一句对白；方言句子带普通话意思 */

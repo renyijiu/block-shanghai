@@ -6,6 +6,7 @@
         <button :class="{ on: tab === 'album' }" @click="tab = 'album'">相册 {{ photos.length }}</button>
         <button v-if="game.metro" :class="{ on: tab === 'metro' }" @click="tab = 'metro'">地铁</button>
         <button :class="{ on: tab === 'life' }" @click="tab = 'life'">收藏</button>
+        <button :class="{ on: tab === 'quests' }" @click="tab = 'quests'">任务</button>
       </div>
       <button class="close" title="关闭（Esc）" @click="emit('close')">✕</button>
     </div>
@@ -16,6 +17,10 @@
 
     <div v-else-if="tab === 'life'" class="body">
       <LifeCollection :game="game" />
+    </div>
+
+    <div v-else-if="tab === 'quests'" class="body">
+      <QuestPanel :game="game" />
     </div>
 
     <div v-else-if="tab === 'codex'" class="body">
@@ -78,8 +83,9 @@ import type { Game } from '../engine/Game.ts'
 import { formatClock } from '../engine/state/clock.ts'
 import LifeCollection from './LifeCollection.vue'
 import MetroCollection from './MetroCollection.vue'
+import QuestPanel from './QuestPanel.vue'
 
-export type CodexTab = 'codex' | 'album' | 'metro' | 'life'
+export type CodexTab = 'codex' | 'album' | 'metro' | 'life' | 'quests'
 
 const props = defineProps<{ game: Game; initialTab?: CodexTab }>()
 const emit = defineEmits<{ close: [] }>()

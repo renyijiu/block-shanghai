@@ -5,6 +5,7 @@
     <div v-if="loading">{{ loading }}</div>
     <template v-else>
       <div class="status">🕘 {{ stats.time }} · {{ stats.weather }} · ¥{{ stats.money }} · 景点 {{ stats.found }}/{{ stats.landmarks }}</div>
+      <div v-if="stats.quest" class="quest" @click="codexTab = 'quests'">📌 {{ stats.quest.name }} {{ stats.quest.k + 1 }}/{{ stats.quest.n }}：{{ stats.quest.text }}</div>
       <div v-if="stats.walk" class="walk">🚶 {{ stats.walk.name }} {{ stats.walk.k }}/{{ stats.walk.n }} · 下一站 {{ stats.walk.next }} · 约 {{ Math.max(10, Math.round(stats.walk.dist / 2) * 10) }} 米</div>
       <div>{{ backend }} · {{ stats.fps }} fps<span v-if="!touch"> · {{ stats.drawCalls }} 次绘制 · {{ (stats.triangles / 1000).toFixed(0) }}k 三角形</span></div>
       <div v-if="!touch">分块：{{ stats.chunks }}（待建 {{ stats.pending }}）· 位置：{{ stats.x }}, {{ stats.z }} 格</div>
@@ -314,6 +315,17 @@ onMounted(async () => {
       ]
       if (parts.length) showNotice(parts.join('　'))
     }
+    // 任务：完成发奖励；新手任务往前一步时提示下一步
+    g.onQuest = ({ completed, advanced }) => {
+      const parts = completed.map((q) => (q.kind === 'novice' ? `🎉 新手任务完成：${q.name} +¥${q.reward}` : `🎯 完成任务“${q.name}” +¥${q.reward}${q.badge ? ` · 徽章“${q.badge}”` : ''}`))
+      for (const q of advanced) {
+        if (q.kind !== 'novice') continue
+        const k = g.life.quests[q.id]?.step ?? 0
+        const next = q.steps[k]
+        if (next) parts.push(`📌 新手任务 ${k + 1}/${q.steps.length}：${next.text}`)
+      }
+      for (const p of parts) showNotice(p)
+    }
     // Citywalk：开始、打卡、走完都弹一张卡片（和发现景点共用一个队列）
     g.onWalk = ({ kind, route, index }) => {
       const s = route.stops[index]!
@@ -434,6 +446,12 @@ onBeforeUnmount(() => {
 
 .walk {
   color: #7ee2a8;
+}
+
+.quest {
+  color: #ffd98a;
+  pointer-events: auto;
+  cursor: pointer;
 }
 
 .side {

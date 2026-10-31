@@ -1,4 +1,4 @@
-import { expect, test } from 'vitest'
+import { describe, expect, test } from 'vitest'
 import { content } from '../src/cities/shanghai/content.ts'
 import { foodAvailable, foodWhen, newLife, recordLife } from '../src/engine/life/progress.ts'
 
@@ -52,8 +52,8 @@ test('文化图鉴：聊天（上海话、老克勒）、滤镜、拍到景点�
   expect(recordLife(content, p, { type: 'talk', speech: 'mandarin', npc: 'office' }, 1).culture).toEqual([])
   expect(recordLife(content, p, { type: 'talk', speech: 'wu', npc: 'uncle' }, 2).culture.sort()).toEqual(['huyu', 'longtang'])
   expect(recordLife(content, p, { type: 'talk', speech: 'wu', npc: 'klaoke' }, 3).culture).toEqual(['klaoke'])
-  expect(recordLife(content, p, { type: 'photo', filter: 'yuefenpai', recognized: ['bund', 'peacehotel'], people: 0 }, 4).culture).toEqual(['yuefenpai', 'bundarch'])
-  expect(recordLife(content, p, { type: 'photo', filter: 'original', recognized: ['huxinting'], people: 2 }, 5).culture).toEqual(['lantern'])
+  expect(recordLife(content, p, { type: 'photo', filter: 'yuefenpai', recognized: ['bund', 'peacehotel'], people: 0, hour: 12, spot: null }, 4).culture).toEqual(['yuefenpai', 'bundarch'])
+  expect(recordLife(content, p, { type: 'photo', filter: 'original', recognized: ['huxinting'], people: 2, hour: 19, spot: 'yuyuan' }, 5).culture).toEqual(['lantern'])
   expect(p.stats).toMatchObject({ talk: 3, photo: 2, groupPhoto: 1 })
   expect(recordLife(content, p, { type: 'plaque', culture: 'haipai' }, 6).culture).toEqual(['haipai'])
   expect(recordLife(content, p, { type: 'plaque', culture: 'haipai' }, 7).culture).toEqual([])
@@ -104,4 +104,68 @@ test('Citywalk 路线：打卡点都在路线上，沿途咖啡馆有区域名',
     }
   }
   for (const s of content.shops) if ('lat' in s.at) expect(s.area).toBeTruthy()
+})
+
+test('拍照计数：拍到什么、夜景时段、站在哪个景点上拍的', () => {
+  const p = newLife()
+  recordLife(content, p, { type: 'photo', filter: 'original', recognized: ['shanghaitower', 'swfc'], people: 0, hour: 19, spot: 'ljzbridge' }, 1)
+  expect(p.stats).toMatchObject({ 'shot:shanghaitower': 1, 'shot:shanghaitower:night': 1, 'shot@ljzbridge:swfc': 1 })
+  recordLife(content, p, { type: 'photo', filter: 'original', recognized: ['orientalpearl'], people: 0, hour: 23, spot: null }, 2)
+  expect(p.stats['shot:orientalpearl:night']).toBeUndefined()
+})
+
+describe('任务', async () => {
+  const { goalProgress, rollDaily, updateQuests } = await import('../src/engine/life/quests.ts')
+  const world = (shot: string[] = [], found: string[] = [], metroRides = 0) => ({ shot: (id: string) => shot.includes(id), found: (id: string) => found.includes(id), metroRides })
+  const quests = content.quests
+
+  test('新手任务按顺序：后面的步骤先做了也要等前面的做完', () => {
+    const p = newLife()
+    expect(updateQuests(quests, p, world([], [], 1), 1, '2026-10-31').advanced).toEqual([])
+    const g = updateQuests(quests, p, world(['orientalpearl'], [], 1), 2, '2026-10-31')
+    expect(g.advanced.map((q) => q.id)).toContain('novice')
+    expect(p.quests.novice).toEqual({ step: 1 })
+    // 吃了小笼包：第 2 步做完，坐过地铁的第 3 步也算上
+    recordLife(content, p, { type: 'eat', food: 'xiaolongbao', shop: 'njxiaolong' }, 3)
+    updateQuests(quests, p, world(['orientalpearl'], [], 1), 4, '2026-10-31')
+    expect(p.quests.novice).toEqual({ step: 3 })
+    recordLife(content, p, { type: 'auto', key: 'deck:shanghaitower' }, 5)
+    const done = updateQuests(quests, p, world(['orientalpearl'], [], 1), 6, '2026-10-31')
+    expect(done.completed.map((q) => q.id)).toContain('novice')
+    expect(p.quests.novice).toEqual({ step: 4, done: 6 })
+  })
+
+  test('区域任务不分先后；完成一次以后不再重复发奖励', () => {
+    const p = newLife()
+    recordLife(content, p, { type: 'eat', food: 'shengjian', shop: 'yysnack' }, 1)
+    const found = ['yuyuan', 'xintiandi', 'tianzifang']
+    const g = updateQuests(quests, p, world([], found), 2, '2026-10-31')
+    expect(g.completed.map((q) => q.id)).toContain('area-oldtown')
+    expect(updateQuests(quests, p, world([], found), 3, '2026-10-31').completed.map((q) => q.id)).not.toContain('area-oldtown')
+  })
+
+  test('三件套要站在环形天桥上拍；几个计数器的目标按达到几个算进度', () => {
+    const p = newLife()
+    const goal = quests.find((q) => q.id === 'area-lujiazui')!.steps[0]!.goal
+    recordLife(content, p, { type: 'photo', filter: 'original', recognized: ['shanghaitower', 'swfc', 'jinmao'], people: 0, hour: 12, spot: null }, 1)
+    expect(goalProgress(goal, p, world())).toEqual([0, 3])
+    recordLife(content, p, { type: 'photo', filter: 'original', recognized: ['shanghaitower', 'swfc'], people: 0, hour: 12, spot: 'ljzbridge' }, 2)
+    expect(goalProgress(goal, p, world())).toEqual([2, 3])
+  })
+
+  test('每日生活任务：同一天挑同样的 3 个，从当天开始计数', () => {
+    const p = newLife()
+    p.stats.talk = 5
+    const d = rollDaily(quests, p, '2026-10-31')
+    expect(d.ids).toHaveLength(3)
+    expect(new Set(d.ids).size).toBe(3)
+    expect(rollDaily(quests, newLife(), '2026-10-31').ids).toEqual(d.ids)
+    // 当天之前的聊天不算
+    p.daily = { ...d, ids: ['daily-talk', 'daily-eat', 'daily-photo'] }
+    expect(updateQuests(quests, p, world(), 1, '2026-10-31').completed).toEqual([])
+    for (let i = 0; i < 3; i++) recordLife(content, p, { type: 'talk', speech: 'mandarin', npc: 'office' }, 2)
+    expect(updateQuests(quests, p, world(), 3, '2026-10-31').completed.map((q) => q.id)).toEqual(['daily-talk'])
+    // 第二天换一批
+    expect(rollDaily(quests, p, '2026-11-01').done).toEqual([])
+  })
 })

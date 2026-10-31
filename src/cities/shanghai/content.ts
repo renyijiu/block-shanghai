@@ -195,5 +195,122 @@ export const content: LifeContent = {
         { name: '鲁迅公园', lat: 31.271278, lon: 121.479819, text: '鲁迅公园原名虹口公园，园里有鲁迅墓和鲁迅纪念馆。走完了虹口的 Citywalk。' }
       ]
     }
+  ],
+  // 任务（docs/05 第 11 节）。还没建的地方（苏州河步道、1933 老场坊、杨浦滨江、手摇船）的任务留到 P6
+  quests: [
+    {
+      id: 'novice',
+      kind: 'novice',
+      name: '初到上海',
+      reward: 100,
+      badge: '上海新游客',
+      steps: [
+        { text: '拍下东方明珠', goal: { shot: ['orientalpearl'] } },
+        { text: '在南京路步行街的小笼馆吃一份小笼包', goal: { stat: 'eat:xiaolongbao@njxiaolong' } },
+        { text: '坐一次地铁', goal: { metro: 1 } },
+        { text: '登上上海中心顶层观光厅', goal: { item: 'towerbadge' } }
+      ]
+    },
+    {
+      id: 'area-bund',
+      kind: 'area',
+      name: '万国建筑',
+      area: '黄浦 · 外滩',
+      reward: 30,
+      badge: '外滩徽章',
+      steps: [
+        { text: '拍下外滩万国建筑群', goal: { shot: ['bund'] } },
+        { text: '拍下海关大楼、和平饭店、原汇丰银行大楼', goal: { shot: ['customshouse', 'peacehotel', 'hsbc'] } },
+        { text: '读一读外滩观景平台上的文化牌', goal: { culture: 'haipai' } },
+        { text: '走过外白渡桥', goal: { found: ['waibaidu'] } }
+      ]
+    },
+    {
+      id: 'area-oldtown',
+      kind: 'area',
+      name: '老城厢',
+      area: '黄浦 · 老城厢',
+      reward: 30,
+      badge: '老城厢徽章',
+      steps: [
+        { text: '游览豫园', goal: { found: ['yuyuan'] } },
+        { text: '在城隍庙吃一份小吃', goal: { stat: 'eat@yysnack' } },
+        { text: '逛逛新天地', goal: { found: ['xintiandi'] } },
+        { text: '逛逛田子坊', goal: { found: ['tianzifang'] } }
+      ]
+    },
+    {
+      id: 'area-lujiazui',
+      kind: 'area',
+      name: '陆家嘴天际线',
+      area: '浦东 · 陆家嘴',
+      reward: 30,
+      badge: '陆家嘴徽章',
+      steps: [
+        { text: '站在环形天桥上拍下“三件套”', goal: { stat: ['shot@ljzbridge:shanghaitower', 'shot@ljzbridge:swfc', 'shot@ljzbridge:jinmao'] } },
+        { text: '夜里拍下东方明珠的灯光', goal: { stat: 'shot:orientalpearl:night' } },
+        { text: '登上东方明珠观光层', goal: { item: 'pearlmodel' } }
+      ]
+    },
+    {
+      id: 'area-wutong',
+      kind: 'area',
+      name: '梧桐区',
+      area: '徐汇 · 梧桐区',
+      reward: 30,
+      badge: '梧桐区徽章',
+      steps: [
+        { text: '在武康大楼前拍一张', goal: { shot: ['wukang'] } },
+        { text: '走完武康路—安福路 Citywalk', goal: { walk: 'wukang' } },
+        { text: '看看徐家汇天主堂', goal: { found: ['xjhcathedral'] } }
+      ]
+    },
+    {
+      id: 'area-jingan',
+      kind: 'area',
+      name: '闹市古刹',
+      area: '静安 · 静安寺',
+      reward: 30,
+      badge: '静安徽章',
+      steps: [
+        { text: '游览静安寺', goal: { found: ['jingansi'] } },
+        { text: '拍下金顶和高楼同框', goal: { shot: ['jingansi'] } }
+      ]
+    },
+    {
+      id: 'area-hongkou',
+      kind: 'area',
+      name: '北外滩',
+      area: '虹口 · 北外滩',
+      reward: 30,
+      badge: '虹口徽章',
+      steps: [
+        { text: '走过外白渡桥', goal: { found: ['waibaidu'] } },
+        { text: '走完多伦路—鲁迅公园 Citywalk', goal: { walk: 'duolun' } }
+      ]
+    },
+    {
+      id: 'area-qingpu',
+      kind: 'area',
+      name: '水乡',
+      area: '青浦 · 朱家角',
+      reward: 30,
+      badge: '水乡徽章',
+      steps: [
+        { text: '到朱家角看放生桥', goal: { found: ['zhujiajiao'] } },
+        { text: '拍一张水乡照片', goal: { shot: ['zhujiajiao'] } }
+      ]
+    },
+    { id: 'theme-food', kind: 'theme', name: '食在上海', reward: 50, badge: '食在上海', steps: [{ text: '吃过 6 种上海美食', goal: { count: 'foods', n: 6 } }] },
+    { id: 'theme-culture', kind: 'theme', name: '海派文化达人', reward: 50, badge: '海派文化达人', steps: [{ text: '解锁 6 项文化图鉴', goal: { count: 'culture', n: 6 } }] },
+    { id: 'theme-coffee', kind: 'theme', name: '咖啡漫游', reward: 30, badge: '咖啡地图', steps: [{ text: '去过 5 家咖啡馆', goal: { count: 'coffee', n: 5 } }] },
+    { id: 'theme-citywalk', kind: 'theme', name: '城市漫步者', reward: 50, badge: '城市漫步者', steps: [{ text: '走完 3 条 Citywalk', goal: { count: 'walks', n: 3 } }] },
+    // 每日生活任务：每天挑 3 个，各 10 元
+    { id: 'daily-talk', kind: 'daily', name: '和路人聊天', reward: 10, steps: [{ text: '和 3 位路人聊天', goal: { stat: 'talk', n: 3 } }] },
+    { id: 'daily-eat', kind: 'daily', name: '吃点东西', reward: 10, steps: [{ text: '在小店吃一样东西', goal: { stat: 'eat' } }] },
+    { id: 'daily-photo', kind: 'daily', name: '随手拍', reward: 10, steps: [{ text: '拍 2 张照片', goal: { stat: 'photo', n: 2 } }] },
+    { id: 'daily-group', kind: 'daily', name: '合个影', reward: 10, steps: [{ text: '和路人合影一次', goal: { stat: 'groupPhoto' } }] },
+    { id: 'daily-coffee', kind: 'daily', name: '喝杯咖啡', reward: 10, steps: [{ text: '在咖啡馆喝一杯咖啡', goal: { stat: 'eat:coffee' } }] },
+    { id: 'daily-plaque', kind: 'daily', name: '读文化牌', reward: 10, steps: [{ text: '读一块文化牌', goal: { stat: 'plaque' } }] }
   ]
 }
