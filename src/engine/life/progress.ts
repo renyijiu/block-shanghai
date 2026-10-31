@@ -1,6 +1,9 @@
 // 生活进度（docs/05 第 5–7、11 节）：吃过的美食、背包里的纪念品、文化图鉴、咖啡地图、Citywalk、任务和计数器。
 // 纯函数：事件来了更新进度、返回新得到的东西；存档里只存这份进度
 import type { CultureDef, FoodDef, LifeContent } from '../city.ts'
+import { isEn } from '../../i18n/core.ts'
+
+const MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 export interface LifeProgress {
   /** 吃过的美食 → 第一次吃的游戏时间 */
@@ -53,7 +56,13 @@ export function foodAvailable(f: FoodDef, date: Date, hour: number) {
 /** 季节限定的说明：“3–4 月”“9–11 月”“早上 5–11 点” */
 export function foodWhen(f: FoodDef) {
   const parts: string[] = []
-  if (f.months) parts.push(`${f.months[0]}–${f.months[f.months.length - 1]} 月`)
+  const [m0, m1] = [f.months?.[0], f.months?.[f.months.length - 1]]
+  if (isEn) {
+    if (m0 && m1) parts.push(`${MONTHS_EN[m0 - 1]}–${MONTHS_EN[m1 - 1]}`)
+    if (f.hours) parts.push(`${f.hours[0]}:00–${f.hours[1]}:00`)
+    return parts.join(', ')
+  }
+  if (m0 && m1) parts.push(`${m0}–${m1} 月`)
   if (f.hours) parts.push(`${f.hours[0]}–${f.hours[1]} 点`)
   return parts.join('，')
 }

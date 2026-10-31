@@ -1,14 +1,14 @@
 <template>
   <div class="metro-col">
     <section>
-      <h3>每日任务 <small>（每完成一项 +¥{{ DAILY_REWARD }}，每天按日期刷新）</small></h3>
+      <h3>{{ t('每日任务') }} <small>{{ t('（每完成一项 +¥{n}，每天按日期刷新）', { n: DAILY_REWARD }) }}</small></h3>
       <ul class="daily">
-        <li v-for="t in daily" :key="t.id" :class="{ done: t.done }">{{ t.done ? '✓' : '○' }} {{ t.title }}<small v-if="t.id === 'lines-2' && !t.done">（今天 {{ todayLines }}/2）</small></li>
+        <li v-for="d in daily" :key="d.id" :class="{ done: d.done }">{{ d.done ? '✓' : '○' }} {{ d.title }}<small v-if="d.id === 'lines-2' && !d.done">{{ t('（今天 {n}/2）', { n: todayLines }) }}</small></li>
       </ul>
     </section>
 
     <section>
-      <h3>地铁成就 {{ unlocked }}/{{ ACHIEVEMENTS.length }}</h3>
+      <h3>{{ t('地铁成就') }} {{ unlocked }}/{{ ACHIEVEMENTS.length }}</h3>
       <div class="ach">
         <div v-for="a in ACHIEVEMENTS" :key="a.id" class="a" :class="{ on: progress.achievements[a.id] !== undefined }">
           <b>{{ progress.achievements[a.id] !== undefined ? '🏅' : '🔒' }} {{ a.name }}</b>
@@ -19,26 +19,26 @@
     </section>
 
     <section>
-      <h3>线路徽章 {{ lit }}/{{ lines.length }} <small>（坐过一条线的所有区间就点亮）</small></h3>
+      <h3>{{ t('线路徽章') }} {{ lit }}/{{ lines.length }} <small>{{ t('（坐过一条线的所有区间就点亮）') }}</small></h3>
       <div class="badges">
         <div v-for="b in lines" :key="b.line.id" class="badge" :class="{ lit: b.lit }" :style="{ borderColor: b.line.color }">
-          <span class="chip" :style="{ background: b.line.color }">{{ b.line.name.replace('号线', '') }}</span>
+          <span class="chip" :style="{ background: b.line.color }">{{ lineShort(b.line) }}</span>
           <span>{{ b.done }}/{{ b.total }}</span>
         </div>
       </div>
     </section>
 
     <section>
-      <h3>集站图鉴 · 到访 {{ visited }}/{{ stations.length }} 站</h3>
+      <h3>{{ t('集站图鉴 · 到访 {n}/{total} 站', { n: visited, total: stations.length }) }}</h3>
       <div class="pick">
-        <button v-for="l in data.lines" :key="l.id" :class="{ on: line === l.id }" :style="line === l.id ? { background: l.color, color: '#fff' } : {}" @click="line = l.id">{{ l.name }}</button>
+        <button v-for="l in data.lines" :key="l.id" :class="{ on: line === l.id }" :style="line === l.id ? { background: l.color, color: '#fff' } : {}" @click="line = l.id">{{ nameOf(l) }}</button>
       </div>
       <ol class="stations">
         <li v-for="s in lineStations" :key="s.id" :class="{ seen: s.time !== null }">
           <span class="dot" :style="{ background: s.time !== null ? currentColor : '#ccc' }"></span>
-          <b>{{ s.name }}</b>
-          <small>{{ s.nameEn }}</small>
-          <span class="meta">{{ s.district }}<template v-if="s.time !== null"> · {{ when(s.time) }}</template><template v-else> · 未到访</template></span>
+          <b>{{ isEn ? s.nameEn : s.name }}</b>
+          <small>{{ isEn ? s.name : s.nameEn }}</small>
+          <span class="meta">{{ s.district }}<template v-if="s.time !== null"> · {{ when(s.time) }}</template><template v-else> · {{ t('未到访') }}</template></span>
         </li>
       </ol>
     </section>
@@ -50,6 +50,8 @@ import { computed, ref } from 'vue'
 import type { Game } from '../engine/Game.ts'
 import { ACHIEVEMENTS, badges, DAILY_REWARD } from '../engine/metro/collection.ts'
 import { formatClock } from '../engine/state/clock.ts'
+import { isEn, lineShort, nameOf } from '../i18n/core.ts'
+import { t } from '../i18n/index.ts'
 
 // 地铁收集（docs/04 第 8 节）：每日任务、成就、线路徽章、按线路分页的集站图鉴
 const props = defineProps<{ game: Game }>()
@@ -59,11 +61,11 @@ const progress = game.metroProgress
 const stations = data.stations
 const districts = game.city.config.districts as Record<string, { name: string } | undefined>
 
-const when = (t: number) => `第 ${Math.floor(t / 86400) + 1} 天 ${formatClock(t % 86400)}`
+const when = (s: number) => t('第 {day} 天 {time}', { day: Math.floor(s / 86400) + 1, time: formatClock(s % 86400) })
 const unlocked = computed(() => ACHIEVEMENTS.filter((a) => progress.achievements[a.id] !== undefined).length)
 const visited = computed(() => Object.keys(progress.visits).length)
 const todayLines = progress.daily.lines.length
-const daily = game.dailyTasks().map((t) => ({ ...t, done: progress.daily.done.includes(t.id) }))
+const daily = game.dailyTasks().map((d) => ({ ...d, done: progress.daily.done.includes(d.id) }))
 
 const lines = computed(() => badges(data, progress).map((b) => ({ ...b, line: data.lines.find((l) => l.id === b.line)! })))
 const lit = computed(() => lines.value.filter((b) => b.lit).length)
@@ -78,7 +80,7 @@ const lineStations = computed(() => {
   return order.map((i) => {
     const s = stations[i]!
     const d = game.districts?.at(s.pos[0], s.pos[1])?.id
-    return { id: s.id, name: s.name, nameEn: s.nameEn, district: (d && districts[d]?.name) || '市外', time: progress.visits[s.id] ?? null }
+    return { id: s.id, name: s.name, nameEn: s.nameEn, district: (d && districts[d]?.name) || t('市外'), time: progress.visits[s.id] ?? null }
   })
 })
 </script>

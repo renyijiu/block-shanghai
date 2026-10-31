@@ -5,27 +5,28 @@
       {{ status.where }}
     </div>
     <div v-if="status.sides.length" class="sides">
-      <div v-for="(s, i) in status.sides" :key="i">往 {{ s.toward }} · {{ s.text }}</div>
-      <button v-if="status.canSkipWait" @click="emit('skipWait')">跳过等车</button>
+      <div v-for="(s, i) in status.sides" :key="i">{{ t('往 {to}', { to: s.toward }) }} · {{ s.text }}</div>
+      <button v-if="status.canSkipWait" @click="emit('skipWait')">{{ t('跳过等车') }}</button>
     </div>
     <div v-if="status.ride" class="ride">
       <div class="next">
-        <template v-if="status.ride.terminal">终点站 {{ status.ride.next }} · 请下车</template>
-        <template v-else-if="status.ride.atStation">本站 {{ status.ride.next }} · 车门已开，走到门边按 E 下车</template>
-        <template v-else>下一站 {{ status.ride.next }}</template>
+        <template v-if="status.ride.terminal">{{ t('终点站 {name} · 请下车', { name: status.ride.next }) }}</template>
+        <template v-else-if="status.ride.atStation">{{ t('本站 {name} · 车门已开，走到门边按 E 下车', { name: status.ride.next }) }}</template>
+        <template v-else>{{ t('下一站 {name}', { name: status.ride.next }) }}</template>
       </div>
       <div v-if="!status.ride.terminal" class="buttons">
-        <button @click="emit('skipNext')">跳到下一站</button>
+        <button @click="emit('skipNext')">{{ t('跳到下一站') }}</button>
         <select v-model="target" @change="go">
-          <option :value="-1">直达…</option>
+          <option :value="-1">{{ t('直达…') }}</option>
           <option v-for="s in status.ride.stops" :key="s.index" :value="s.index">{{ s.name }}</option>
         </select>
       </div>
     </div>
     <Transition name="say">
       <div v-if="shown" :key="shown.id" class="say">
-        <div>{{ shown.zh }}</div>
-        <div class="en">{{ shown.en }}</div>
+        <!-- 报站中英双语，跟真实的上海地铁一样；英文界面英文在前 -->
+        <div>{{ isEn ? shown.en : shown.zh }}</div>
+        <div class="en">{{ isEn ? shown.zh : shown.en }}</div>
       </div>
     </Transition>
   </div>
@@ -35,6 +36,8 @@
 import { onBeforeUnmount, ref, watch } from 'vue'
 import type { StationStatus } from '../engine/interior/InteriorManager.ts'
 import type { Announcement } from '../engine/interior/trip.ts'
+import { isEn } from '../i18n/core.ts'
+import { t } from '../i18n/index.ts'
 
 // 地铁站内的界面：在哪儿、站台两侧下一班、车厢里的下一站和跳过按钮、报站气泡（docs/04 第 7 节）
 const props = defineProps<{ status: StationStatus; announce: (Announcement & { id: number }) | null }>()

@@ -5,6 +5,7 @@ import type { Projection } from '../geo/projection.ts'
 import type { PlacedLandmark } from '../landmarks/LandmarkManager.ts'
 import type { InteractPoint } from '../world/interact.ts'
 import type { Lot } from '../world/lots.ts'
+import { tr } from '../../i18n/core.ts'
 
 const KIND_NAMES = { food: '小吃', gift: '纪念品', coffee: '咖啡' } as const
 const SIGN = { food: 0xd8452f, gift: 0x2f7fd8, coffee: 0x8a5a3a } as const
@@ -60,7 +61,7 @@ export function kiosk(h: KioskHost, shop: ShopDef, spot: Spot) {
   part(0, 0.2, 2.8, 0.18, 2.45, 3.05, SIGN[shop.kind], LIGHT)
   part(0, 0.2, 3, 0.22, 2.42, 2.5, 0x2a2a2a, { collide: false })
   const [wx, wz] = h.toWorld(...at(0, 2))
-  h.points.push({ x: wx, z: wz, r: 2.6, label: `${shop.name} · ${KIND_NAMES[shop.kind]}`, action: '逛逛', kind: 'shop', shop: shop.id })
+  h.points.push({ x: wx, z: wz, r: 2.6, label: `${shop.name} · ${tr(KIND_NAMES[shop.kind])}`, action: '逛逛', kind: 'shop', shop: shop.id })
 }
 
 function plaque(h: KioskHost, id: string, name: string, a: Anchor) {
@@ -76,7 +77,7 @@ function plaque(h: KioskHost, id: string, name: string, a: Anchor) {
   part(0, 0.09, 0.9, 0.04, 0.6, 1.5, 0xc9a24a, { collide: false })
   part(0, 0, 1.2, 0.2, 1.7, 1.78, 0xffd98a, LIGHT)
   const [wx, wz] = h.toWorld(...at(0, 1.2))
-  h.points.push({ x: wx, z: wz, r: 2.2, label: `文化牌 · ${name}`, action: '阅读', kind: 'culture', culture: id })
+  h.points.push({ x: wx, z: wz, r: 2.2, label: tr('文化牌 · {name}', { name }), action: '阅读', kind: 'culture', culture: id })
 }
 
 /** 景点加载时调用：把挂在这个景点上的小店和文化牌一起建出来 */

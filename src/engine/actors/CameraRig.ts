@@ -3,6 +3,7 @@
 import * as THREE from 'three/webgpu'
 import type { Input } from './Input.ts'
 import { PLAYER, type Player, type PlayerWorld } from './Player.ts'
+import { tr } from '../../i18n/core.ts'
 
 export type ViewMode = 'third' | 'first'
 
@@ -70,7 +71,7 @@ export class CameraRig {
 
   /** 当前视角的名字（拍照界面显示） */
   get viewName() {
-    return this.selfie ? '自拍' : this.mode === 'third' ? '第三人称' : '第一人称'
+    return tr(this.selfie ? '自拍' : this.mode === 'third' ? '第三人称' : '第一人称')
   }
 
   private cycleView() {

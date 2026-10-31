@@ -12,14 +12,14 @@
           <div class="name">
             {{ q.name }}
             <span v-if="q.area" class="area">{{ q.area }}</span>
-            <span class="tag" :class="{ ok: q.done }">{{ q.done ? '完成' : `${q.k}/${q.steps.length}` }}</span>
+            <span class="tag" :class="{ ok: q.done }">{{ q.done ? t('完成') : `${q.k}/${q.steps.length}` }}</span>
           </div>
           <ul>
             <li v-for="(s, i) in q.steps" :key="i" :class="{ ok: s.done, now: q.kind === 'novice' && !q.done && i === q.k }">
-              {{ s.done ? '✓' : q.kind === 'novice' ? `${i + 1}.` : '·' }} {{ s.text }}<small v-if="s.need > 1 && !s.done">（{{ s.have }}/{{ s.need }}）</small>
+              {{ s.done ? '✓' : q.kind === 'novice' ? `${i + 1}.` : '·' }} {{ s.text }}<small v-if="s.need > 1 && !s.done"> ({{ s.have }}/{{ s.need }})</small>
             </li>
           </ul>
-          <div class="reward">奖励 ¥{{ q.reward }}<template v-if="q.badge"> · 徽章“{{ q.badge }}”</template></div>
+          <div class="reward">{{ t('奖励 ¥{n}', { n: q.reward }) }}<template v-if="q.badge">{{ t(' · 徽章“{badge}”', { badge: q.badge }) }}</template></div>
         </div>
       </div>
     </section>
@@ -31,6 +31,7 @@ import { computed } from 'vue'
 import type { QuestDef } from '../engine/city.ts'
 import type { Game } from '../engine/Game.ts'
 import { goalProgress, rollDaily } from '../engine/life/quests.ts'
+import { t } from '../i18n/index.ts'
 
 const props = defineProps<{ game: Game }>()
 const game = props.game
@@ -50,18 +51,18 @@ const view = (q: QuestDef, base?: Record<string, number>, doneToday?: boolean) =
 const groups = computed(() => {
   const daily = rollDaily(defs, game.life, today())
   return [
-    { kind: 'novice', title: '🧭 新手任务', intro: '按顺序一步一步做，做完正式开始上海之旅。', items: defs.filter((q) => q.kind === 'novice').map((q) => view(q)) },
+    { kind: 'novice', title: t('🧭 新手任务'), intro: t('按顺序一步一步做，做完正式开始上海之旅。'), items: defs.filter((q) => q.kind === 'novice').map((q) => view(q)) },
     {
       kind: 'daily',
-      title: '📅 今日生活任务',
-      intro: '每天换 3 个，按真实日期刷新；从今天开始算。',
+      title: t('📅 今日生活任务'),
+      intro: t('每天换 3 个，按真实日期刷新；从今天开始算。'),
       items: daily.ids.flatMap((id) => {
         const q = defs.find((d) => d.id === id)
         return q ? [view(q, daily.base, daily.done.includes(id))] : []
       })
     },
-    { kind: 'area', title: '🗺 区域任务', intro: '每个区一组，步骤不分先后，做完得这个区的徽章。', items: defs.filter((q) => q.kind === 'area').map((q) => view(q)) },
-    { kind: 'theme', title: '🎯 主题任务', intro: '', items: defs.filter((q) => q.kind === 'theme').map((q) => view(q)) }
+    { kind: 'area', title: t('🗺 区域任务'), intro: t('每个区一组，步骤不分先后，做完得这个区的徽章。'), items: defs.filter((q) => q.kind === 'area').map((q) => view(q)) },
+    { kind: 'theme', title: t('🎯 主题任务'), intro: '', items: defs.filter((q) => q.kind === 'theme').map((q) => view(q)) }
   ]
 })
 

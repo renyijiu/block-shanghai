@@ -3,7 +3,7 @@
     <div class="card">
       <div class="head">
         <b>{{ icon }} {{ shop.name }}</b>
-        <button class="close" title="关闭（Esc）" @click="emit('close')">✕</button>
+        <button class="close" :title="t('关闭（Esc）')" @click="emit('close')">✕</button>
       </div>
       <div v-for="r in rows" :key="r.id" class="row">
         <div class="info">
@@ -14,10 +14,10 @@
           </div>
           <div class="meta">{{ r.desc }}</div>
         </div>
-        <button class="go" :disabled="!r.open || money < r.price" @click="buy(r.id)">{{ r.open ? `${r.verb} ¥${r.price}` : '没到季节' }}</button>
+        <button class="go" :disabled="!r.open || money < r.price" @click="buy(r.id)">{{ r.open ? `${r.verb} ¥${r.price}` : t('没到季节') }}</button>
       </div>
       <div class="foot">
-        <span>钱包 ¥{{ money }}</span>
+        <span>{{ t('钱包 ¥{money}', { money }) }}</span>
         <span v-if="message" :class="{ bad: !ok }">{{ message }}</span>
       </div>
     </div>
@@ -28,6 +28,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { Game } from '../engine/Game.ts'
 import { foodAvailable, foodWhen } from '../engine/life/progress.ts'
+import { t } from '../i18n/index.ts'
 
 const props = defineProps<{ game: Game; shopId: string }>()
 const emit = defineEmits<{ close: []; bought: [message: string] }>()
@@ -47,11 +48,11 @@ const rows = computed(() => {
   const hour = game.clock.daySeconds / 3600
   return shop.items.flatMap((id) => {
     const f = content.foods.find((x) => x.id === id)
-    if (f) return [{ id, name: f.name, desc: f.desc, price: f.price, verb: f.id === 'coffee' ? '来一杯' : '吃', when: foodWhen(f), open: foodAvailable(f, now, hour), have: game.life.foods[id] !== undefined ? '吃过' : '' }]
+    if (f) return [{ id, name: f.name, desc: f.desc, price: f.price, verb: t(f.id === 'coffee' ? '来一杯' : '吃'), when: foodWhen(f), open: foodAvailable(f, now, hour), have: game.life.foods[id] !== undefined ? t('吃过') : '' }]
     const s = content.souvenirs.find((x) => x.id === id)
     if (!s || s.price === undefined) return []
     const n = game.life.items[id] ?? 0
-    return [{ id, name: s.name, desc: s.desc, price: s.price, verb: '买', when: '', open: true, have: n ? `背包里有 ${n} 个` : '' }]
+    return [{ id, name: s.name, desc: s.desc, price: s.price, verb: t('买'), when: '', open: true, have: n ? t('背包里有 {n} 个', { n }) : '' }]
   })
 })
 

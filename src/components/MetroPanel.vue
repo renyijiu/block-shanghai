@@ -3,52 +3,52 @@
     <canvas ref="canvas" @wheel="onWheel" @pointerdown="onDown" @pointermove="onMove" @pointerup="onUp" @pointercancel="onUp"></canvas>
 
     <div class="top">
-      <div class="title">上海地铁<span v-if="inStation && fromStation"> · {{ fromStation.name }}站</span></div>
+      <div class="title">{{ t('上海地铁') }}<span v-if="inStation && from !== null"> · {{ t('{station}站', { station: sn(from) }) }}</span></div>
       <div class="tools">
-        <button title="放大" @click="zoom(1.5)">＋</button>
-        <button title="缩小" @click="zoom(1 / 1.5)">－</button>
-        <button title="关闭（Esc）" @click="emit('close')">✕</button>
+        <button :title="t('放大')" @click="zoom(1.5)">＋</button>
+        <button :title="t('缩小')" @click="zoom(1 / 1.5)">－</button>
+        <button :title="t('关闭（Esc）')" @click="emit('close')">✕</button>
       </div>
     </div>
 
     <div class="legend">
-      <span v-for="l in metro.data.lines" :key="l.id" class="chip" :style="{ background: l.color }">{{ l.name.replace('号线', '') }}</span>
+      <span v-for="l in metro.data.lines" :key="l.id" class="chip" :style="{ background: l.color }">{{ lineShort(l) }}</span>
     </div>
 
     <div class="plan">
       <label>
-        <span class="dot from">起</span>
-        <input v-model="fromText" placeholder="起点站（中文或拼音）" @focus="focus = 'from'" @input="focus = 'from'" />
+        <span class="dot from">{{ t('起') }}</span>
+        <input v-model="fromText" :placeholder="t('起点站（中文或拼音）')" @focus="focus = 'from'" @input="focus = 'from'" />
       </label>
       <label>
-        <span class="dot to">终</span>
-        <input v-model="toText" placeholder="终点站，也可以在图上点选" @focus="focus = 'to'" @input="focus = 'to'" />
+        <span class="dot to">{{ t('终') }}</span>
+        <input v-model="toText" :placeholder="t('终点站，也可以在图上点选')" @focus="focus = 'to'" @input="focus = 'to'" />
       </label>
       <ul v-if="suggestions.length" class="suggest">
         <li v-for="i in suggestions" :key="i" @pointerdown.prevent="choose(i)">
-          {{ stations[i]!.name }} <small>{{ stations[i]!.nameEn }}</small>
+          {{ sn(i) }} <small>{{ isEn ? stations[i]!.name : stations[i]!.nameEn }}</small>
           <span v-for="l in stations[i]!.lines" :key="l" class="mini" :style="{ background: lineOf(l).color }"></span>
         </li>
       </ul>
       <div class="modes">
-        <button :class="{ on: mode === 'fastest' }" @click="mode = 'fastest'">最快</button>
-        <button :class="{ on: mode === 'fewest' }" @click="mode = 'fewest'">少换乘</button>
+        <button :class="{ on: mode === 'fastest' }" @click="mode = 'fastest'">{{ t('最快') }}</button>
+        <button :class="{ on: mode === 'fewest' }" @click="mode = 'fewest'">{{ t('少换乘') }}</button>
       </div>
 
       <div v-if="route" class="result">
-        <div class="summary">约 {{ Math.round(route.minutes) }} 分钟 · {{ route.fare }} 元 · {{ route.transfers ? `换乘 ${route.transfers} 次` : '直达' }}</div>
+        <div class="summary">{{ t('约 {m} 分钟 · {fare} 元', { m: Math.round(route.minutes), fare: route.fare }) }} · {{ route.transfers ? t('换乘 {n} 次', { n: route.transfers }) : t('直达') }}</div>
         <ol>
           <li v-for="(leg, k) in route.legs" :key="k">
-            <span class="chip" :style="{ background: lineOf(leg.line).color }">{{ lineOf(leg.line).name }}</span>
-            {{ stations[leg.from]!.name }} → {{ stations[leg.to]!.name }}
-            <small>{{ leg.stations.length - 1 }} 站 · {{ Math.round(leg.minutes) }} 分钟</small>
+            <span class="chip" :style="{ background: lineOf(leg.line).color }">{{ nameOf(lineOf(leg.line)) }}</span>
+            {{ sn(leg.from) }} → {{ sn(leg.to) }}
+            <small>{{ t('{n} 站 · {m} 分钟', { n: leg.stations.length - 1, m: Math.round(leg.minutes) }) }}</small>
           </li>
         </ol>
-        <button class="go" :disabled="!inStation || from !== initialFrom" @click="emit('travel', route)">快速到达</button>
-        <div v-if="!inStation" class="hint">从地铁口进站后才能乘车（走到地铁口按 E）</div>
-        <div v-else-if="from !== initialFrom" class="hint">要从本站（{{ stations[initialFrom!]!.name }}）出发才能乘车</div>
+        <button class="go" :disabled="!inStation || from !== initialFrom" @click="emit('travel', route)">{{ t('快速到达') }}</button>
+        <div v-if="!inStation" class="hint">{{ t('从地铁口进站后才能乘车（走到地铁口按 E）') }}</div>
+        <div v-else-if="from !== initialFrom" class="hint">{{ t('要从本站（{station}）出发才能乘车', { station: sn(initialFrom!) }) }}</div>
       </div>
-      <div v-else-if="from !== null && to !== null" class="hint">{{ from === to ? '起点和终点是同一站' : '没有找到路线' }}</div>
+      <div v-else-if="from !== null && to !== null" class="hint">{{ t(from === to ? '起点和终点是同一站' : '没有找到路线') }}</div>
     </div>
   </div>
 </template>
@@ -60,21 +60,24 @@ import { drawMap, type MapView } from '../engine/map/drawMap.ts'
 import { drawMetro, stationAt } from '../engine/map/drawMetro.ts'
 import type { Route, RouteMode } from '../engine/metro/network.ts'
 import { usePanZoom } from './usePanZoom.ts'
+import { isEn, lineShort, nameOf } from '../i18n/core.ts'
+import { t } from '../i18n/index.ts'
 
 const props = defineProps<{ game: Game; initialFrom: number | null; inStation: boolean }>()
 const emit = defineEmits<{ close: []; travel: [route: Route] }>()
 const metro = props.game.metro!
 const stations = metro.data.stations
 const lineOf = (id: string) => metro.lineById.get(id)!
+/** 站名（界面语言） */
+const sn = (i: number) => nameOf(stations[i]!)
 
 const canvas = ref<HTMLCanvasElement | null>(null)
 const from = ref<number | null>(props.initialFrom)
 const to = ref<number | null>(null)
-const fromText = ref(from.value !== null ? stations[from.value]!.name : '')
+const fromText = ref(from.value !== null ? sn(from.value) : '')
 const toText = ref('')
 const focus = ref<'from' | 'to' | null>(null)
 const mode = ref<RouteMode>('fastest')
-const fromStation = computed(() => (from.value !== null ? stations[from.value] : null))
 
 // 搜索：中文站名、英文 / 拼音站名都能匹配（英文站名大多就是拼音，如 Lujiazui）
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9一-鿿]/g, '')
@@ -82,22 +85,22 @@ const suggestions = computed(() => {
   const text = focus.value === 'from' ? fromText.value : focus.value === 'to' ? toText.value : ''
   const sel = focus.value === 'from' ? from.value : to.value
   const q = norm(text)
-  if (!q || (sel !== null && stations[sel]!.name === text)) return []
+  if (!q || (sel !== null && sn(sel) === text)) return []
   const hits: number[] = []
   stations.forEach((s, i) => {
     if (norm(s.name).includes(q) || norm(s.nameEn).includes(q) || norm(s.id).includes(q)) hits.push(i)
   })
   // 站名以输入开头的排前面
-  return hits.sort((a, b) => Number(!norm(stations[a]!.name).startsWith(q)) - Number(!norm(stations[b]!.name).startsWith(q))).slice(0, 8)
+  return hits.sort((a, b) => Number(!norm(sn(a)).startsWith(q)) - Number(!norm(sn(b)).startsWith(q))).slice(0, 8)
 })
 
 function choose(i: number) {
   if (focus.value === 'from') {
     from.value = i
-    fromText.value = stations[i]!.name
+    fromText.value = sn(i)
   } else {
     to.value = i
-    toText.value = stations[i]!.name
+    toText.value = sn(i)
   }
   focus.value = null
   dirty = true

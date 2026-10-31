@@ -10,6 +10,7 @@ import type { Lot } from '../world/lots.ts'
 import type { WorldMaterials } from '../world/materials.ts'
 import { Polyline } from './boats.ts'
 import { BUS_LANE, busesAt, busPose, nextBus, tripTime, type BusLine } from './buses.ts'
+import { tr } from '../../i18n/core.ts'
 
 const parseClock = (s: string) => {
   const [h, m] = s.split(':').map(Number)
@@ -112,7 +113,7 @@ export class BusSystem {
         b.orientedBox(sx - Math.sin(h) * 0.8, sz + Math.cos(h) * 0.8, h, 3.6, 0.15, 0, 2.6, 0x9fc3d6, { glass: true, collide: false })
         b.orientedBox(sx - Math.sin(h) * 0.3, sz + Math.cos(h) * 0.3, h, 3.8, 1.4, 2.6, 2.75, 0xe8e2d4, { windows: 0, collide: false })
         this.stops.push({ line, index: i, name: st.name, x: sx, z: sz })
-        points.push({ x: sx, z: sz, r: 4, label: `${d.name} · ${st.name}站`, action: '坐车', kind: 'bus', bus: d.id, stop: i })
+        points.push({ x: sx, z: sz, r: 4, label: tr('{line} · {stop}站', { line: d.name, stop: st.name }), action: '坐车', kind: 'bus', bus: d.id, stop: i })
         this.footprints.push({ x0: sx - 3, z0: sz - 3, x1: sx + 3, z1: sz + 3 })
       })
     }

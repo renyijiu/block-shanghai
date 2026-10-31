@@ -40,7 +40,7 @@
           <button @click="sample">{{ t('示例皮肤') }}</button>
           <button v-if="look.skinImage" @click="set('skinImage', null)">{{ t('去掉皮肤') }}</button>
         </div>
-        <img v-if="look.skinImage" class="skin" :src="look.skinImage" alt="皮肤" />
+        <img v-if="look.skinImage" class="skin" :src="look.skinImage" :alt="t('皮肤')" />
         <p v-if="error" class="error">{{ error }}</p>
       </section>
       <button class="reset" @click="reset">{{ t('恢复默认') }}</button>
@@ -93,11 +93,11 @@ function upload(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0]
   ;(e.target as HTMLInputElement).value = ''
   if (!file) return
-  if (file.size > 100_000) return void (error.value = '图片太大了，皮肤一般只有几 KB')
+  if (file.size > 100_000) return void (error.value = t('图片太大了，皮肤一般只有几 KB'))
   const img = new Image()
   img.onload = () => {
     URL.revokeObjectURL(img.src)
-    if (img.width !== 64 || (img.height !== 64 && img.height !== 32)) return void (error.value = `尺寸不对：需要 64×64 或 64×32，这张是 ${img.width}×${img.height}`)
+    if (img.width !== 64 || (img.height !== 64 && img.height !== 32)) return void (error.value = t('尺寸不对：需要 64×64 或 64×32，这张是 {w}×{h}', { w: img.width, h: img.height }))
     const c = document.createElement('canvas')
     c.width = c.height = 64
     const ctx = c.getContext('2d')!
@@ -108,7 +108,7 @@ function upload(e: Event) {
     }
     set('skinImage', c.toDataURL('image/png'))
   }
-  img.onerror = () => (error.value = '读不出这张图片')
+  img.onerror = () => (error.value = t('读不出这张图片'))
   img.src = URL.createObjectURL(file)
 }
 

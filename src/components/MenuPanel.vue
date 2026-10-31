@@ -8,7 +8,7 @@
       <button class="item" @click="emit('open', 'character')">{{ t('👤 形象') }}<small>{{ t('颜色、发型、帽子，或者上传皮肤') }}</small></button>
       <button class="item" @click="emit('quality')">{{ t('⚙️ 画质：{q}', { q: qualityLabel }) }}<small>{{ t('低 / 中 / 高，手机默认低；太卡会自动调低') }}</small></button>
       <button class="item" @click="emit('fullscreen')">{{ t(fullscreen ? '⛶ 退出全屏' : '⛶ 全屏') }}<small>{{ t('手机上会同时锁成横屏') }}</small></button>
-      <button class="item" @click="setLocale(locale === 'zh' ? 'en' : 'zh')">{{ locale === 'zh' ? t('🌐 语言：中文') : t('🌐 语言：English') }}<small>{{ t('英文模式下景点介绍、对白暂时还是中文') }}</small></button>
+      <button class="item" @click="setLocale(locale === 'zh' ? 'en' : 'zh')">{{ locale === 'zh' ? t('🌐 语言：中文') : t('🌐 语言：English') }}<small>{{ t('切换后页面会重新加载') }}</small></button>
       <button class="item" @click="emit('open', 'about')">{{ t('ℹ️ 关于') }}<small>{{ t('数据来源、致谢') }}</small></button>
     </div>
   </div>

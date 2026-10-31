@@ -55,7 +55,7 @@ block-shanghai/
     ├── main.ts
     ├── App.vue
     ├── style.css
-    ├── i18n/                  界面语言：中文原文查英文表（t()），城市包另给英文地名（namesEn）
+    ├── i18n/                  语言：core.ts 按中文原文查英文（引擎和界面共用 tr()），en-ui.ts 是界面和引擎文字的英文；切换语言会重新加载页面
     ├── components/            MiniMap / BigMap / DistrictToast / TouchControls / Menu / Panels / MetroMap …
     ├── engine/
     │   ├── Game.ts            主循环、系统调度
@@ -82,7 +82,7 @@ block-shanghai/
             ├── data/          烘焙产物（water / roads / parks / districts / metro）
             ├── landmarks.ts   景点定义和建模（景点多了再按区拆成目录）
             ├── content.ts     美食、文化、纪念品、商店、任务、对白
-            └── strings.ts     UI 文案
+            └── en.ts          英文：城市包里所有给玩家看的文字（按中文原文查），英文模式开局时整体换掉
 ```
 
 目录按路线图逐步加入，以仓库实际内容为准。
@@ -101,8 +101,10 @@ export default {
   buildings,     // 程序化建筑：mixAt(place) 风格权重、styles 各风格的建模函数、treeMixAt / trees 行道树（P1 起）
   landmarks,     // 景点定义数组
   boats,         // 渡轮和游船：航线（经纬度）、码头名、票价、航速、首末班（P3）
-  content,       // 美食 / 文化 / 纪念品 / 商店 / 任务 / 对白
-  strings,       // UI 文案
+  buses,         // 观光巴士（P6）
+  people,        // 路人：类型、穿着、对白（P5）
+  content,       // 美食 / 文化 / 纪念品 / 商店 / 任务
+  en,            // 英文：中文原文 → 英文，英文模式下整体替换包里的文字（P6，可选）
   spawns         // 出生点
 }
 ```

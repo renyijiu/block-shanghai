@@ -3,10 +3,10 @@
     <div class="card">
       <div class="head">
         <b>📜 {{ entry.name }}</b>
-        <button class="close" title="关闭（Esc）" @click="emit('close')">✕</button>
+        <button class="close" :title="t('关闭（Esc）')" @click="emit('close')">✕</button>
       </div>
       <p>{{ entry.text }}</p>
-      <div class="hint">已收进“收藏 · 文化图鉴”</div>
+      <div class="hint">{{ t('已收进“收藏 · 文化图鉴”') }}</div>
     </div>
   </div>
 </template>
@@ -14,6 +14,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted } from 'vue'
 import type { CultureDef } from '../engine/city.ts'
+import { t } from '../i18n/index.ts'
 
 // 文化牌：读一段介绍，第一次读解锁文化图鉴
 defineProps<{ entry: CultureDef }>()

@@ -2,6 +2,7 @@
 import type { MetroData } from '../metro/data.ts'
 import type { Route } from '../metro/network.ts'
 import type { MapView } from './drawMap.ts'
+import { nameOf, tr } from '../../i18n/core.ts'
 
 export interface MetroMapStyle {
   route?: Route | null
@@ -84,17 +85,17 @@ export function drawMetro(ctx: CanvasRenderingContext2D, data: MetroData, view: 
     if (!dim && (labelAll || (transfer && labelTransfer) || onRoute.has(i))) {
       ctx.lineWidth = 3 * dpr
       ctx.strokeStyle = 'rgba(255,255,255,0.9)'
-      ctx.strokeText(st.name, x + r + 3 * dpr, y)
+      ctx.strokeText(nameOf(st), x + r + 3 * dpr, y)
       ctx.fillStyle = '#2a2a2a'
-      ctx.fillText(st.name, x + r + 3 * dpr, y)
+      ctx.fillText(nameOf(st), x + r + 3 * dpr, y)
     }
   })
   ctx.globalAlpha = 1
 
   // 起点、终点标记
   for (const [idx, text, color] of [
-    [style.from, '起', '#2e8b57'],
-    [style.to, '终', '#c8282a']
+    [style.from, tr('起'), '#2e8b57'],
+    [style.to, tr('终'), '#c8282a']
   ] as const) {
     if (idx === null || idx === undefined) continue
     const st = data.stations[idx]!

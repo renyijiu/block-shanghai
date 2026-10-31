@@ -5,8 +5,8 @@ import { buildings } from './buildings.ts'
 import config from './config.ts'
 import { buses } from './buses.ts'
 import { content } from './content.ts'
+import { en } from './en.ts'
 import { landmarks } from './landmarks.ts'
-import { namesEn } from './names-en.ts'
 import { people } from './people.ts'
 import world from './data/world.json?url'
 import water from './data/water.json?url'
@@ -26,5 +26,5 @@ export default {
   buses,
   people,
   content,
-  namesEn
+  en
 } satisfies CityPackage

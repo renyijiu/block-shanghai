@@ -2,21 +2,21 @@
   <div class="taxi" @click.self="emit('close')">
     <div class="card">
       <div class="head">
-        <b>🚕 打车</b>
-        <button class="close" title="关闭（Esc）" @click="emit('close')">✕</button>
+        <b>{{ t('🚕 打车') }}</b>
+        <button class="close" :title="t('关闭（Esc）')" @click="emit('close')">✕</button>
       </div>
-      <p class="intro">起步价 14 元（3 公里），之后每公里 2.5 元，15 公里以上 3.6 元；夜里 23 点到 5 点加三成。在景点旁边的马路上下车。</p>
-      <input v-model="q" class="search" placeholder="搜景点或区名" />
+      <p class="intro">{{ t('起步价 14 元（3 公里），之后每公里 2.5 元，15 公里以上 3.6 元；夜里 23 点到 5 点加三成。在景点旁边的马路上下车。') }}</p>
+      <input v-model="q" class="search" :placeholder="t('搜景点或区名')" />
       <div class="list">
         <div v-for="r in rows" :key="r.id" class="row">
           <div class="info">
             <div class="name">{{ r.found ? r.name : '？？？' }} <small>{{ r.district }}</small></div>
-            <div class="meta">{{ r.km }} 公里 · 约 {{ r.minutes }} 分钟</div>
+            <div class="meta">{{ t('{km} 公里 · 约 {m} 分钟', { km: r.km, m: r.minutes }) }}</div>
           </div>
           <button class="go" :disabled="money < r.fare" @click="emit('go', r.id)">¥{{ r.fare }}</button>
         </div>
       </div>
-      <div class="hint">钱包 ¥{{ money }} · 还没发现的景点也能去，到了才知道是哪儿</div>
+      <div class="hint">{{ t('钱包 ¥{money} · 还没发现的景点也能去，到了才知道是哪儿', { money }) }}</div>
     </div>
   </div>
 </template>
@@ -24,6 +24,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { Game } from '../engine/Game.ts'
+import { t } from '../i18n/index.ts'
 
 const props = defineProps<{ game: Game }>()
 const emit = defineEmits<{ close: []; go: [id: string] }>()
@@ -42,7 +43,8 @@ const all = (game.landmarks?.placed ?? [])
   .sort((a, b) => a.km - b.km)
 const rows = computed(() => {
   const s = q.value.trim()
-  return s ? all.filter((r) => r.district.includes(s) || (r.found && r.name.includes(s))) : all
+  const low = s.toLowerCase()
+  return s ? all.filter((r) => r.district.toLowerCase().includes(low) || (r.found && r.name.toLowerCase().includes(low))) : all
 })
 
 function onKey(e: KeyboardEvent) {

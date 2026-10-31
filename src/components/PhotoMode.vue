@@ -8,21 +8,21 @@
       <button v-for="(f, i) in filters" :key="f.id" :class="{ on: f.id === filter }" @click="choose(f)"><small v-if="!touch">{{ i + 1 }}</small>{{ f.name }}</button>
     </div>
     <div class="side">
-      <button class="close" title="退出拍照（Esc）" @click="emit('close')">✕</button>
-      <button class="shutter" :disabled="busy" title="拍照（空格）" @click="shoot"></button>
-      <button class="view" title="切换视角（V）" @click="game.input.press('view')">{{ view }}</button>
+      <button class="close" :title="t('退出拍照（Esc）')" @click="emit('close')">✕</button>
+      <button class="shutter" :disabled="busy" :title="t('拍照（空格）')" @click="shoot"></button>
+      <button class="view" :title="t('切换视角（V）')" @click="game.input.press('view')">{{ view }}</button>
     </div>
-    <div v-if="!touch" class="keys">空格 拍照 · 1–{{ filters.length }} 滤镜 · V 视角（含自拍）· 拖动取景 · Esc 退出</div>
+    <div v-if="!touch" class="keys">{{ t('空格 拍照 · 1–{n} 滤镜 · V 视角（含自拍）· 拖动取景 · Esc 退出', { n: filters.length }) }}</div>
     <div v-if="flash" class="flash"></div>
     <Transition name="pop">
       <div v-if="result" class="result" @click="emit('album')">
         <img :src="result.url" alt="" />
         <div>
-          <div v-if="result.names.length" class="names">拍到：{{ result.names.join('、') }}</div>
-          <div v-else class="names dim">画面里没有认出景点</div>
-          <div v-if="result.people" class="people">和 {{ result.people }} 位路人合影</div>
-          <div v-if="result.newly.length" class="newly">图鉴新解锁 {{ result.newly.length }} 项：{{ result.newly.join('、') }}</div>
-          <div class="hint">{{ result.saved ? '已存进相册 · 点这里查看' : '照片没能保存（浏览器不允许本地存储）' }}</div>
+          <div v-if="result.names.length" class="names">{{ t('拍到：{names}', { names: result.names.join(t('、')) }) }}</div>
+          <div v-else class="names dim">{{ t('画面里没有认出景点') }}</div>
+          <div v-if="result.people" class="people">{{ t('和 {n} 位路人合影', { n: result.people }) }}</div>
+          <div v-if="result.newly.length" class="newly">{{ t('图鉴新解锁 {n} 项：{names}', { n: result.newly.length, names: result.newly.join(t('、')) }) }}</div>
+          <div class="hint">{{ t(result.saved ? '已存进相册 · 点这里查看' : '照片没能保存（浏览器不允许本地存储）') }}</div>
         </div>
       </div>
     </Transition>
@@ -33,6 +33,7 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import type { Game } from '../engine/Game.ts'
 import type { PhotoFilter } from '../engine/photo/filters.ts'
+import { t } from '../i18n/index.ts'
 
 const props = defineProps<{ game: Game; touch: boolean }>()
 const emit = defineEmits<{ close: []; album: []; shot: [newly: number] }>()

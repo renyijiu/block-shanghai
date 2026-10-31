@@ -8,6 +8,7 @@ import { routeFare } from '../metro/network.ts'
 import { skyAt } from '../sky/Sky.ts'
 import type { GameClock } from '../state/clock.ts'
 import { CarScene, CorridorScene, createInteriorMaterials, HallScene, PlatformScene, type InteriorMaterials, type InteriorScene, type Spawn } from './scenes.ts'
+import { isEn, nameOf, tr } from '../../i18n/core.ts'
 import { announce, callAt, crowdLevel, exitDirection, loopContinue, platformSides, segmentSeconds, transferLines, type Announcement, type TrainCall } from './trip.ts'
 
 /** 站内的位置 */
@@ -188,7 +189,7 @@ export class InteriorManager {
     if (place.kind === 'hall') {
       const station = place.station
       if (verb === 'gate' && arg === 'in') {
-        if (money < rules.fare.baseYuan) return { notice: `交通卡余额不足 ${rules.fare.baseYuan} 元，不能进站` }
+        if (money < rules.fare.baseYuan) return { notice: tr('交通卡余额不足 {fare} 元，不能进站', { fare: rules.fare.baseYuan }) }
         this.trip = { entry: station, legs: [] }
         this.onEvent?.({ type: 'metroEnter', station })
         return { spawn: this.scene!.spawns.get('gate:in') }
@@ -199,15 +200,15 @@ export class InteriorManager {
         this.trip = null
         const spawn = this.scene!.spawns.get('gate:out')
         this.onEvent?.({ type: 'metroExit', station, exit: '', fare, trip })
-        return { spawn, notice: trip.legs.length ? `出站扣费 ${fare} 元${money - fare < 0 ? '（交通卡透支，下次进站前要有起步价）' : ''}` : '出站（没有乘车，不扣费）' }
+        return { spawn, notice: trip.legs.length ? tr('出站扣费 {fare} 元', { fare }) + (money - fare < 0 ? tr('（交通卡透支，下次进站前要有起步价）') : '') : tr('出站（没有乘车，不扣费）') }
       }
       if (verb === 'platform' && arg) {
-        if (!this.trip) return { notice: '先刷卡进站' }
+        if (!this.trip) return { notice: tr('先刷卡进站') }
         this.platform(station, arg)
         return { spawn: this.scene!.spawns.get('hall') }
       }
       if (verb === 'exit' && arg) {
-        if (this.trip) return { notice: '先刷卡出站' }
+        if (this.trip) return { notice: tr('先刷卡出站') }
         return { leave: Number(arg) }
       }
       if (verb === 'map') return { map: true }
@@ -384,7 +385,7 @@ export class InteriorManager {
     // 磁浮的速度屏：加速到 300 km/h 巡航，进站前减速
     if (rt.line.kind === 'maglev') car.setSpeed(moving ? 300 * Math.min(1, Math.sin(Math.PI * Math.min(1, r.elapsed / r.duration)) * 1.6) : 0)
     car.setDisplay(
-      stops.map((s) => data.stations[s]!.name),
+      stops.map((s) => nameOf(data.stations[s]!)),
       moving ? r.stop + 1 : r.stop,
       !moving
     )
@@ -415,7 +416,7 @@ export class InteriorManager {
     const data = this.metro.data
     if (place.kind === 'hall') {
       const st = this.st(place.station)
-      return { where: `${st.name}站 · 站厅${this.trip ? '（付费区）' : ''}`, color: null, sides: [], canSkipWait: false, ride: null }
+      return { where: tr('{station}站 · 站厅', { station: nameOf(st) }) + (this.trip ? tr('（付费区）') : ''), color: null, sides: [], canSkipWait: false, ride: null }
     }
     if (place.kind === 'platform') {
       const st = this.st(place.station)
@@ -423,32 +424,32 @@ export class InteriorManager {
       const ps = this.scene as PlatformScene
       const sides = ps.info.sides.map((side, i) => {
         const s = ps.sideStatus(i, t)
-        const text = !s ? '' : s.state === 'open' ? '车门已开，请上车' : s.state === 'arriving' ? '列车进站' : s.state === 'leaving' ? '列车出站' : s.minutes === null ? '今日运营结束' : s.minutes <= 1 ? '即将进站' : `${s.minutes} 分钟后到`
-        return { toward: side.toward, text }
+        const text = tr(!s ? '' : s.state === 'open' ? '车门已开，请上车' : s.state === 'arriving' ? '列车进站' : s.state === 'leaving' ? '列车出站' : s.minutes === null ? '今日运营结束' : s.minutes <= 1 ? '即将进站' : '{m} 分钟后到', { m: s?.minutes ?? 0 })
+        return { toward: isEn ? side.towardEn : side.toward, text }
       })
-      return { where: `${st.name}站 · ${line.name}站台`, color: line.color, sides, canSkipWait: true, ride: null }
+      return { where: tr('{station}站 · {line}站台', { station: nameOf(st), line: nameOf(line) }), color: line.color, sides, canSkipWait: true, ride: null }
     }
     if (place.kind === 'corridor') {
       const st = this.st(place.station)
-      return { where: `${st.name}站 · 换乘${this.line(place.to).name}`, color: this.line(place.to).color, sides: [], canSkipWait: false, ride: null }
+      return { where: tr('{station}站 · 换乘{line}', { station: nameOf(st), line: nameOf(this.line(place.to)) }), color: this.line(place.to).color, sides: [], canSkipWait: false, ride: null }
     }
     const r = this.ride
     const line = this.line(place.line)
-    if (!r) return { where: line.name, color: line.color, sides: [], canSkipWait: false, ride: null }
+    if (!r) return { where: nameOf(line), color: line.color, sides: [], canSkipWait: false, ride: null }
     const stops = r.call.rt.service.stops
     const moving = r.phase === 'moving'
     const cur = moving ? r.stop + 1 : r.stop
-    const terminalName = data.stations[stops[stops.length - 1]!]!.name
+    const terminalName = nameOf(data.stations[stops[stops.length - 1]!]!)
     return {
-      where: `${line.name} · 往 ${line.loop ? (/内圈|外圈/.exec(r.call.rt.service.name)?.[0] ?? terminalName) : terminalName}`,
+      where: tr('{line} · 往 {to}', { line: nameOf(line), to: line.loop ? tr(/内圈|外圈/.exec(r.call.rt.service.name)?.[0] ?? terminalName) : terminalName }),
       color: line.color,
       sides: [],
       canSkipWait: false,
       ride: {
-        next: data.stations[stops[cur]!]!.name,
+        next: nameOf(data.stations[stops[cur]!]!),
         atStation: !moving,
         terminal: r.phase === 'terminal',
-        stops: stops.slice(r.stop + 1).map((s, k) => ({ index: r.stop + 1 + k, name: data.stations[s]!.name }))
+        stops: stops.slice(r.stop + 1).map((s, k) => ({ index: r.stop + 1 + k, name: nameOf(data.stations[s]!) }))
       }
     }
   }

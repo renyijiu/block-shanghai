@@ -10,10 +10,10 @@
     ></canvas>
     <div class="title">{{ title }}<span v-if="here"> · {{ t('你在') }} {{ here }}</span></div>
     <div class="tools">
-      <button title="放大" @click="zoom(1.5)">＋</button>
-      <button title="缩小" @click="zoom(1 / 1.5)">－</button>
-      <button title="回到我的位置" @click="center()">◎</button>
-      <button title="关闭（M / Esc）" @click="emit('close')">✕</button>
+      <button :title="t('放大')" @click="zoom(1.5)">＋</button>
+      <button :title="t('缩小')" @click="zoom(1 / 1.5)">－</button>
+      <button :title="t('回到我的位置')" @click="center()">◎</button>
+      <button :title="t('关闭（M / Esc）')" @click="emit('close')">✕</button>
     </div>
     <div class="credit">© OpenStreetMap contributors</div>
   </div>

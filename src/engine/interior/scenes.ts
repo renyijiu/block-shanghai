@@ -12,6 +12,10 @@ import type { Lot } from '../world/lots.ts'
 import { addPerson } from './people.ts'
 import { fit, FONT, Screen, textSign } from './signs.ts'
 import { nextCall, type Crowd, type PlatformSide, type TrainCall } from './trip.ts'
+import * as i18n from '../../i18n/core.ts'
+
+/** 站台一侧的方向（往哪个终点站），英文模式用英文站名 */
+const towardOf = (s: { toward: string; towardEn: string }) => (i18n.isEn ? s.towardEn : s.toward)
 
 export interface InteriorMaterials {
   solid: THREE.MeshLambertMaterial
@@ -161,8 +165,8 @@ export class HallScene extends InteriorScene {
       if (i < 6) b.box(x + 0.2, 0.55, -0.05, x + 2.8, 1.0, 0.05, 0xd8e8f0, { windows: 0, collide: false, glass: true })
     }
     b.colliders.push({ x0: -9.5, y0: 0, z0: -0.3, x1: 9.5, y1: 1.3, z1: 0.3 })
-    this.point({ x: 0, z: -1.6, r: 5, label: '刷卡进站（交通卡）', action: '进站', go: 'gate:in' })
-    this.point({ x: 0, z: 1.6, r: 5, label: '刷卡出站', action: '出站', go: 'gate:out' })
+    this.point({ x: 0, z: -1.6, r: 5, label: i18n.tr('刷卡进站（交通卡）'), action: '进站', go: 'gate:in' })
+    this.point({ x: 0, z: 1.6, r: 5, label: i18n.tr('刷卡出站'), action: '出站', go: 'gate:out' })
     this.spawns.set('gate:in', { x: 0, z: 2.6, facing: FACE.north })
     this.spawns.set('gate:out', { x: 0, z: -2.6, facing: FACE.south })
 
@@ -173,7 +177,7 @@ export class HallScene extends InteriorScene {
       glowBox(glow, x - 0.45, 1.0, -2.65, x + 0.45, 1.6, -2.6, 0x9fd8ff)
     }
     this.place(textSign([{ text: '售票 · 线路图', size: 0.5, bold: true }, { text: 'Tickets · Metro Map', size: 0.3, color: '#cfe3ff' }], 6, 1, '#2f6fb0'), -17, 2.6, -1.75, 0)
-    this.point({ x: -17, z: -4, r: 3.5, label: '线路图 · 快速到达', action: '查看', go: 'map' })
+    this.point({ x: -17, z: -4, r: 3.5, label: i18n.tr('线路图 · 快速到达'), action: '查看', go: 'map' })
 
     // 站名
     const nameSign = () => textSign([{ text: info.name, size: 0.55, bold: true }, { text: info.nameEn, size: 0.3, color: '#cfd6de' }], 9, 1.8, '#1f2a36', '#c8282a')
@@ -227,7 +231,7 @@ export class HallScene extends InteriorScene {
       // 闸机到扶梯口的线路色导向条
       const len = Math.hypot(x, 8)
       b.orientedBox(x / 2, 5, Math.atan2(8, x), len, 0.5, 0, 0.02, color, { collide: false, windows: 0 })
-      this.point({ x, z: 8.2, r: 3.2, label: `去站台 · ${line.name}`, action: '下楼', go: `platform:${line.id}` })
+      this.point({ x, z: 8.2, r: 3.2, label: i18n.tr('去站台 · {line}', { line: i18n.nameOf(line) }), action: '下楼', go: `platform:${line.id}` })
       this.spawns.set(`platform:${line.id}`, { x, z: 7, facing: FACE.south })
     })
 
@@ -246,7 +250,7 @@ export class HallScene extends InteriorScene {
       b.box(s.x + 2, 0, s.z, s.x + 2.3, 3.4, s.z + depth, 0xc9c4ba, { windows: 0 })
       b.box(s.x - 2, 3, s.z + 0.05, s.x + 2, HALL.h, s.z + 0.3, 0x15181c, { windows: 0, collide: false })
       this.place(this.exitSign(e), s.x, 4.2, s.z + depth + 0.1, 0)
-      this.point({ x: s.x, z: s.z + depth + 1.5, r: 3.2, label: `出站 · ${this.exitName(e)}（${e.dir}）`, action: '出站', go: `exit:${e.entrance}` })
+      this.point({ x: s.x, z: s.z + depth + 1.5, r: 3.2, label: this.exitLabel(e), action: '出站', go: `exit:${e.entrance}` })
       this.spawns.set(`exit:${e.entrance}`, { x: s.x, z: s.z + depth + 2.5, facing: FACE.south })
     } else {
       const x0 = s.nx > 0 ? s.x : s.x - depth
@@ -258,7 +262,7 @@ export class HallScene extends InteriorScene {
       b.box(x0, 0, s.z + 2, x0 + depth, 3.4, s.z + 2.3, 0xc9c4ba, { windows: 0 })
       const front = s.x + s.nx * depth
       this.place(this.exitSign(e), front + s.nx * 0.1, 4.2, s.z, s.nx > 0 ? Math.PI / 2 : -Math.PI / 2)
-      this.point({ x: front + s.nx * 1.5, z: s.z, r: 3.2, label: `出站 · ${this.exitName(e)}（${e.dir}）`, action: '出站', go: `exit:${e.entrance}` })
+      this.point({ x: front + s.nx * 1.5, z: s.z, r: 3.2, label: this.exitLabel(e), action: '出站', go: `exit:${e.entrance}` })
       this.spawns.set(`exit:${e.entrance}`, { x: front + s.nx * 2.5, z: s.z, facing: s.nx > 0 ? FACE.east : FACE.west })
     }
     glowBox(glow, s.x - 1.5, HALL.h - 0.1, s.z - 0.2, s.x + 1.5, HALL.h, s.z + 0.2, 0xffe08a)
@@ -266,6 +270,12 @@ export class HallScene extends InteriorScene {
 
   private exitName(e: HallExit) {
     return e.ref ? `${e.ref} 号口` : '出口'
+  }
+
+  /** 出口的交互提示（站牌是中英双语，提示跟随界面语言） */
+  private exitLabel(e: HallExit) {
+    const exit = e.ref ? i18n.tr('{ref} 号口', { ref: e.ref }) : i18n.tr('出口')
+    return i18n.tr('出站 · {exit}（{dir}）', { exit, dir: i18n.tr(e.dir) })
   }
 
   private exitSign(e: HallExit) {
@@ -447,7 +457,7 @@ export class PlatformScene extends InteriorScene {
     for (const s of [-2.2, 2]) b.box(s, 0, exitZ - 1.2, s + 0.2, 1.1, exitZ + 2, 0xb9bec4, { windows: 0 })
     b.box(-2.2, 0, exitZ - 1.2, 2.2, 1.1, exitZ - 1, 0xd8e8f0, { windows: 0, glass: true })
     this.place(textSign([{ text: '出站 · 换乘 ↑', size: 0.5, bold: true }, { text: 'Exit · Transfer', size: 0.32, color: '#e6ebf0' }], 4.4, 1.1, '#1f2a36'), 0, 3.4, exitZ - 1.3, Math.PI)
-    this.point({ x: 0, z: exitZ - 2.6, r: 3, label: '出站 · 去站厅', action: '上楼', go: 'hall' })
+    this.point({ x: 0, z: exitZ - 2.6, r: 3, label: i18n.tr('出站 · 去站厅'), action: '上楼', go: 'hall' })
     this.spawns.set('hall', { x: 0, z: exitZ - 3.5, facing: FACE.north })
     const tz = island ? -L + 2.5 : exitZ - 2.6
     info.transfers.forEach((t, i) => {
@@ -455,7 +465,7 @@ export class PlatformScene extends InteriorScene {
       const z = island ? tz : tz - Math.floor(i / 2) * 3
       this.place(textSign([{ text: `换乘 ${t.name}`, size: 0.5, bold: true }, { text: `Transfer to ${t.nameEn}`, size: 0.32, color: '#e6ebf0' }], 2.3, 0.8, '#1f2a36', t.color), x, 3.1, z + (island ? -1.2 : 1.2), island ? 0 : Math.PI)
       b.box(x - 0.9, 0, z + (island ? -1.6 : 1.4), x + 0.9, 0.02, z + (island ? -0.4 : 1.8), hex(t.color), { collide: false, windows: 0 })
-      this.point({ x, z, r: 1.6, label: `换乘 ${t.name}`, action: '换乘', go: `transfer:${t.id}` })
+      this.point({ x, z, r: 1.6, label: i18n.tr('换乘 {line}', { line: i18n.nameOf(t) }), action: '换乘', go: `transfer:${t.id}` })
       this.spawns.set(`transfer:${t.id}`, { x, z: z + (island ? 1.5 : -1.5), facing: island ? FACE.south : FACE.north })
     })
     // 长椅、柱子
@@ -569,7 +579,7 @@ export class PlatformScene extends InteriorScene {
       const s = this.info.sides[side]!
       this.interact.add(
         `doors:${side}`,
-        DOOR_Z.map((z) => ({ x: e - Math.sign(e) * 0.9, z, r: 1.7, label: `上车 · ${this.info.line.name} 往 ${s.toward}`, action: '上车', kind: 'interior' as const, go: `board:${side}` }))
+        DOOR_Z.map((z) => ({ x: e - Math.sign(e) * 0.9, z, r: 1.7, label: i18n.tr('上车 · {line} 往 {to}', { line: i18n.nameOf(this.info.line), to: towardOf(s) }), action: '上车', kind: 'interior' as const, go: `board:${side}` }))
       )
     }
   }
@@ -623,7 +633,7 @@ export class PlatformScene extends InteriorScene {
       }
       // 倒计时屏
       const st = this.sideStatus(i, t)
-      const text = !st ? '' : tr.state === 'arriving' ? '列车进站' : tr.state === 'open' ? '请上车' : tr.state === 'leaving' ? '列车出站' : st.minutes === null ? '今日运营结束' : st.minutes <= 1 ? '即将进站' : `${st.minutes} 分钟`
+      const text = i18n.tr(!st ? '' : tr.state === 'arriving' ? '列车进站' : tr.state === 'open' ? '请上车' : tr.state === 'leaving' ? '列车出站' : st.minutes === null ? '今日运营结束' : st.minutes <= 1 ? '即将进站' : '{m} 分钟', { m: st?.minutes ?? 0 })
       tr.screen.draw(`${side.toward}|${text}`, (ctx, W, H) => {
         ctx.fillStyle = '#0d1117'
         ctx.fillRect(0, 0, W, H)
@@ -633,7 +643,7 @@ export class PlatformScene extends InteriorScene {
         ctx.font = `600 ${Math.round(H * 0.3)}px ${FONT}`
         ctx.fillStyle = '#e6ebf0'
         ctx.textAlign = 'left'
-        ctx.fillText(fit(ctx, `往 ${side.toward}`, W * 0.5), H * 0.25, H / 2)
+        ctx.fillText(fit(ctx, i18n.tr('往 {to}', { to: towardOf(side) }), W * 0.5), H * 0.25, H / 2)
         ctx.font = `700 ${Math.round(H * 0.42)}px ${FONT}`
         ctx.fillStyle = '#ffb000'
         ctx.textAlign = 'right'
@@ -853,7 +863,7 @@ export class CarScene extends InteriorScene {
   setDoors(open: boolean) {
     this.doorsOpen = open
     this.interact.removeOwner('doors')
-    if (open) this.interact.add('doors', this.doorZ.map((z) => ({ x: 1.0, z, r: 1.2, label: '下车', action: '下车', kind: 'interior' as const, go: 'alight' })))
+    if (open) this.interact.add('doors', this.doorZ.map((z) => ({ x: 1.0, z, r: 1.2, label: i18n.tr('下车'), action: '下车', kind: 'interior' as const, go: 'alight' })))
   }
 
   /** 磁浮的速度屏（km/h） */
@@ -943,7 +953,7 @@ export class CarScene extends InteriorScene {
         ctx.font = `600 ${Math.round(H * 0.2)}px ${FONT}`
         ctx.fillStyle = '#e6ebf0'
         ctx.textAlign = 'left'
-        ctx.fillText(atStation ? '本站' : '下一站', W * 0.02, H * 0.12)
+        ctx.fillText(i18n.tr(atStation ? '本站' : '下一站'), W * 0.02, H * 0.12)
       })
     }
   }
@@ -978,8 +988,8 @@ export class CorridorScene extends InteriorScene {
     for (const z of [-8, 8]) for (const s of [-1, 1]) this.place(textSign([{ text: `换乘 ${to.name} →`, size: 0.5, bold: true }, { text: `Transfer to ${to.nameEn}`, size: 0.32, color: '#e6ebf0' }], 3, 0.9, '#1f2a36', to.color), s * (W - 0.02), 2.2, z, s > 0 ? -Math.PI / 2 : Math.PI / 2)
     this.place(textSign([{ text: `${to.name} 站台`, size: 0.5, bold: true }, { text: to.nameEn, size: 0.32 }], 3, 0.9, '#1f2a36', to.color), 0, 2.4, L - 0.02, Math.PI)
     this.place(textSign([{ text: `返回 ${from.name}`, size: 0.5, bold: true }, { text: from.nameEn, size: 0.32 }], 3, 0.9, '#1f2a36', from.color), 0, 2.4, -L + 0.02, 0)
-    this.point({ x: 0, z: L - 1.8, r: 2.4, label: `换乘 ${to.name} 站台`, action: '前往', go: `platform:${to.id}` })
-    this.point({ x: 0, z: -L + 1.8, r: 2.4, label: `返回 ${from.name} 站台`, action: '返回', go: `platform:${from.id}` })
+    this.point({ x: 0, z: L - 1.8, r: 2.4, label: i18n.tr('换乘 {line} 站台', { line: i18n.nameOf(to) }), action: '前往', go: `platform:${to.id}` })
+    this.point({ x: 0, z: -L + 1.8, r: 2.4, label: i18n.tr('返回 {line} 站台', { line: i18n.nameOf(from) }), action: '返回', go: `platform:${from.id}` })
     this.spawns.set('start', { x: 0, z: -L + 3.5, facing: FACE.south })
     this.add(b, glow)
   }

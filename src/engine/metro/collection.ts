@@ -1,6 +1,7 @@
 // 地铁的收集和任务（docs/04 第 8 节）：地铁事件、集站图鉴、线路徽章、成就、每日任务。
 // 纯函数：进度存在存档里，事件来了就更新进度、返回新达成的东西
 import type { MetroData } from './data.ts'
+import { localize, nameOf, tr } from '../../i18n/core.ts'
 
 /** 一次进站到出站：进站的车站和坐过的每一段 */
 export interface Trip {
@@ -40,7 +41,7 @@ export interface Achievement {
   desc: string
 }
 
-export const ACHIEVEMENTS: Achievement[] = [
+export const ACHIEVEMENTS: Achievement[] = localize([
   { id: 'first-ride', name: '第一次坐地铁', desc: '完成一次乘车（以后在纪念品里换纪念交通卡）' },
   { id: 'loop-4', name: '环线一周', desc: '4 号线不出站坐满一圈' },
   { id: 'century-avenue', name: '四线换乘', desc: '在世纪大道站换乘一次' },
@@ -52,7 +53,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'collect-50', name: '集站 50', desc: '到访 50 个车站' },
   { id: 'collect-100', name: '集站 100', desc: '到访 100 个车站' },
   { id: 'collect-all', name: '全网打卡', desc: '到访全部车站' }
-]
+])
 
 const segKey = (data: MetroData, line: string, a: number, b: number) => {
   const [x, y] = [data.stations[a]!.id, data.stations[b]!.id].sort()
@@ -123,14 +124,15 @@ const hash = (s: string) => {
 /** 当天的每日任务（docs/04 第 8 节“每日任务池”）：坐两条不同的线、到访一个新车站、从指定出口出站去某个景点 */
 export function dailyTasks(data: MetroData, date: string, exits: ExitTarget[]): DailyTask[] {
   const tasks: DailyTask[] = [
-    { id: 'lines-2', title: '今天乘坐 2 条不同线路' },
-    { id: 'new-station', title: '今天到访 1 个新车站' }
+    { id: 'lines-2', title: tr('今天乘坐 2 条不同线路') },
+    { id: 'new-station', title: tr('今天到访 1 个新车站') }
   ]
   const target = exits.length ? exits[hash(date) % exits.length]! : null
   if (target) {
     const e = data.entrances[target.entrance]!
     const st = data.stations[e.station]!
-    tasks.push({ id: `exit-${target.entrance}`, title: `从${st.name}站${e.ref ? ` ${e.ref} 号口` : ''}出站，去${target.landmark}` })
+    const vars = { station: nameOf(st), ref: e.ref, place: target.landmark }
+    tasks.push({ id: `exit-${target.entrance}`, title: e.ref ? tr('从{station}站 {ref} 号口出站，去{place}', vars) : tr('从{station}站出站，去{place}', vars) })
   }
   return tasks
 }

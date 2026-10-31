@@ -1,15 +1,15 @@
 <template>
   <div ref="container" class="stage"></div>
   <div v-show="!photoOpen" class="hud" :class="{ compact: touch }">
-    <div class="title">{{ config.name }}<span v-if="!touch"> · {{ config.nameEn }}</span></div>
+    <div class="title">{{ isEn ? config.nameEn : config.name }}<span v-if="!touch"> · {{ isEn ? config.name : config.nameEn }}</span></div>
     <div v-if="loading">{{ loading }}</div>
     <template v-else>
       <div class="status">🕘 {{ stats.time }} · {{ tPhrase(stats.weather) }} · ¥{{ stats.money }} · {{ t('景点') }} {{ stats.found }}/{{ stats.landmarks }}</div>
-      <div v-if="stats.quest" class="quest" @click="codexTab = 'quests'">📌 {{ stats.quest.name }} {{ stats.quest.k + 1 }}/{{ stats.quest.n }}：{{ stats.quest.text }}</div>
+      <div v-if="stats.quest" class="quest" @click="codexTab = 'quests'">📌 {{ stats.quest.name }} {{ stats.quest.k + 1 }}/{{ stats.quest.n }}{{ t('：') }}{{ stats.quest.text }}</div>
       <div v-if="stats.bike" class="bikeline">🚲 {{ t('骑行 {m} 分钟', { m: stats.bike.minutes }) }} · ¥{{ stats.bike.fare }}<span v-if="!touch">{{ t('（B 还车）') }}</span></div>
       <div v-if="stats.walk" class="walk">🚶 {{ stats.walk.name }} {{ stats.walk.k }}/{{ stats.walk.n }} · {{ t('下一站') }} {{ stats.walk.next }} · {{ t('约 {m} 米', { m: Math.max(10, Math.round(stats.walk.dist / 2) * 10) }) }}</div>
       <div>{{ backend }} · {{ stats.fps }} fps<span v-if="!touch"> · {{ stats.drawCalls }} {{ t('次绘制') }} · {{ (stats.triangles / 1000).toFixed(0) }}k {{ t('三角形') }}</span></div>
-      <div v-if="!touch">{{ t('分块') }}：{{ stats.chunks }}（{{ t('待建') }} {{ stats.pending }}）· {{ t('位置') }}：{{ stats.x }}, {{ stats.z }} {{ t('格') }}</div>
+      <div v-if="!touch">{{ t('分块') }}{{ t('：') }}{{ stats.chunks }} ({{ t('待建') }} {{ stats.pending }}) · {{ t('位置') }}{{ t('：') }}{{ stats.x }}, {{ stats.z }} {{ t('格') }}</div>
       <div v-if="!touch" class="hint">{{ t(stats.mode === 'dev' ? 'WASD 移动 · Q/E 升降 · Shift 加速 · 拖动旋转 · 滚轮缩放' : 'WASD 移动 · Shift 奔跑 · 空格跳 · 拖动转视角 · 滚轮远近 · V 切换视角 · M 地图 · E 交互 · P 拍照 · C 图鉴 · B 单车 · T 打车') }}</div>
     </template>
   </div>
@@ -40,7 +40,7 @@
     <DistrictToast :name="toast.name" :theme="toast.theme" />
     <DiscoverToast :landmark="discovered" />
     <SpeechBubble :talk="speech" />
-    <BigMap v-if="mapOpen" :game="game" :title="config.name" :here="districtName" @close="mapOpen = false" />
+    <BigMap v-if="mapOpen" :game="game" :title="isEn ? config.nameEn : config.name" :here="districtName" @close="mapOpen = false" />
     <BoatPanel v-if="boatPanel" :game="game" :pier="boatPanel" @close="boatPanel = null" @board="board" />
     <BusPanel v-if="busPanel" :game="game" :line-id="busPanel.line" :stop="busPanel.stop" @close="busPanel = null" @board="boardBus" />
     <TaxiPanel v-if="taxiPanel" :game="game" @close="taxiPanel = false" @go="takeTaxi" />
@@ -73,7 +73,8 @@ import BusPanel from './components/BusPanel.vue'
 import CharacterPanel from './components/CharacterPanel.vue'
 import MenuPanel from './components/MenuPanel.vue'
 import AboutPanel from './components/AboutPanel.vue'
-import { locale, t, tPhrase } from './i18n/index.ts'
+import { t, tPhrase } from './i18n/index.ts'
+import { isEn, nameOf } from './i18n/core.ts'
 import TaxiPanel from './components/TaxiPanel.vue'
 import CodexPanel, { type CodexTab } from './components/CodexPanel.vue'
 import CultureCard from './components/CultureCard.vue'
@@ -94,13 +95,13 @@ import type { InteractPoint } from './engine/world/interact.ts'
 import type { CultureDef } from './engine/city.ts'
 import type { Pier } from './engine/transport/BoatSystem.ts'
 import { QUALITY_ORDER, QUALITY_PRESETS, type QualityLevel } from './engine/quality.ts'
-import { CITIES, DEFAULT_CITY } from './cities/index.ts'
+import { DEFAULT_CITY, loadCity } from './cities/index.ts'
 
-const city = CITIES[DEFAULT_CITY]
+const city = loadCity(DEFAULT_CITY)
 const config = city.config
 const container = ref<HTMLDivElement | null>(null)
 const backend = ref('')
-const loading = ref('初始化渲染器…')
+const loading = ref(t('初始化渲染器…'))
 const stats = reactive<GameStats>(emptyStats())
 // 触屏设备显示摇杆和按钮
 const touch = matchMedia('(pointer: coarse)').matches
@@ -193,12 +194,12 @@ async function travel(route: Route) {
   const g = game.value
   if (!g) return
   metroPanel.value = null
-  travelText.value = '乘坐地铁…'
+  travelText.value = t('乘坐地铁…')
   try {
     const r = await g.fastTravel(route, (t) => (travelText.value = t))
     showNotice(r.message)
   } catch (e) {
-    showNotice('乘车出错：' + (e instanceof Error ? e.message : String(e)))
+    showNotice(t('乘车出错：') + (e instanceof Error ? e.message : String(e)))
     console.error(e)
   } finally {
     travelText.value = ''
@@ -212,7 +213,7 @@ async function interiorGo(go: string) {
   const g = game.value
   if (!g?.interior?.active || travelText.value) return
   const verb = go.split(':')[0]!
-  const fade = GO_TEXT[verb]
+  const fade = GO_TEXT[verb] && t(GO_TEXT[verb])
   if (fade) {
     travelText.value = fade
     await new Promise((r) => setTimeout(r, 350))
@@ -222,7 +223,7 @@ async function interiorGo(go: string) {
   if (r.notice) showNotice(r.notice)
   if (r.map) openMetro(g.interior.station, true)
   if (r.leave !== undefined) {
-    travelText.value = '出站…'
+    travelText.value = t('出站…')
     try {
       showNotice(await g.leaveStation(r.leave, (t) => (travelText.value = t)))
     } finally {
@@ -234,7 +235,7 @@ async function interiorGo(go: string) {
 async function enterStation(station: number, entrance: number) {
   const g = game.value
   if (!g || travelText.value) return
-  travelText.value = '进站…'
+  travelText.value = t('进站…')
   await new Promise((r) => setTimeout(r, 450))
   g.enterStation(station, entrance)
   travelText.value = ''
@@ -245,7 +246,7 @@ async function board(berth: Pier) {
   const g = game.value
   if (!g) return
   boatPanel.value = null
-  travelText.value = '上船…'
+  travelText.value = t('上船…')
   await new Promise((r) => setTimeout(r, 700))
   const r = g.boardBoat(berth)
   travelText.value = ''
@@ -255,7 +256,7 @@ async function board(berth: Pier) {
 async function skipRide() {
   const g = game.value
   if (!g?.ride && !g?.busRide) return
-  travelText.value = g.busRide ? '巴士到站了…' : '船靠岸了…'
+  travelText.value = t(g.busRide ? '巴士到站了…' : '船靠岸了…')
   try {
     await g.skipRide((t) => (travelText.value = t))
     await new Promise((r) => setTimeout(r, 800))
@@ -269,7 +270,7 @@ async function boardBus(line: string, from: number, to: number) {
   const g = game.value
   if (!g) return
   busPanel.value = null
-  travelText.value = '等车…'
+  travelText.value = t('等车…')
   await new Promise((r) => setTimeout(r, 700))
   const r = g.boardBus(line, from, to)
   travelText.value = ''
@@ -286,14 +287,14 @@ function toggleBike() {
 function openTaxi() {
   const g = game.value
   if (!g) return
-  if (!g.canHailTaxi) return showNotice('要走到马路边才能打到车')
+  if (!g.canHailTaxi) return showNotice(t('要走到马路边才能打到车'))
   taxiPanel.value = true
 }
 async function takeTaxi(id: string) {
   const g = game.value
   if (!g) return
   taxiPanel.value = false
-  travelText.value = '上车…'
+  travelText.value = t('上车…')
   try {
     showNotice((await g.taxi(id, (t) => (travelText.value = t))).message)
   } finally {
@@ -305,7 +306,7 @@ async function takeTaxi(id: string) {
 async function rideElevator(p: InteractPoint) {
   const g = game.value
   if (!g || travelText.value) return
-  travelText.value = p.action === '下楼' ? '电梯下行…' : '电梯上行…'
+  travelText.value = t(p.action === '下楼' ? '电梯下行…' : '电梯上行…')
   await new Promise((r) => setTimeout(r, 900))
   const text = g.rideElevator(p)
   travelText.value = ''
@@ -344,17 +345,13 @@ function cycleQuality() {
 
 // 区名：进入新的区时弹出提示（docs/06 P1 验收）
 type DistrictId = keyof typeof config.districts
-// 英文模式下的地名（城市包的 namesEn），没有就用中文
-const enDistrict = (id: string) => (locale.value === 'en' ? city.namesEn?.districts[id] : undefined)
-const placeName = (id: string, zh: string) => (locale.value === 'en' ? (city.namesEn?.landmarks[id] ?? zh) : zh)
-const districtName = computed(() => (stats.district ? (enDistrict(stats.district)?.[0] ?? config.districts[stats.district as DistrictId]?.name ?? null) : null))
+const districtName = computed(() => (stats.district ? (config.districts[stats.district as DistrictId]?.name ?? null) : null))
 const toast = reactive({ name: '', theme: '' })
 watch(
   () => stats.district,
   (id) => {
     const d = id ? config.districts[id as DistrictId] : null
-    const en = id ? enDistrict(id) : undefined
-    if (d) Object.assign(toast, { name: en?.[0] ?? d.name, theme: en?.[1] ?? d.theme })
+    if (d) Object.assign(toast, { name: d.name, theme: d.theme })
   }
 )
 
@@ -413,9 +410,12 @@ onMounted(async () => {
     // 地铁成就、线路徽章、每日任务
     g.onProgress = (gain) => {
       const parts = [
-        ...gain.achievements.map((id) => `🏅 达成成就：${ACHIEVEMENTS.find((a) => a.id === id)?.name ?? id}`),
-        ...gain.badges.map((id) => `点亮线路徽章：${g.metro?.lineById.get(id)?.name ?? id}`),
-        ...gain.daily.map((id) => `每日任务完成：${g.dailyTasks().find((t) => t.id === id)?.title ?? id} +¥${DAILY_REWARD}`)
+        ...gain.achievements.map((id) => t('🏅 达成成就：{name}', { name: ACHIEVEMENTS.find((a) => a.id === id)?.name ?? id })),
+        ...gain.badges.map((id) => {
+          const line = g.metro?.lineById.get(id)
+          return t('点亮线路徽章：{name}', { name: line ? nameOf(line) : id })
+        }),
+        ...gain.daily.map((id) => t('每日任务完成：{name} +¥{n}', { name: g.dailyTasks().find((d) => d.id === id)?.title ?? id, n: DAILY_REWARD }))
       ]
       if (parts.length) showNotice(parts.join('　'))
     }
@@ -423,20 +423,22 @@ onMounted(async () => {
     const content = city.content
     g.onLife = (gain) => {
       const parts = [
-        ...gain.foods.map((id) => `🥢 美食图鉴 +1：${content.foods.find((f) => f.id === id)?.name ?? id}`),
-        ...gain.items.map((id) => `🎒 得到纪念品：${content.souvenirs.find((s) => s.id === id)?.name ?? id}`),
-        ...gain.culture.map((id) => `📜 文化图鉴解锁：${content.culture.find((c) => c.id === id)?.name ?? id}`)
+        ...gain.foods.map((id) => t('🥢 美食图鉴 +1：{name}', { name: content.foods.find((f) => f.id === id)?.name ?? id })),
+        ...gain.items.map((id) => t('🎒 得到纪念品：{name}', { name: content.souvenirs.find((s) => s.id === id)?.name ?? id })),
+        ...gain.culture.map((id) => t('📜 文化图鉴解锁：{name}', { name: content.culture.find((c) => c.id === id)?.name ?? id }))
       ]
       if (parts.length) showNotice(parts.join('　'))
     }
     // 任务：完成发奖励；新手任务往前一步时提示下一步
     g.onQuest = ({ completed, advanced }) => {
-      const parts = completed.map((q) => (q.kind === 'novice' ? `🎉 新手任务完成：${q.name} +¥${q.reward}` : `🎯 完成任务“${q.name}” +¥${q.reward}${q.badge ? ` · 徽章“${q.badge}”` : ''}`))
+      const parts = completed.map((q) =>
+        q.kind === 'novice' ? t('🎉 新手任务完成：{name} +¥{n}', { name: q.name, n: q.reward }) : t('🎯 完成任务“{name}” +¥{n}', { name: q.name, n: q.reward }) + (q.badge ? t(' · 徽章“{badge}”', { badge: q.badge }) : '')
+      )
       for (const q of advanced) {
         if (q.kind !== 'novice') continue
         const k = g.life.quests[q.id]?.step ?? 0
         const next = q.steps[k]
-        if (next) parts.push(`📌 新手任务 ${k + 1}/${q.steps.length}：${next.text}`)
+        if (next) parts.push(t('📌 新手任务 {k}/{n}：{text}', { k: k + 1, n: q.steps.length, text: next.text }))
       }
       for (const p of parts) showNotice(p)
     }
@@ -448,14 +450,19 @@ onMounted(async () => {
       showDiscover({
         id: `walk:${route.def.id}:${index}`,
         name: s.name,
-        kicker: kind === 'start' ? `🚶 开始 Citywalk · ${route.def.name}` : kind === 'done' ? `🏅 走完 Citywalk · 获得徽章“${route.def.badge}”` : `🚶 Citywalk 打卡 ${index + 1}/${n}`,
+        kicker:
+          kind === 'start'
+            ? t('🚶 开始 Citywalk · {name}', { name: route.def.name })
+            : kind === 'done'
+              ? t('🏅 走完 Citywalk · 获得徽章“{badge}”', { badge: route.def.badge })
+              : t('🚶 Citywalk 打卡 {k}/{n}', { k: index + 1, n }),
         district: route.def.area,
         desc: s.text,
-        tip: next ? `下一站：${next.name}（跟着地上的步道和绿色标记走）` : ''
+        tip: next ? t('下一站：{name}（跟着地上的步道和绿色标记走）', { name: next.name }) : ''
       })
     }
     g.onDiscover = ({ def }) =>
-      showDiscover({ id: def.id, name: placeName(def.id, def.name), grade: def.grade, district: enDistrict(def.district)?.[0] ?? config.districts[def.district as DistrictId]?.name ?? '', desc: def.desc, tip: def.tip ?? '' })
+      showDiscover({ id: def.id, name: def.name, grade: def.grade, district: config.districts[def.district as DistrictId]?.name ?? '', desc: def.desc, tip: def.tip ?? '' })
     g.start()
     // 引擎状态按 5 Hz 同步到界面（docs/07 第 5 节）
     timer = window.setInterval(() => Object.assign(stats, g.stats), 200)
@@ -501,7 +508,7 @@ onMounted(async () => {
       }
     })
   } catch (e) {
-    loading.value = '初始化失败：' + (e instanceof Error ? e.message : String(e))
+    loading.value = t('初始化失败：') + (e instanceof Error ? e.message : String(e))
     console.error(e)
   }
 })
@@ -580,6 +587,15 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: flex-end;
   gap: 6px;
+}
+
+/* 横屏手机高度不够：侧栏按钮排成两列，不压住右下角的跳、跑按钮 */
+@media (max-height: 480px) {
+  .side {
+    display: grid;
+    grid-template-columns: repeat(2, auto);
+    justify-items: end;
+  }
 }
 
 .side button {

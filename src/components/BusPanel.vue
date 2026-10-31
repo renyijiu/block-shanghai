@@ -2,18 +2,18 @@
   <div class="bus" @click.self="emit('close')">
     <div class="card">
       <div class="head">
-        <b>🚌 {{ line.name }} · {{ here }}站</b>
-        <button class="close" title="关闭（Esc）" @click="emit('close')">✕</button>
+        <b>🚌 {{ t('{line} · {stop}站', { line: line.name, stop: here }) }}</b>
+        <button class="close" :title="t('关闭（Esc）')" @click="emit('close')">✕</button>
       </div>
-      <p class="intro">双层敞篷观光巴士，到头掉头往回开；坐在二层能看街景，也可以跳过直接到站。{{ hours }}，每 {{ headway }} 分钟一班。</p>
+      <p class="intro">{{ t('双层敞篷观光巴士，到头掉头往回开；坐在二层能看街景，也可以跳过直接到站。{hours}，每 {m} 分钟一班。', { hours, m: headway }) }}</p>
       <div v-for="r in rows" :key="r.to" class="row">
         <div class="info">
-          <div class="name">去 {{ r.name }} <small>{{ r.dir }}</small></div>
-          <div class="meta">下一班 {{ r.next }}{{ r.wait > 0 ? `（${r.wait} 分钟后）` : '（马上来）' }} · 车程约 {{ r.minutes }} 分钟</div>
+          <div class="name">{{ t('去 {stop}', { stop: r.name }) }} <small>{{ r.dir }}</small></div>
+          <div class="meta">{{ t('下一班 {time}', { time: r.next }) }}{{ r.wait > 0 ? t('（{m} 分钟后）', { m: r.wait }) : t('（马上来）') }} · {{ t('车程约 {m} 分钟', { m: r.minutes }) }}</div>
         </div>
-        <button class="go" :disabled="money < line.fare" @click="emit('board', line.id, stop, r.to)">上车 ¥{{ line.fare }}</button>
+        <button class="go" :disabled="money < line.fare" @click="emit('board', line.id, stop, r.to)">{{ t('上车') }} ¥{{ line.fare }}</button>
       </div>
-      <div v-if="money < line.fare" class="hint">钱包里只有 {{ money }} 元</div>
+      <div v-if="money < line.fare" class="hint">{{ t('钱包里只有 {money} 元', { money }) }}</div>
     </div>
   </div>
 </template>
@@ -23,6 +23,7 @@ import { computed, onBeforeUnmount, onMounted } from 'vue'
 import type { Game } from '../engine/Game.ts'
 import { formatClock } from '../engine/state/clock.ts'
 import { nextBus } from '../engine/transport/buses.ts'
+import { t } from '../i18n/index.ts'
 
 const props = defineProps<{ game: Game; lineId: string; stop: number }>()
 const emit = defineEmits<{ close: []; board: [line: string, from: number, to: number] }>()
@@ -34,12 +35,12 @@ const headway = Math.round(line.headway / 60)
 
 // 去别的每一站：方向、下一班、车程
 const rows = computed(() => {
-  const t = props.game.clock.seconds
+  const now = props.game.clock.seconds
   return line.stops.flatMap((s, i) => {
     if (i === props.stop) return []
-    const n = nextBus(line, props.stop, i, t)
+    const n = nextBus(line, props.stop, i, now)
     const end = line.stops[n.dir === 0 ? line.stops.length - 1 : 0]!.name
-    return [{ to: i, name: s.name, dir: `往${end}方向`, next: formatClock(n.board % 86400), wait: Math.round((n.board - t) / 60), minutes: Math.round((n.arrive - n.board) / 60) }]
+    return [{ to: i, name: s.name, dir: t('往{end}方向', { end }), next: formatClock(n.board % 86400), wait: Math.round((n.board - now) / 60), minutes: Math.round((n.arrive - n.board) / 60) }]
   })
 })
 

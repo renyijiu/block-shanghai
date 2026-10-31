@@ -38,6 +38,7 @@ import { loadSave, NEW_GAME, writeSave } from './state/save.ts'
 import { createWorldMaterials, type WorldMaterials } from './world/materials.ts'
 import { nearestGroundRoad, nearGroundRoad, walkable } from './world/queries.ts'
 import { WorldData } from './world/WorldData.ts'
+import { nameOf, tr } from '../i18n/core.ts'
 
 export { CHUNK_SIZE }
 
@@ -276,8 +277,8 @@ export class Game {
    */
   async init(onProgress?: (text: string) => void): Promise<RenderBackend> {
     await this.renderer.init()
-    onProgress?.('加载地图数据…')
-    const [world, metro] = await Promise.all([WorldData.load(this.city.data, (d, t) => onProgress?.(`加载地图数据 ${d}/${t}`)), MetroSystem.load(this.city.data.metro)])
+    onProgress?.(tr('加载地图数据…'))
+    const [world, metro] = await Promise.all([WorldData.load(this.city.data, (d, t) => onProgress?.(tr('加载地图数据 {d}/{t}', { d, t }))), MetroSystem.load(this.city.data.metro)])
     if (this.disposed) return this.backend
     this.world = world
     this.metro = metro
@@ -385,7 +386,7 @@ export class Game {
     // 开局直接是当时的天气，不从晴天过渡
     this.weather = this.weatherOverride ?? weatherAt(new Date(), this.clock.seconds)
     this.weatherLook = lookOf(this.weather)
-    await this.chunks.prebuild(focus.x, focus.z, (d, t) => onProgress?.(`生成城市 ${d}/${t}`))
+    await this.chunks.prebuild(focus.x, focus.z, (d, t) => onProgress?.(tr('生成城市 {d}/{t}', { d, t })))
     // 碰撞盒随分块建好以后再放人，被占着就找最近的空位
     if (!this.devCamera) {
       this.player.spawn(focus.x, focus.z, this.playerWorld)
@@ -420,8 +421,8 @@ export class Game {
    */
   async fastTravel(route: Route, onProgress?: (text: string) => void): Promise<TravelResult> {
     const metro = this.metro
-    if (!metro || !this.playerWorld || !this.chunks) return { ok: false, message: '地铁还没准备好' }
-    if (this.money < route.fare) return { ok: false, message: `余额不足：票价 ${route.fare} 元，钱包里只有 ${this.money} 元` }
+    if (!metro || !this.playerWorld || !this.chunks) return { ok: false, message: tr('地铁还没准备好') }
+    if (this.money < route.fare) return { ok: false, message: tr('余额不足：票价 {fare} 元，钱包里只有 {money} 元', { fare: route.fare, money: this.money }) }
     // 从站厅的线路图快速到达：先离开站内场景
     if (this.interior?.active) this.exitInterior()
     const stations = metro.data.stations
@@ -445,15 +446,15 @@ export class Game {
     this.player.pos.set(x, 0, z)
     this.landmarks?.update(x, z)
     try {
-      await this.chunks.prebuild(x, z, (d, t) => onProgress?.(`前往 ${dest.name}站 ${d}/${t}`))
+      await this.chunks.prebuild(x, z, (d, t) => onProgress?.(tr('前往 {station}站 {d}/{t}', { station: nameOf(dest), d, t })))
       this.player.spawn(x, z, this.playerWorld)
       this.player.model.position.copy(this.player.pos)
     } finally {
       this.traveling = false
     }
     this.saveNow()
-    const exitName = exit?.ref ? ` ${exit.ref} 号口` : ''
-    return { ok: true, message: `到达 ${dest.name}站${exitName} · 用时 ${Math.round(route.minutes)} 分钟 · ${route.fare} 元` }
+    const exitName = exit?.ref ? tr(' {ref} 号口', { ref: exit.ref }) : ''
+    return { ok: true, message: tr('到达 {station}站{exit} · 用时 {m} 分钟 · {fare} 元', { station: nameOf(dest), exit: exitName, m: Math.round(route.minutes), fare: route.fare }) }
   }
 
   /**
@@ -481,9 +482,9 @@ export class Game {
    */
   boardBoat(berth: Pier): TravelResult {
     const boats = this.boats
-    if (!boats || this.ride) return { ok: false, message: '现在不能上船' }
+    if (!boats || this.ride) return { ok: false, message: tr('现在不能上船') }
     const line = berth.line
-    if (this.money < line.fare) return { ok: false, message: `余额不足：船票 ${line.fare} 元，钱包里只有 ${this.money} 元` }
+    if (this.money < line.fare) return { ok: false, message: tr('余额不足：船票 {fare} 元，钱包里只有 {money} 元', { fare: line.fare, money: this.money }) }
     this.returnBike()
     const ride = boats.board(berth, this.clock.seconds)
     // 等船：快进到开船前半分钟
@@ -493,8 +494,8 @@ export class Game {
     this.ride = ride
     this.prompt = null
     this.saveNow()
-    const to = line.kind === 'ferry' ? `开往${ride.to.name}` : (line.route ?? '往返')
-    return { ok: true, message: `${line.name} · ${to} · ${line.fare} 元${wait > 60 ? ` · 等了 ${Math.round(wait / 60)} 分钟` : ''}` }
+    const to = line.kind === 'ferry' ? tr('开往{to}', { to: ride.to.name }) : (line.route ?? tr('往返'))
+    return { ok: true, message: tr('{line} · {to} · {fare} 元', { line: line.name, to, fare: line.fare }) + (wait > 60 ? tr(' · 等了 {m} 分钟', { m: Math.round(wait / 60) }) : '') }
   }
 
   // 天气：每秒按日期和游戏时间算一次该是什么天气；画面参数约 8 秒过渡过去
@@ -573,15 +574,15 @@ export class Game {
     const food = c.foods.find((f) => f.id === itemId)
     const gift = c.souvenirs.find((s) => s.id === itemId)
     const price = food?.price ?? gift?.price
-    if (!shop?.items.includes(itemId) || price === undefined) return { ok: false, message: '这家店不卖这个' }
-    if (food && !foodAvailable(food, new Date(), this.clock.daySeconds / 3600)) return { ok: false, message: `${food.name}现在不卖` }
-    if (this.money < price) return { ok: false, message: `余额不足：${price} 元，钱包里只有 ${this.money} 元` }
+    if (!shop?.items.includes(itemId) || price === undefined) return { ok: false, message: tr('这家店不卖这个') }
+    if (food && !foodAvailable(food, new Date(), this.clock.daySeconds / 3600)) return { ok: false, message: tr('{food}现在不卖', { food: food.name }) }
+    if (this.money < price) return { ok: false, message: tr('余额不足：{price} 元，钱包里只有 {money} 元', { price, money: this.money }) }
     this.money -= price
     if (food) this.lifeEvent({ type: 'eat', food: food.id, shop: shop.id })
     else this.lifeEvent({ type: 'buy', item: itemId })
     this.clock.addMinutes(food ? 10 : 2)
     this.saveNow()
-    return { ok: true, message: food ? `吃了${food.name} · ${price} 元` : `买了${gift!.name} · ${price} 元，放进背包` }
+    return { ok: true, message: food ? tr('吃了{food} · {price} 元', { food: food.name, price }) : tr('买了{item} · {price} 元，放进背包', { item: gift!.name, price }) }
   }
 
   // Citywalk：走到打卡点上按顺序打卡，走完记一次 citywalk 事件（解锁文化图鉴）
@@ -670,7 +671,7 @@ export class Game {
     this.traveling = true
     this.player.pos.set(x, 0, z)
     try {
-      await this.chunks.prebuild(x, z, (d, t) => onProgress?.(`出站 ${d}/${t}`))
+      await this.chunks.prebuild(x, z, (d, t) => onProgress?.(tr('出站 {d}/{t}', { d, t })))
       this.landmarks?.update(x, z)
       this.player.spawn(x, z, this.playerWorld)
       this.player.model.position.copy(this.player.pos)
@@ -678,7 +679,7 @@ export class Game {
       this.traveling = false
     }
     this.saveNow()
-    return `${st.name}站 ${e.ref ? `${e.ref} 号口` : ''}出站`
+    return e.ref ? tr('{station}站 {ref} 号口出站', { station: nameOf(st), ref: e.ref }) : tr('{station}站出站', { station: nameOf(st) })
   }
 
   /** 玩家在城市地图上的位置（在地铁站里时是这个站的出入口） */
@@ -762,7 +763,7 @@ export class Game {
       this.traveling = true
       this.player.pos.set(s.x, 0, s.z)
       try {
-        await this.chunks.prebuild(s.x, s.z, (d, t) => onProgress?.(`前往 ${s.name}站 ${d}/${t}`))
+        await this.chunks.prebuild(s.x, s.z, (d, t) => onProgress?.(tr('前往 {station}站 {d}/{t}', { station: s.name, d, t })))
       } finally {
         this.traveling = false
       }
@@ -774,8 +775,8 @@ export class Game {
   boardBus(lineId: string, from: number, to: number): TravelResult {
     const buses = this.buses
     const line = buses?.line(lineId)
-    if (!buses || !line || this.ride || this.busRide) return { ok: false, message: '现在不能上车' }
-    if (this.money < line.fare) return { ok: false, message: `余额不足：车票 ${line.fare} 元，钱包里只有 ${this.money} 元` }
+    if (!buses || !line || this.ride || this.busRide) return { ok: false, message: tr('现在不能上车') }
+    if (this.money < line.fare) return { ok: false, message: tr('余额不足：车票 {fare} 元，钱包里只有 {money} 元', { fare: line.fare, money: this.money }) }
     this.returnBike()
     const ride = buses.board(line, from, to, this.clock.seconds)
     const wait = ride.board - this.clock.seconds
@@ -784,7 +785,7 @@ export class Game {
     this.busRide = ride
     this.prompt = null
     this.saveNow()
-    return { ok: true, message: `${line.name} · 开往${line.stops[to]!.name} · ${line.fare} 元${wait > 60 ? ` · 等了 ${Math.round(wait / 60)} 分钟` : ''}` }
+    return { ok: true, message: tr('{line} · 开往{to} · {fare} 元', { line: line.name, to: line.stops[to]!.name, fare: line.fare }) + (wait > 60 ? tr(' · 等了 {m} 分钟', { m: Math.round(wait / 60) }) : '') }
   }
 
   // 坐巴士：车到之前站在站牌下，上车后站在二层敞篷上跟着走，到站下车
@@ -798,7 +799,7 @@ export class Game {
       this.player.model.position.copy(this.player.pos)
       this.lifeEvent({ type: 'stat', key: 'bus' })
       this.saveNow()
-      this.onRideEnd?.(`${ride.line.name} · 到达 ${s.name}`)
+      this.onRideEnd?.(tr('{line} · 到达 {stop}', { line: ride.line.name, stop: s.name }))
       return
     }
     const seat = t >= ride.board ? buses.seat(ride, t) : null
@@ -818,12 +819,12 @@ export class Game {
   toggleBike(): TravelResult {
     if (this.bike) return { ok: true, message: this.returnBike() }
     const p = this.player.pos
-    if (this.interior?.active || this.ride || this.busRide || this.traveling || p.y > 1) return { ok: false, message: '这里扫不了共享单车' }
-    if (!this.world || !nearGroundRoad(this.world, p.x, p.z, 2.5)) return { ok: false, message: '共享单车要在马路边扫码，只能在马路上骑' }
-    if (this.money < 1.5) return { ok: false, message: `余额不足：钱包里只有 ${this.money} 元` }
+    if (this.interior?.active || this.ride || this.busRide || this.traveling || p.y > 1) return { ok: false, message: tr('这里扫不了共享单车') }
+    if (!this.world || !nearGroundRoad(this.world, p.x, p.z, 2.5)) return { ok: false, message: tr('共享单车要在马路边扫码，只能在马路上骑') }
+    if (this.money < 1.5) return { ok: false, message: tr('余额不足：钱包里只有 {money} 元', { money: this.money }) }
     this.bike = { since: this.clock.seconds }
     this.player.setRiding(true)
-    return { ok: true, message: '扫码开锁 · 每 15 分钟 1.5 元，只能在马路上骑（B 还车）' }
+    return { ok: true, message: tr('扫码开锁 · 每 15 分钟 1.5 元，只能在马路上骑（B 还车）') }
   }
 
   /** 还车，返回提示；没骑车返回空串 */
@@ -836,7 +837,7 @@ export class Game {
     this.player.setRiding(false)
     this.lifeEvent({ type: 'stat', key: 'bike' })
     this.saveNow()
-    return `还车 · 骑了 ${Math.max(1, Math.round(minutes))} 分钟 · ${fare} 元`
+    return tr('还车 · 骑了 {m} 分钟 · {fare} 元', { m: Math.max(1, Math.round(minutes)), fare })
   }
 
   private bikeFare(minutes: number) {
@@ -867,10 +868,10 @@ export class Game {
   /** 打车去某个景点：扣车费、按车程推进时钟，在景点旁边的马路上下车 */
   async taxi(landmarkId: string, onProgress?: (text: string) => void): Promise<TravelResult> {
     const dest = this.landmarks?.byId(landmarkId)
-    if (!dest || !this.chunks || !this.playerWorld || !this.world) return { ok: false, message: '找不到这个地方' }
-    if (!this.canHailTaxi) return { ok: false, message: '要走到马路边才能打到车' }
+    if (!dest || !this.chunks || !this.playerWorld || !this.world) return { ok: false, message: tr('找不到这个地方') }
+    if (!this.canHailTaxi) return { ok: false, message: tr('要走到马路边才能打到车') }
     const q = this.taxiQuote(dest.x, dest.z)
-    if (this.money < q.fare) return { ok: false, message: `余额不足：车费约 ${q.fare} 元，钱包里只有 ${this.money} 元` }
+    if (this.money < q.fare) return { ok: false, message: tr('余额不足：车费约 {fare} 元，钱包里只有 {money} 元', { fare: q.fare, money: this.money }) }
     this.returnBike()
     // 在离景点最近的马路边下车
     const road = nearestGroundRoad(this.world, dest.x, dest.z, 120)
@@ -887,7 +888,7 @@ export class Game {
     this.player.pos.set(x, 0, z)
     this.landmarks?.update(x, z)
     try {
-      await this.chunks.prebuild(x, z, (d, t) => onProgress?.(`打车去${dest.def.name} ${d}/${t}`))
+      await this.chunks.prebuild(x, z, (d, t) => onProgress?.(tr('打车去{place} {d}/{t}', { place: dest.def.name, d, t })))
       this.player.spawn(x, z, this.playerWorld)
       this.player.model.position.copy(this.player.pos)
       // 面朝景点
@@ -897,7 +898,7 @@ export class Game {
     }
     this.lifeEvent({ type: 'stat', key: 'taxi' })
     this.saveNow()
-    return { ok: true, message: `到达${dest.def.name} · ${q.km} 公里 · ${q.minutes} 分钟 · ${q.fare} 元` }
+    return { ok: true, message: tr('到达{place} · {km} 公里 · {m} 分钟 · {fare} 元', { place: dest.def.name, km: q.km, m: q.minutes, fare: q.fare }) }
   }
 
   // 坐船：玩家跟着船走，到站下船
@@ -912,7 +913,7 @@ export class Game {
       this.lifeEvent({ type: 'stat', key: `boat:${ride.line.id}` })
       this.lifeEvent({ type: 'stat', key: `boat:${ride.line.kind}` })
       this.saveNow()
-      this.onRideEnd?.(ride.line.kind === 'ferry' ? `到达 ${ride.to.name}` : `${ride.line.name}结束，回到${ride.to.name}`)
+      this.onRideEnd?.(ride.line.kind === 'ferry' ? tr('到达 {to}', { to: ride.to.name }) : tr('{line}结束，回到{to}', { line: ride.line.name, to: ride.to.name }))
       return
     }
     const s = this.boats!.seat(ride, t)
@@ -1230,14 +1231,14 @@ export class Game {
       ride: this.ride
         ? {
             name: this.ride.line.name,
-            to: this.ride.line.kind === 'ferry' ? `开往${this.ride.to.name}` : `回到${this.ride.to.name}`,
+            to: this.ride.line.kind === 'ferry' ? tr('开往{to}', { to: this.ride.to.name }) : tr('回到{to}', { to: this.ride.to.name }),
             minutes: Math.max(0, Math.ceil((this.ride.arrive - this.clock.seconds) / 60)),
             sailing: this.clock.seconds >= this.ride.dep
           }
         : this.busRide
           ? {
               name: this.busRide.line.name,
-              to: `开往${this.busRide.line.stops[this.busRide.to]!.name}`,
+              to: tr('开往{to}', { to: this.busRide.line.stops[this.busRide.to]!.name }),
               minutes: Math.max(0, Math.ceil((this.busRide.arrive - this.clock.seconds) / 60)),
               sailing: this.clock.seconds >= this.busRide.board
             }

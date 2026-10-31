@@ -2,10 +2,10 @@
   <Transition name="say">
     <div v-if="shown" :key="shown.key" class="bubble">
       <div class="who">
-        {{ shown.talk.name }}<span class="tag">{{ SPEECH[shown.talk.speech] }}</span>
+        {{ shown.talk.name }}<span class="tag">{{ t(SPEECH[shown.talk.speech]) }}</span>
       </div>
       <div class="text">{{ shown.talk.line.text }}</div>
-      <div v-if="shown.talk.line.gloss" class="gloss">（{{ shown.talk.line.gloss }}）</div>
+      <div v-if="shown.talk.line.gloss" class="gloss">{{ t('（{gloss}）', { gloss: shown.talk.line.gloss }) }}</div>
     </div>
   </Transition>
 </template>
@@ -13,6 +13,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from 'vue'
 import type { Talk } from '../engine/actors/NPCManager.ts'
+import { t } from '../i18n/index.ts'
 
 // 路人说的话：上海话下面带普通话意思，5 秒后消失
 const props = defineProps<{ talk: { talk: Talk; key: number } | null }>()

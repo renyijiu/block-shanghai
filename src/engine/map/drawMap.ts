@@ -2,6 +2,7 @@
 // 缩得很小时（看全市）改用一张预先画好的全图底图，避免每次重画几千个分块的矢量数据
 import { CHUNK_SIZE, chunkKey, chunkOf } from '../world/chunks.ts'
 import type { AreaLayer, DistrictLayer, FlatRing, RoadLayer, WorldMeta } from '../world/data.ts'
+import { tr } from '../../i18n/core.ts'
 
 export interface MapData {
   meta: WorldMeta
@@ -212,8 +213,9 @@ function drawOverlays(ctx: CanvasRenderingContext2D, data: MapData, view: MapVie
     ctx.fillStyle = MAP_COLORS.label
     for (const d of data.districts.districts) {
       const [x, y] = [sx(d.label[0]), sz(d.label[1])]
-      ctx.strokeText(d.name, x, y)
-      ctx.fillText(d.name, x, y)
+      const name = tr(d.name)
+      ctx.strokeText(name, x, y)
+      ctx.fillText(name, x, y)
     }
   }
 }

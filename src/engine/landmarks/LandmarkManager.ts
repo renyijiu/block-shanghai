@@ -7,6 +7,7 @@ import { orientedBox, type Box, type CollisionWorld } from '../geo/CollisionWorl
 import type { Projection } from '../geo/projection.ts'
 import type { InteractPoint, InteractRegistry } from '../world/interact.ts'
 import type { Lot } from '../world/lots.ts'
+import { tr } from '../../i18n/core.ts'
 import type { WorldMaterials } from '../world/materials.ts'
 
 /** 摆到世界里的景点 */
@@ -134,15 +135,16 @@ export class LandmarkBuilder implements LandmarkContext {
     this.decks.push({ ...orientedBox(wx, wz, this.p.def.rot, x1 - x0, z1 - z0, y - 0.4, y), deck: true })
   }
 
-  elevator(x: number, z: number, tx: number, ty: number, tz: number, deck: string) {
+  elevator(x: number, z: number, tx: number, ty: number, tz: number, deckZh: string) {
     const name = this.p.def.name
+    const deck = tr(deckZh)
     const [bx, bz] = this.p.toWorld(x, z)
     const [wx, wz] = this.p.toWorld(tx, tz)
     const kind = 'elevator'
     const landmark = this.p.def.id
-    this.points.push({ x: bx, z: bz, r: 5, label: `${name} · 电梯去${deck}`, action: '乘电梯', kind, landmark, target: { x: wx, y: ty, z: wz }, arrive: `${name} · ${deck}` })
+    this.points.push({ x: bx, z: bz, r: 5, label: tr('{name} · 电梯去{deck}', { name, deck }), action: '乘电梯', kind, landmark, target: { x: wx, y: ty, z: wz }, arrive: `${name} · ${deck}` })
     // 顶上的电梯口：回到地面
-    this.points.push({ x: wx, z: wz, r: 6, y: ty, label: `${name} · 电梯回地面`, action: '下楼', kind, landmark, target: { x: bx, y: 0, z: bz }, arrive: `${name} · 回到地面` })
+    this.points.push({ x: wx, z: wz, r: 6, y: ty, label: tr('{name} · 电梯回地面', { name }), action: '下楼', kind, landmark, target: { x: bx, y: 0, z: bz }, arrive: tr('{name} · 回到地面', { name }) })
   }
 
   toWorld(x: number, z: number): [number, number] {

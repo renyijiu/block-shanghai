@@ -20,6 +20,7 @@ import { WORLD_COLORS, type WorldMaterials } from './materials.ts'
 import { isWater } from './queries.ts'
 import type { Season } from '../sky/weather.ts'
 import type { WorldData } from './WorldData.ts'
+import { nameOf, tr } from '../../i18n/core.ts'
 
 /** 生成分块需要的外部依赖 */
 export interface ChunkContext {
@@ -264,8 +265,8 @@ export class ChunkManager {
       const ent = metro.entrances[e]!
       const st = metro.stations[ent.station]!
       buildEntrance(b, entranceFootprint(metro, e))
-      const exit = ent.ref ? `${ent.ref} 号口` : '出入口'
-      points.push({ x: ent.pos[0], z: ent.pos[1], r: 5, label: `${st.name}站 · ${exit}`, action: '进站', kind: 'metro', station: ent.station, entrance: e })
+      const exit = ent.ref ? tr('{ref} 号口', { ref: ent.ref }) : tr('出入口')
+      points.push({ x: ent.pos[0], z: ent.pos[1], r: 5, label: tr('{station}站 · {exit}', { station: nameOf(st), exit }), action: '进站', kind: 'metro', station: ent.station, entrance: e })
     }
     const color = (id: string) => hexColor(metro.lines.find((l) => l.id === id)?.color ?? '#888888')
     for (const si of mc.stations) {

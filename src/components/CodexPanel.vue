@@ -2,13 +2,13 @@
   <div class="codex">
     <div class="top">
       <div class="tabs">
-        <button :class="{ on: tab === 'codex' }" @click="tab = 'codex'">图鉴 {{ shotCount }}/{{ total }}</button>
-        <button :class="{ on: tab === 'album' }" @click="tab = 'album'">相册 {{ photos.length }}</button>
-        <button v-if="game.metro" :class="{ on: tab === 'metro' }" @click="tab = 'metro'">地铁</button>
-        <button :class="{ on: tab === 'life' }" @click="tab = 'life'">收藏</button>
-        <button :class="{ on: tab === 'quests' }" @click="tab = 'quests'">任务</button>
+        <button :class="{ on: tab === 'codex' }" @click="tab = 'codex'">{{ t('图鉴') }} {{ shotCount }}/{{ total }}</button>
+        <button :class="{ on: tab === 'album' }" @click="tab = 'album'">{{ t('相册') }} {{ photos.length }}</button>
+        <button v-if="game.metro" :class="{ on: tab === 'metro' }" @click="tab = 'metro'">{{ t('地铁') }}</button>
+        <button :class="{ on: tab === 'life' }" @click="tab = 'life'">{{ t('收藏') }}</button>
+        <button :class="{ on: tab === 'quests' }" @click="tab = 'quests'">{{ t('任务') }}</button>
       </div>
-      <button class="close" title="关闭（Esc）" @click="emit('close')">✕</button>
+      <button class="close" :title="t('关闭（Esc）')" @click="emit('close')">✕</button>
     </div>
 
     <div v-if="tab === 'metro'" class="body">
@@ -24,15 +24,15 @@
     </div>
 
     <div v-else-if="tab === 'codex'" class="body">
-      <p class="intro">走近景点会自动“发现”；拍照时景点在画面里、没被挡住，就会解锁图鉴。外滩、豫园、人民广场的子景点可以单独拍。</p>
+      <p class="intro">{{ t('走近景点会自动“发现”；拍照时景点在画面里、没被挡住，就会解锁图鉴。外滩、豫园、人民广场的子景点可以单独拍。') }}</p>
       <section v-for="g in grades" :key="g.grade">
         <h3>{{ g.title }}</h3>
         <div class="cards">
           <div v-for="e in g.items" :key="e.id" class="card" :class="{ locked: !e.found, open: openId === e.id }" @click="openId = openId === e.id ? null : e.id">
             <div class="pic">
               <img v-if="e.thumb" :src="e.thumb" alt="" />
-              <span v-else-if="e.shot">照片已删除</span>
-              <span v-else-if="e.found">📷 还没拍到</span>
+              <span v-else-if="e.shot">{{ t('照片已删除') }}</span>
+              <span v-else-if="e.found">{{ t('📷 还没拍到') }}</span>
               <span v-else class="q">？</span>
             </div>
             <div class="info">
@@ -40,7 +40,7 @@
                 <span class="grade" :class="e.grade">{{ e.grade }}</span>
                 {{ e.found ? e.name : '？？？' }}
               </div>
-              <div class="meta">{{ e.district }} · {{ e.shot ? '已拍到' : e.found ? '已发现' : '未发现' }}</div>
+              <div class="meta">{{ e.district }} · {{ t(e.shot ? '已拍到' : e.found ? '已发现' : '未发现') }}</div>
               <div v-if="e.subs.length" class="subs">
                 <span v-for="s in e.subs" :key="s.id" :class="{ done: s.shot }">{{ s.shot ? '✓ ' : '' }}{{ e.found ? s.name : '？？？' }}</span>
               </div>
@@ -55,8 +55,8 @@
     </div>
 
     <div v-else class="body">
-      <p v-if="!game.album" class="intro">这个浏览器不能在本地保存照片（可能是隐私模式），拍的照片不会进相册，图鉴照常解锁。</p>
-      <p v-else-if="!photos.length" class="intro">还没有照片。按 P（或点“📷 拍照”）进入拍照模式。</p>
+      <p v-if="!game.album" class="intro">{{ t('这个浏览器不能在本地保存照片（可能是隐私模式），拍的照片不会进相册，图鉴照常解锁。') }}</p>
+      <p v-else-if="!photos.length" class="intro">{{ t('还没有照片。按 P（或点“📷 拍照”）进入拍照模式。') }}</p>
       <div class="grid">
         <div v-for="p in photos" :key="p.id" class="ph" @click="view(p.id)">
           <img :src="p.url" alt="" />
@@ -69,9 +69,9 @@
       <img :src="viewer.url" alt="" />
       <div class="bar">
         <span>{{ viewer.caption }}</span>
-        <a :href="viewer.url" :download="`方块上海-${viewer.id}.jpg`">下载</a>
-        <button @click="remove(viewer.id)">删除</button>
-        <button @click="closeViewer">关闭</button>
+        <a :href="viewer.url" :download="`${isEn ? 'block-shanghai' : '方块上海'}-${viewer.id}.jpg`">{{ t('下载') }}</a>
+        <button @click="remove(viewer.id)">{{ t('删除') }}</button>
+        <button @click="closeViewer">{{ t('关闭') }}</button>
       </div>
     </div>
   </div>
@@ -84,6 +84,8 @@ import { formatClock } from '../engine/state/clock.ts'
 import LifeCollection from './LifeCollection.vue'
 import MetroCollection from './MetroCollection.vue'
 import QuestPanel from './QuestPanel.vue'
+import { isEn } from '../i18n/core.ts'
+import { t } from '../i18n/index.ts'
 
 export type CodexTab = 'codex' | 'album' | 'metro' | 'life' | 'quests'
 
@@ -93,7 +95,7 @@ const game = props.game
 const tab = ref<CodexTab>(props.initialTab ?? 'codex')
 watch(
   () => props.initialTab,
-  (t) => t && (tab.value = t)
+  (v) => v && (tab.value = v)
 )
 const openId = ref<string | null>(null)
 const photos = ref<{ id: string; url: string; caption: string }[]>([])
@@ -103,8 +105,8 @@ const districts = game.city.config.districts as Record<string, { name: string } 
 
 const caption = (landmarks: string[], gameTime: number) => {
   const day = Math.floor(gameTime / 86400) + 1
-  const names = landmarks.map((id) => game.landmarkName(id)).join('、')
-  return `第 ${day} 天 ${formatClock(gameTime % 86400)}${names ? ' · ' + names : ''}`
+  const names = landmarks.map((id) => game.landmarkName(id)).join(t('、'))
+  return t('第 {day} 天 {time}', { day, time: formatClock(gameTime % 86400) }) + (names ? ' · ' + names : '')
 }
 
 // 图鉴条目：景点 + 子景点，拍到的显示照片缩略图
@@ -127,7 +129,7 @@ const total = computed(() => entries.value.reduce((n, e) => n + 1 + e.subs.lengt
 const shotCount = computed(() => entries.value.reduce((n, e) => n + (e.shot ? 1 : 0) + e.subs.filter((s) => s.shot).length, 0))
 const grades = computed(() =>
   (['S', 'A', 'B'] as const)
-    .map((grade) => ({ grade, title: { S: 'S 级 · 高度还原', A: 'A 级 · 主要建筑', B: 'B 级 · 区域氛围' }[grade], items: entries.value.filter((e) => e.grade === grade) }))
+    .map((grade) => ({ grade, title: t({ S: 'S 级 · 高度还原', A: 'A 级 · 主要建筑', B: 'B 级 · 区域氛围' }[grade]), items: entries.value.filter((e) => e.grade === grade) }))
     .filter((g) => g.items.length)
 )
 
@@ -158,7 +160,7 @@ function closeViewer() {
 }
 
 async function remove(id: string) {
-  if (!confirm('删除这张照片？图鉴不会因此重新上锁。')) return
+  if (!confirm(t('删除这张照片？图鉴不会因此重新上锁。'))) return
   await game.album?.delete(id)
   closeViewer()
   await load()

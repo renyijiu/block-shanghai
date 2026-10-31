@@ -141,7 +141,7 @@ export const people: NpcContent = {
   weatherLines: {
     rain: [{ text: '落雨了，覅忘记带伞。', gloss: '下雨了，别忘了带伞。' }],
     plum: [{ text: '黄梅天，衣裳晒勿干。', gloss: '梅雨天，衣服晒不干。' }],
-    typhoon: [{ text: '台风来了，早点回去。', gloss: '台风来了，早点回去。' }],
+    typhoon: [{ text: '台风来了，早点转去。', gloss: '台风来了，早点回去。' }],
     snow: [{ text: '上海难得落雪，快点拍照！', gloss: '上海难得下雪，快拍照！' }]
   },
   /** 晚上在外滩、陆家嘴附近说的 */
