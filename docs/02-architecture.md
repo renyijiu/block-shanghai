@@ -165,7 +165,7 @@ export default {
 | `MetroSystem` | 线网、路线规划、按时刻表算列车位置（`metro/MetroSystem.ts`）；`TrainRenderer` 负责高架列车渲染（`metro/trains.ts`）；乘车流程（P4） | ✅ |
 | `InteriorManager` | 站厅、站台、车厢、换乘通道等独立场景的构建与切换；乘车时间轴（按真实运行分钟推进时钟）、报站、出站计费，发出 `metroEnter` / `metroExit` / `metroRide` / `metroTransfer` 事件（P4） | 在室内时 |
 | `PhotoSystem` | 按快门那一帧渲染完从画布取图；滤镜按城市包参数逐像素处理（`photo/filters.ts`，取景时用 CSS filter 近似预览，像素风降低渲染分辨率）；识别景点（`photo/recognize.ts`：瞄准点在画面中间 90%、在 `photoR` 以内、视线没被碰撞盒挡住）；照片存 IndexedDB（`photo/album.ts`） | 拍照时 |
-| `Sky` | 昼夜、天气、季节、夜间材质 | ✅ |
+| `Sky` | 昼夜、天气、季节、夜间材质（`sky/weather.ts` 季节和天气的纯函数，`sky/Precipitation.ts` 雨雪粒子） | ✅ |
 | `store` | 响应式 UI 状态 + 存档 + 事件 → 任务结算 | — |
 
 ### 场景切换

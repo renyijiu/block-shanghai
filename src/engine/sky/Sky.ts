@@ -1,6 +1,9 @@
 // 昼夜：天空 / 雾的颜色、太阳和环境光随游戏时刻变化；夜里窗户亮灯，外滩、陆家嘴景观灯 18:30–22:00 亮起（docs/05 第 9 节）
 import * as THREE from 'three/webgpu'
 import { SKY_UNIFORMS } from '../world/materials.ts'
+import type { WeatherLook } from './weather.ts'
+
+const CLEAR: WeatherLook = { cloud: 0, rain: 0, snow: 0, fog: 0, wind: 0 }
 
 // 关键时刻（小时）→ 天空颜色、阳光强度、环境光强度
 const KEYS: [number, number, number, number][] = [
@@ -43,6 +46,10 @@ export class Sky {
   private readonly sun: THREE.DirectionalLight
   private readonly hemi: THREE.HemisphereLight
   state: SkyState = skyAt(12)
+  /** 晴天时雾的起止距离（画质决定），天气再往近处压 */
+  private fogNear = 500
+  private fogFar = 1000
+  private readonly gray = new THREE.Color()
 
   constructor(scene: THREE.Scene, sun: THREE.DirectionalLight, hemi: THREE.HemisphereLight) {
     this.scene = scene
@@ -50,19 +57,31 @@ export class Sky {
     this.hemi = hemi
   }
 
-  /** daySec：当天的秒 */
-  update(daySec: number) {
+  setFogRange(near: number, far: number) {
+    this.fogNear = near
+    this.fogFar = far
+  }
+
+  /** daySec：当天的秒；look：当前天气（阴天压暗、去饱和，雨雾把雾拉近） */
+  update(daySec: number, look: WeatherLook = CLEAR) {
     const h = daySec / 3600
     const s = (this.state = skyAt(h))
-    ;(this.scene.background as THREE.Color).copy(s.color)
-    ;(this.scene.fog as THREE.Fog).color.copy(s.color)
+    const l = s.color.r * 0.3 + s.color.g * 0.59 + s.color.b * 0.11
+    this.gray.setRGB(l * 0.92, l * 0.95, l * 1.0)
+    const color = s.color.clone().lerp(this.gray, look.cloud * 0.8)
+    ;(this.scene.background as THREE.Color).copy(color)
+    const fog = this.scene.fog as THREE.Fog
+    fog.color.copy(color)
+    const thick = Math.max(look.fog, look.rain * 0.5, look.snow * 0.5)
+    fog.near = this.fogNear * (1 - thick * 0.85)
+    fog.far = this.fogFar * (1 - thick * 0.6)
     // 太阳 6 点从东边升起、18 点从西边落下；夜里换成偏蓝的月光
     const a = ((h - 6) / 12) * Math.PI
     const day = h > 6 && h < 18
     this.sun.position.set(day ? Math.cos(a) * 700 : -300, day ? Math.sin(a) * 900 + 80 : 800, 400)
     this.sun.color.setHex(day ? 0xfff4e0 : 0x8fa3d8)
-    this.sun.intensity = s.sun
-    this.hemi.intensity = s.ambient
+    this.sun.intensity = s.sun * (1 - look.cloud * 0.75)
+    this.hemi.intensity = s.ambient * (1 - look.cloud * 0.2)
     SKY_UNIFORMS.night.value = s.night
     SKY_UNIFORMS.lights.value = s.lights
   }

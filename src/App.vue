@@ -4,7 +4,7 @@
     <div class="title">{{ config.name }}<span v-if="!touch"> · {{ config.nameEn }}</span></div>
     <div v-if="loading">{{ loading }}</div>
     <template v-else>
-      <div class="status">🕘 {{ stats.time }} · ¥{{ stats.money }} · 景点 {{ stats.found }}/{{ stats.landmarks }}</div>
+      <div class="status">🕘 {{ stats.time }} · {{ stats.weather }} · ¥{{ stats.money }} · 景点 {{ stats.found }}/{{ stats.landmarks }}</div>
       <div>{{ backend }} · {{ stats.fps }} fps<span v-if="!touch"> · {{ stats.drawCalls }} 次绘制 · {{ (stats.triangles / 1000).toFixed(0) }}k 三角形</span></div>
       <div v-if="!touch">分块：{{ stats.chunks }}（待建 {{ stats.pending }}）· 位置：{{ stats.x }}, {{ stats.z }} 格</div>
       <div v-if="!touch" class="hint">{{ stats.mode === 'dev' ? 'WASD 移动 · Q/E 升降 · Shift 加速 · 拖动旋转 · 滚轮缩放' : 'WASD 移动 · Shift 奔跑 · 空格跳 · 拖动转视角 · 滚轮远近 · V 切换视角 · M 地图 · E 交互 · P 拍照 · C 图鉴' }}</div>
@@ -60,7 +60,7 @@ import MetroPanel from './components/MetroPanel.vue'
 import MiniMap from './components/MiniMap.vue'
 import PhotoMode from './components/PhotoMode.vue'
 import TouchControls from './components/TouchControls.vue'
-import { Game, type GameStats } from './engine/Game.ts'
+import { emptyStats, Game, type GameStats } from './engine/Game.ts'
 import type { Route } from './engine/metro/network.ts'
 import { ACHIEVEMENTS, DAILY_REWARD } from './engine/metro/collection.ts'
 import type { InteractPoint } from './engine/world/interact.ts'
@@ -73,7 +73,7 @@ const config = city.config
 const container = ref<HTMLDivElement | null>(null)
 const backend = ref('')
 const loading = ref('初始化渲染器…')
-const stats = reactive<GameStats>({ fps: 0, drawCalls: 0, triangles: 0, chunks: 0, pending: 0, buildAvg: 0, buildMax: 0, x: 0, z: 0, mode: 'player', view: 'third', district: null, time: '', money: 0, prompt: null, found: 0, landmarks: 0, ride: null, station: null, announce: null })
+const stats = reactive<GameStats>(emptyStats())
 // 触屏设备显示摇杆和按钮
 const touch = matchMedia('(pointer: coarse)').matches
 const game = shallowRef<Game | null>(null)

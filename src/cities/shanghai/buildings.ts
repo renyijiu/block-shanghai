@@ -2,6 +2,7 @@
 import type { Builder } from '../../engine/build/Builder.ts'
 import { range, type Rng } from '../../engine/build/random.ts'
 import type { BuildingStyle, CityBuildings, Place, TreeStyle } from '../../engine/city.ts'
+import type { Season } from '../../engine/sky/weather.ts'
 import type { Lot } from '../../engine/world/lots.ts'
 
 // ---------------------------------------------------------------- 风格分区
@@ -117,7 +118,7 @@ const shikumen: BuildingStyle = (b, l, rng) => {
 }
 
 // 老洋房：一两栋独立住宅，红瓦坡屋顶，花园围墙，院里有树
-const villa: BuildingStyle = (b, l, rng) => {
+const villa: BuildingStyle = (b, l, rng, season) => {
   const [cx, cz] = center(l)
   const wallC = 0xd9d2c3
   const t = 0.4
@@ -139,8 +140,8 @@ const villa: BuildingStyle = (b, l, rng) => {
     b.gable(hx - w / 2 - 0.3, hz - d / 2 - 0.3, hx + w / 2 + 0.3, hz + d / 2 + 0.3, h, 2.2, axis, choose(rng, [0xa0523d, 0x8c4a3a, 0x6b4a3a]), wall)
     boxAt(b, hx + w / 4, hz, 0.8, 0.8, h, h + 2.6, 0x8c6a55, { windows: 0, collide: false })
   }
-  camphor(b, l.x0 + 2.5, l.z1 - 2.5, rng)
-  if (rng() < 0.6) plane(b, l.x1 - 2.5, l.z1 - 2.5, rng)
+  camphor(b, l.x0 + 2.5, l.z1 - 2.5, rng, season)
+  if (rng() < 0.6) plane(b, l.x1 - 2.5, l.z1 - 2.5, rng, season)
 }
 
 // 工人新村：五六层板楼，东西向平行排列、朝南
@@ -226,37 +227,66 @@ const trunk = (b: Builder, x: number, z: number, w: number, h: number, color: nu
 const crown = (b: Builder, x: number, z: number, w: number, y0: number, y1: number, color: number) =>
   b.box(x - w / 2, y0, z - w / 2, x + w / 2, y1, z + w / 2, color, { windows: 0, collide: 'camera' })
 
-// 法国梧桐：斑驳的浅色树干，宽而扁的树冠
-const plane: TreeStyle = (b, x, z, rng) => {
+// 冬天落叶：树干往上分几根枝杈
+const bare = (b: Builder, x: number, z: number, h: number, spread: number, color: number) => {
+  for (const [dx, dz] of [
+    [-1, -1],
+    [1, -1],
+    [-1, 1],
+    [1, 1]
+  ] as const) {
+    const ox = (dx * spread) / 3
+    const oz = (dz * spread) / 3
+    b.box(x + ox - 0.09, h - 0.3, z + oz - 0.09, x + ox + 0.09, h + spread * 0.55, z + oz + 0.09, color, { windows: 0, collide: 'camera' })
+  }
+  b.box(x - 0.12, h - 0.2, z - 0.12, x + 0.12, h + spread * 0.7, z + 0.12, color, { windows: 0, collide: 'camera' })
+}
+
+// 树冠颜色按季节：[下层, 上层]
+const PLANE: Record<Season, [number, number] | null> = { spring: [0x9cc25a, 0xaccf6a], summer: [0x77a64a, 0x86b257], autumn: [0xc79b3a, 0xd6ae4a], winter: null }
+const GINKGO: Record<Season, [number, number] | null> = { spring: [0xb5d06a, 0xc2da78], summer: [0xa6be4c, 0xb5c95a], autumn: [0xf0be2a, 0xf7d045], winter: null }
+const CAMPHOR: Record<Season, [number, number]> = { spring: [0x4f8a3e, 0x7aa84e], summer: [0x3f7a3a, 0x4a8a40], autumn: [0x3f7a3a, 0x4a8a40], winter: [0x3a6e38, 0x44793c] }
+
+// 法国梧桐：斑驳的浅色树干，宽而扁的树冠；秋天黄褐，冬天落叶
+const plane: TreeStyle = (b, x, z, rng, season) => {
   const h = range(rng, 3, 3.6)
   trunk(b, x, z, 0.6, h, 0x9c927d)
   const w = range(rng, 4.2, 5)
-  crown(b, x + range(rng, -0.3, 0.3), z + range(rng, -0.3, 0.3), w, h - 0.2, h + 1.6, 0x77a64a)
-  crown(b, x, z, w * 0.72, h + 1.6, h + 2.8, 0x86b257)
+  const ox = range(rng, -0.3, 0.3)
+  const oz = range(rng, -0.3, 0.3)
+  const c = PLANE[season]
+  if (!c) return bare(b, x, z, h, w * 0.6, 0x8a806c)
+  crown(b, x + ox, z + oz, w, h - 0.2, h + 1.6, c[0])
+  crown(b, x, z, w * 0.72, h + 1.6, h + 2.8, c[1])
 }
 
-// 香樟：深色树干，浓绿的圆冠
-const camphor: TreeStyle = (b, x, z, rng) => {
+// 香樟：深色树干，浓绿的圆冠；四季常绿，春天新叶偏浅
+const camphor: TreeStyle = (b, x, z, rng, season) => {
   const h = range(rng, 2.2, 2.7)
   trunk(b, x, z, 0.55, h, 0x5d4a36)
   const w = range(rng, 3.4, 4.2)
-  crown(b, x, z, w, h - 0.2, h + 2.4, 0x3f7a3a)
-  crown(b, x, z, w * 0.66, h + 2.4, h + 3.3, 0x4a8a40)
+  const c = CAMPHOR[season]
+  crown(b, x, z, w, h - 0.2, h + 2.4, c[0])
+  crown(b, x, z, w * 0.66, h + 2.4, h + 3.3, c[1])
 }
 
-// 银杏：细高的树冠
-const ginkgo: TreeStyle = (b, x, z, rng) => {
+// 银杏：细高的树冠；秋天金黄，冬天落叶
+const ginkgo: TreeStyle = (b, x, z, rng, season) => {
   const h = range(rng, 2.6, 3.1)
   trunk(b, x, z, 0.45, h, 0x6b5a45)
-  crown(b, x, z, 2.2, h - 0.2, h + 3.6, 0xa6be4c)
-  crown(b, x, z, 1.4, h + 3.6, h + 4.6, 0xb5c95a)
+  const c = GINKGO[season]
+  if (!c) return bare(b, x, z, h, 2.4, 0x6b5a45)
+  crown(b, x, z, 2.2, h - 0.2, h + 3.6, c[0])
+  crown(b, x, z, 1.4, h + 3.6, h + 4.6, c[1])
 }
 
-// 白玉兰（市花）：小乔木；开花季节以后随季节系统处理
-const magnolia: TreeStyle = (b, x, z, rng) => {
+// 白玉兰（市花）：小乔木；春天满树白花，冬天落叶
+const magnolia: TreeStyle = (b, x, z, rng, season) => {
   const h = range(rng, 1.8, 2.2)
   trunk(b, x, z, 0.45, h, 0x6b5a45)
-  crown(b, x, z, 3, h - 0.2, h + 2.2, 0x6a9a4a)
+  if (season === 'winter') return bare(b, x, z, h, 2, 0x6b5a45)
+  crown(b, x, z, 3, h - 0.2, h + 2.2, season === 'spring' ? 0xf4efe6 : 0x6a9a4a)
+  if (season === 'spring') crown(b, x, z, 1.8, h + 2.2, h + 2.8, 0xf8e8ec)
 }
 
 export const buildings: CityBuildings = {

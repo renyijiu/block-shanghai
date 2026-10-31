@@ -4,6 +4,7 @@ import type { Builder } from './build/Builder.ts'
 import type { Rng } from './build/random.ts'
 import type { LatLon, ProjectionConfig } from './geo/projection.ts'
 import type { PhotoFilter } from './photo/filters.ts'
+import type { Season } from './sky/weather.ts'
 import type { Lot } from './world/lots.ts'
 import type { WorldDataUrls } from './world/WorldData.ts'
 
@@ -47,10 +48,10 @@ export interface Place extends LatLon {
   distKm: number
 }
 
-/** 在地块上盖一组建筑；坐标是游戏格，高度按建筑尺度（docs/03 第 3 节） */
-export type BuildingStyle = (b: Builder, lot: Lot, rng: Rng) => void
-/** 在 (x, z) 种一棵树（人物尺度） */
-export type TreeStyle = (b: Builder, x: number, z: number, rng: Rng) => void
+/** 在地块上盖一组建筑；坐标是游戏格，高度按建筑尺度（docs/03 第 3 节）。season 给院子里的树换季 */
+export type BuildingStyle = (b: Builder, lot: Lot, rng: Rng, season: Season) => void
+/** 在 (x, z) 种一棵树（人物尺度）；按季节换颜色、冬天落叶。随机数的消耗不能随季节变，换季不改布局 */
+export type TreeStyle = (b: Builder, x: number, z: number, rng: Rng, season: Season) => void
 
 /** 程序化建筑和行道树（docs/05 第 3 节） */
 export interface CityBuildings {

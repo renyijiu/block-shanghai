@@ -18,6 +18,7 @@ import type { InteractPoint, InteractRegistry } from './interact.ts'
 import { blockedByRoad, findLots, overlapsObstacle, streetTreeSpots, type Lot, type LotInputs } from './lots.ts'
 import { WORLD_COLORS, type WorldMaterials } from './materials.ts'
 import { isWater } from './queries.ts'
+import type { Season } from '../sky/weather.ts'
 import type { WorldData } from './WorldData.ts'
 
 /** 生成分块需要的外部依赖 */
@@ -32,6 +33,8 @@ export interface ChunkContext {
   interact: InteractRegistry
   /** 景点占地：程序化建筑和行道树避开 */
   landmarks: Lot[]
+  /** 当前季节（行道树换季） */
+  season: () => Season
 }
 
 /**
@@ -239,12 +242,12 @@ export class ChunkManager {
     for (const lot of findLots(cx, cz, CHUNK_SIZE, inputs)) {
       const mix = buildings.mixAt(placeAt((lot.x0 + lot.x1) / 2, (lot.z0 + lot.z1) / 2))
       const style = mix && pick(mix, rng)
-      if (style) buildings.styles[style]?.(b, lot, rng)
+      if (style) buildings.styles[style]?.(b, lot, rng, this.ctx.season())
     }
     for (const t of streetTreeSpots(own, inputs, buildings.treeSpacing)) {
       const mix = buildings.treeMixAt(placeAt(t.x, t.z))
       const species = mix && pick(mix, rng)
-      if (species) buildings.trees[species]?.(b, t.x, t.z, rng)
+      if (species) buildings.trees[species]?.(b, t.x, t.z, rng, this.ctx.season())
     }
     this.ctx.interact.add(key, points)
     return b.build()

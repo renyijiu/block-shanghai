@@ -17,6 +17,8 @@ import { MetroSystem } from './metro/MetroSystem.ts'
 import { TrainRenderer } from './metro/trains.ts'
 import type { Route } from './metro/network.ts'
 import { Sky } from './sky/Sky.ts'
+import { Precipitation } from './sky/Precipitation.ts'
+import { lookOf, mixLook, SEASON_NAMES, seasonOf, WEATHER_ICONS, WEATHER_NAMES, weatherAt, type Season, type WeatherKind, type WeatherLook } from './sky/weather.ts'
 import { GameClock } from './state/clock.ts'
 import { BoatSystem, type Pier, type Ride } from './transport/BoatSystem.ts'
 import { InteriorManager, type InteriorResult, type StationStatus } from './interior/InteriorManager.ts'
@@ -75,6 +77,8 @@ export interface GameStats {
   station: StationStatus | null
   /** 最新报站（id 变了界面就弹出） */
   announce: (Announcement & { id: number }) | null
+  /** 天气和季节：“⛅ 多云 · 秋” */
+  weather: string
 }
 
 /** 拍照的结果，给界面显示 */
@@ -88,6 +92,9 @@ export interface PhotoResult {
   /** 存进相册了没有（隐私模式等情况下 IndexedDB 不可用） */
   saved: boolean
 }
+
+/** 统计和界面状态的初始值 */
+export const emptyStats = (): GameStats => ({ fps: 0, drawCalls: 0, triangles: 0, chunks: 0, pending: 0, buildAvg: 0, buildMax: 0, x: 0, z: 0, mode: 'player', view: 'third', district: null, time: '', money: 0, prompt: null, found: 0, landmarks: 0, ride: null, station: null, announce: null, weather: '' })
 
 /** 快速到达的结果，给界面提示用 */
 export interface TravelResult {
@@ -112,9 +119,17 @@ export class Game {
   devCamera: DevCamera | null = null
   districts: DistrictIndex | null = null
   world: WorldData | null = null
-  readonly stats: GameStats = { fps: 0, drawCalls: 0, triangles: 0, chunks: 0, pending: 0, buildAvg: 0, buildMax: 0, x: 0, z: 0, mode: 'player', view: 'third', district: null, time: '', money: 0, prompt: null, found: 0, landmarks: 0, ride: null, station: null, announce: null }
+  readonly stats: GameStats = emptyStats()
   readonly clock = new GameClock()
   readonly sky: Sky
+  /** 季节（按设备真实日期，?season= 可以指定）和天气（每 4 个游戏小时换，?weather= 可以指定） */
+  season: Season = seasonOf(new Date())
+  weather: WeatherKind = 'sunny'
+  /** 当前画面上的天气参数（切换时慢慢过渡） */
+  weatherLook: WeatherLook = lookOf('sunny')
+  private weatherOverride: WeatherKind | null = null
+  private weatherCheck = 0
+  private readonly precipitation = new Precipitation()
   readonly interact = new InteractRegistry()
   metro: MetroSystem | null = null
   trains: TrainRenderer | null = null
@@ -197,6 +212,7 @@ export class Game {
     const sun = new THREE.DirectionalLight(0xfff4e0, 1.6)
     this.scene.add(hemi, sun)
     this.sky = new Sky(this.scene, sun, hemi)
+    this.scene.add(this.precipitation.root)
 
     this.materials = createWorldMaterials()
     // 地面：跟着焦点移动的大平面，各图层贴在它上面；按最高画质的视距准备
@@ -243,7 +259,8 @@ export class Game {
         proj: this.proj,
         metro: metro.data,
         interact: this.interact,
-        landmarks: [...this.landmarks.footprints, ...this.boats.footprints]
+        landmarks: [...this.landmarks.footprints, ...this.boats.footprints],
+        season: () => this.season
       },
       { radius: QUALITY_PRESETS[this.quality].viewDistance, budgetMs: 6 }
     )
@@ -260,6 +277,11 @@ export class Game {
 
     const params = new URLSearchParams(location.search)
     this.persist = !['cam', 'walk', 'start'].some((k) => params.has(k))
+    // 测试用：?season=winter 指定季节，?weather=rain 指定天气
+    const season = params.get('season')
+    if (season && season in SEASON_NAMES) this.season = season as Season
+    const weather = params.get('weather')
+    if (weather && weather in WEATHER_NAMES) this.weatherOverride = weather as WeatherKind
     const save = this.persist ? loadSave(localStorage, this.city.config.id) : null
     // 测试用：?time=17:45 指定游戏时刻（看高峰期的列车）
     const time = params.get('time')?.split(':').map(Number)
@@ -305,6 +327,9 @@ export class Game {
     }
 
     this.landmarks.update(focus.x, focus.z)
+    // 开局直接是当时的天气，不从晴天过渡
+    this.weather = this.weatherOverride ?? weatherAt(new Date(), this.clock.seconds)
+    this.weatherLook = lookOf(this.weather)
     await this.chunks.prebuild(focus.x, focus.z, (d, t) => onProgress?.(`生成城市 ${d}/${t}`))
     // 碰撞盒随分块建好以后再放人，被占着就找最近的空位
     if (!this.devCamera) {
@@ -324,9 +349,7 @@ export class Game {
   setQuality(level: QualityLevel) {
     const p = QUALITY_PRESETS[level]
     this.quality = level
-    const fog = this.scene.fog as THREE.Fog
-    fog.near = p.viewDistance * 0.55
-    fog.far = p.viewDistance
+    this.sky.setFogRange(p.viewDistance * 0.55, p.viewDistance)
     this.camera.far = p.viewDistance * 1.3
     this.camera.updateProjectionMatrix()
     this.chunks?.setRadius(p.viewDistance)
@@ -412,6 +435,20 @@ export class Game {
     this.saveNow()
     const to = line.kind === 'ferry' ? `开往${ride.to.name}` : '黄浦江往返'
     return { ok: true, message: `${line.name} · ${to} · ${line.fare} 元${wait > 60 ? ` · 等了 ${Math.round(wait / 60)} 分钟` : ''}` }
+  }
+
+  // 天气：每秒按日期和游戏时间算一次该是什么天气；画面参数约 8 秒过渡过去
+  private updateWeather(dt: number, now: number) {
+    if (now - this.weatherCheck > 1000 || !this.weatherCheck) {
+      this.weatherCheck = now
+      this.weather = this.weatherOverride ?? weatherAt(new Date(), this.clock.seconds)
+    }
+    this.weatherLook = mixLook(this.weatherLook, lookOf(this.weather), Math.min(1, dt * 0.25))
+  }
+
+  /** 天气预报式的说法：“⛅ 多云 · 秋” */
+  get weatherText() {
+    return `${WEATHER_ICONS[this.weather]} ${WEATHER_NAMES[this.weather]} · ${SEASON_NAMES[this.season]}`
   }
 
   /** 从街上的地铁口进站：切到站厅场景，站在对应出口的楼梯下 */
@@ -683,7 +720,8 @@ export class Game {
     this.last = now
     // 乘地铁时时钟由站内流程按真实运行分钟推进
     if (!this.interior?.timeControlled) this.clock.tick(dt)
-    this.sky.update(this.clock.daySeconds)
+    this.updateWeather(dt, now)
+    this.sky.update(this.clock.daySeconds, this.weatherLook)
     const it = this.interior
     if (it?.active && !this.devCamera) {
       // 站内：城市场景暂停更新，只渲染站内场景
@@ -703,6 +741,7 @@ export class Game {
     this.chunks?.update(f.x, f.z)
     this.landmarks?.update(f.x, f.z, this.camera.position.x, this.camera.position.z)
     this.trains?.update(this.clock.seconds, f.x, f.z, QUALITY_PRESETS[this.quality].viewDistance)
+    this.precipitation.update(dt, this.camera.position, this.weatherLook)
     this.boats?.update(this.clock.seconds, f.x, f.z, QUALITY_PRESETS[this.quality].viewDistance)
     // 地面平面按分块对齐跟随
     this.ground.position.set(Math.round(f.x / CHUNK_SIZE) * CHUNK_SIZE, 0, Math.round(f.z / CHUNK_SIZE) * CHUNK_SIZE)
@@ -821,6 +860,7 @@ export class Game {
       found: this.landmarks?.found.size ?? 0,
       landmarks: this.landmarks?.placed.length ?? 0,
       station: this.interior?.status() ?? null,
+      weather: this.weatherText,
       announce: this.interior?.announcement ?? null,
       ride: this.ride
         ? {
@@ -852,6 +892,7 @@ export class Game {
     this.trains?.dispose()
     this.landmarks?.dispose()
     this.boats?.dispose()
+    this.precipitation.dispose()
     this.interior?.dispose()
     this.album?.close()
     this.player.dispose()
