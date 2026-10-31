@@ -2,6 +2,7 @@
 // 高度按建筑尺度（1 格 ≈ 2.5 米），水平按地图尺度（核心区 1 格 ≈ 5 米），细部适当夸张以保留辨识度
 import type { LandmarkContext, LandmarkDef, PartOptions } from '../../engine/city.ts'
 import { aLandmarks } from './landmarks-a.ts'
+import { bLandmarks } from './landmarks-b.ts'
 import { chineseRoof, hall, LIGHT, TILE, WARM } from './parts.ts'
 
 const STONE = 0xd8cdb4
@@ -598,4 +599,4 @@ const peoplesSquare: LandmarkDef = {
   tip: '地铁 1、2、8 号线人民广场站，出站就到。'
 }
 
-export const landmarks: LandmarkDef[] = [bund, orientalPearl, shanghaiTower, yuyuan, swfc, jinmao, ljzBridge, nanjingRoad, peoplesSquare, waibaidu, ...aLandmarks]
+export const landmarks: LandmarkDef[] = [bund, orientalPearl, shanghaiTower, yuyuan, swfc, jinmao, ljzBridge, nanjingRoad, peoplesSquare, waibaidu, ...aLandmarks, ...bLandmarks]

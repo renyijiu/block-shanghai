@@ -196,7 +196,7 @@ export const content: LifeContent = {
       ]
     }
   ],
-  // 任务（docs/05 第 11 节）。还没建的地方（苏州河步道、1933 老场坊、杨浦滨江、手摇船）的任务留到 P6
+  // 任务（docs/05 第 11 节）
   quests: [
     {
       id: 'novice',
@@ -268,13 +268,14 @@ export const content: LifeContent = {
     {
       id: 'area-jingan',
       kind: 'area',
-      name: '闹市古刹',
-      area: '静安 · 静安寺',
+      name: '静安寺和苏州河',
+      area: '静安 · 苏州河',
       reward: 30,
       badge: '静安徽章',
       steps: [
         { text: '游览静安寺', goal: { found: ['jingansi'] } },
-        { text: '拍下金顶和高楼同框', goal: { shot: ['jingansi'] } }
+        { text: '拍下金顶和高楼同框', goal: { shot: ['jingansi'] } },
+        { text: '沿苏州河步道走到四行仓库', goal: { found: ['suzhoucreek'] } }
       ]
     },
     {
@@ -286,7 +287,20 @@ export const content: LifeContent = {
       badge: '虹口徽章',
       steps: [
         { text: '走过外白渡桥', goal: { found: ['waibaidu'] } },
-        { text: '走完多伦路—鲁迅公园 Citywalk', goal: { walk: 'duolun' } }
+        { text: '走完多伦路—鲁迅公园 Citywalk', goal: { walk: 'duolun' } },
+        { text: '逛逛 1933 老场坊', goal: { found: ['laochangfang'] } }
+      ]
+    },
+    {
+      id: 'area-yangpu',
+      kind: 'area',
+      name: '工业滨江',
+      area: '杨浦 · 工业滨江',
+      reward: 30,
+      badge: '杨浦徽章',
+      steps: [
+        { text: '沿杨浦滨江走走，看看老码头的吊车', goal: { found: ['yangpuriverside'] } },
+        { text: '拍下杨浦大桥', goal: { shot: ['yangpubridge'] } }
       ]
     },
     {
