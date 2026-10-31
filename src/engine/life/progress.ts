@@ -34,6 +34,8 @@ export type LifeEvent =
   | { type: 'photo'; filter: string; recognized: string[]; people: number; hour: number; spot: string | null }
   | { type: 'plaque'; culture: string }
   | { type: 'citywalk'; route: string }
+  /** 只记一个计数器（坐过某条船线等） */
+  | { type: 'stat'; key: string }
 
 export interface LifeGain {
   foods: string[]
@@ -130,6 +132,9 @@ export function recordLife(content: LifeContent, p: LifeProgress, e: LifeEvent, 
       break
     case 'plaque':
       count('plaque')
+      break
+    case 'stat':
+      count(e.key)
       break
   }
   for (const c of content.culture) {

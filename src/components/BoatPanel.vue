@@ -36,7 +36,7 @@ const rows = computed(() => {
   return (g.boats?.linesAt(props.pier) ?? []).map((berth) => {
     const l = berth.line
     const dep = nextDeparture(l, berth.index, t)
-    const to = l.kind === 'ferry' ? `开往${l.piers[1 - berth.index]}` : '黄浦江往返（外滩 · 陆家嘴 · 北外滩）'
+    const to = l.kind === 'ferry' ? `开往${l.piers[1 - berth.index]}` : (l.route ?? '往返')
     return {
       id: `${l.id}-${berth.index}`,
       berth,

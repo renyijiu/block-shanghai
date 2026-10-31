@@ -312,12 +312,26 @@ export const content: LifeContent = {
       badge: '水乡徽章',
       steps: [
         { text: '到朱家角看放生桥', goal: { found: ['zhujiajiao'] } },
-        { text: '拍一张水乡照片', goal: { shot: ['zhujiajiao'] } }
+        { text: '拍一张水乡照片', goal: { shot: ['zhujiajiao'] } },
+        { text: '在放生桥边坐一次手摇船', goal: { stat: 'boat:zhujiajiao' } }
       ]
     },
     { id: 'theme-food', kind: 'theme', name: '食在上海', reward: 50, badge: '食在上海', steps: [{ text: '吃过 6 种上海美食', goal: { count: 'foods', n: 6 } }] },
     { id: 'theme-culture', kind: 'theme', name: '海派文化达人', reward: 50, badge: '海派文化达人', steps: [{ text: '解锁 6 项文化图鉴', goal: { count: 'culture', n: 6 } }] },
     { id: 'theme-coffee', kind: 'theme', name: '咖啡漫游', reward: 30, badge: '咖啡地图', steps: [{ text: '去过 5 家咖啡馆', goal: { count: 'coffee', n: 5 } }] },
+    {
+      id: 'theme-suburbs',
+      kind: 'theme',
+      name: '远郊游',
+      reward: 50,
+      badge: '远郊旅行家',
+      steps: [
+        { text: '爬上佘山', goal: { found: ['sheshan'] } },
+        { text: '逛七宝古镇', goal: { found: ['qibao'] } },
+        { text: '看滴水湖', goal: { found: ['dishuihu'] } },
+        { text: '去崇明东滩看鸟', goal: { found: ['dongtan'] } }
+      ]
+    },
     { id: 'theme-citywalk', kind: 'theme', name: '城市漫步者', reward: 50, badge: '城市漫步者', steps: [{ text: '走完 3 条 Citywalk', goal: { count: 'walks', n: 3 } }] },
     // 每日生活任务：每天挑 3 个，各 10 元
     { id: 'daily-talk', kind: 'daily', name: '和路人聊天', reward: 10, steps: [{ text: '和 3 位路人聊天', goal: { stat: 'talk', n: 3 } }] },

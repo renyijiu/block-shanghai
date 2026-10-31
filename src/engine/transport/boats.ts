@@ -5,7 +5,9 @@
 export interface BoatLine {
   id: string
   name: string
-  kind: 'ferry' | 'cruise'
+  kind: 'ferry' | 'cruise' | 'rowboat'
+  /** 游船、手摇船的线路说明 */
+  route?: string
   fare: number
   /** 航线：从码头 0 的靠岸点到码头 1 的靠岸点（游船是到折返点） */
   path: Polyline
@@ -113,9 +115,9 @@ export function runPose(l: BoatLine, pier: number, dep: number, t: number): Boat
   const back = s > l.path.length
   const along = back ? total - s : s
   const [x, z] = l.path.at(along)
-  const h = l.path.heading(along) + (back ? Math.PI : 0)
-  // 右侧偏移在离码头 60 格内逐渐加上，靠岸时回到航线上
-  const off = CRUISE_OFFSET * Math.min(1, along / 60)
+  const h = l.path.heading(along, l.kind === 'rowboat' ? 2 : 8) + (back ? Math.PI : 0)
+  // 右侧偏移在离码头 60 格内逐渐加上，靠岸时回到航线上；手摇船在小河里不偏
+  const off = l.kind === 'cruise' ? CRUISE_OFFSET * Math.min(1, along / 60) : 0
   return { x: x - Math.sin(h) * off, z: z + Math.cos(h) * off, angle: h, run: dep }
 }
 

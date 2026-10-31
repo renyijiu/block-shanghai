@@ -471,7 +471,7 @@ export class Game {
     this.ride = ride
     this.prompt = null
     this.saveNow()
-    const to = line.kind === 'ferry' ? `开往${ride.to.name}` : '黄浦江往返'
+    const to = line.kind === 'ferry' ? `开往${ride.to.name}` : (line.route ?? '往返')
     return { ok: true, message: `${line.name} · ${to} · ${line.fare} 元${wait > 60 ? ` · 等了 ${Math.round(wait / 60)} 分钟` : ''}` }
   }
 
@@ -743,7 +743,8 @@ export class Game {
       const [x, z] = ride.to.land
       this.player.spawn(x, z, this.playerWorld!)
       this.player.model.position.copy(this.player.pos)
-      if (ride.line.kind !== 'ferry') this.lifeEvent({ type: 'auto', key: 'cruise' })
+      if (ride.line.kind === 'cruise') this.lifeEvent({ type: 'auto', key: 'cruise' })
+      this.lifeEvent({ type: 'stat', key: `boat:${ride.line.id}` })
       this.saveNow()
       this.onRideEnd?.(ride.line.kind === 'ferry' ? `到达 ${ride.to.name}` : `${ride.line.name}结束，回到${ride.to.name}`)
       return

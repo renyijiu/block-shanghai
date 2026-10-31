@@ -319,7 +319,10 @@ export interface NpcContent {
 export interface BoatLineDef {
   id: string
   name: string
-  kind: 'ferry' | 'cruise'
+  /** 渡轮来回两个码头；游船、手摇船从码头出发开到折返点再回来（手摇船在小河里，不偏到右侧、码头只是岸边的石阶） */
+  kind: 'ferry' | 'cruise' | 'rowboat'
+  /** 游船、手摇船的说明（船票面板上显示）：“黄浦江往返（外滩 · 陆家嘴 · 北外滩）” */
+  route?: string
   /** 票价（元） */
   fare: number
   /** 航线（WGS-84 [lat, lon]）：渡轮从码头 0 到码头 1，首尾是码头外的江面；游船从出发码头到折返点 */

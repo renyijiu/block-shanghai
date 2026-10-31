@@ -625,6 +625,357 @@ const shMuseumEast: LandmarkDef = {
   tip: '在世纪大道上，离图书馆东馆不远。'
 }
 
+// ---------------------------------------------------------------- 远郊（地图压缩过的地方，景点按原尺度）
+
+/** 一架停在机坪上的飞机：机头朝 +z（局部），在 (x, z) 转 ang */
+function plane(c: LandmarkContext, x: number, z: number, ang: number) {
+  const at = (u: number, v: number): [number, number] => [x + u * Math.cos(ang) - v * Math.sin(ang), z + u * Math.sin(ang) + v * Math.cos(ang)]
+  const part = (u: number, v: number, w: number, d: number, y0: number, y1: number, color: number) => {
+    const [px, pz] = at(u, v)
+    c.slab(px, pz, w, d, y0, y1, color, ang, { windows: 0, collide: y0 < 1 })
+  }
+  part(0, 0, 2, 16, 1, 3, 0xf4f4f0)
+  part(0, 8.6, 1.4, 1.4, 1.3, 2.7, 0xf4f4f0)
+  part(0, 0.5, 18, 2.6, 1.6, 1.9, 0xdcdcdc)
+  for (const u of [-4, 4]) part(u, 1.4, 0.9, 2, 0.8, 1.6, 0x9aa1a8)
+  part(0, -7.2, 0.3, 2.4, 3, 6, 0x2f6fb5)
+  part(0, -7.2, 6, 1.4, 2.6, 2.9, 0xdcdcdc)
+  for (const v of [5, -1]) part(0, v, 0.3, 0.3, 0, 1, 0x333333)
+  part(0, 0, 2.05, 14, 2.2, 2.45, 0x2f6fb5)
+}
+
+/** 一列白色高铁：沿局部 z，从 z0 到 z1 */
+function bulletTrain(c: LandmarkContext, x: number, z0: number, z1: number) {
+  c.box(x - 0.9, 0.2, z0 + 2, x + 0.9, 2.4, z1 - 2, 0xf4f4f0, { windows: 0.5 })
+  c.box(x - 0.92, 1.1, z0 + 2, x + 0.92, 1.35, z1 - 2, 0x2f6fb5, FLAT)
+  for (const [a, b] of [
+    [z0, z0 + 2],
+    [z1 - 2, z1]
+  ] as const)
+    c.box(x - 0.7, 0.2, a, x + 0.7, 1.8, b, 0xf4f4f0, { windows: 0 })
+}
+
+const resort: LandmarkDef = {
+  id: 'resort',
+  name: '上海国际旅游度假区 · 星愿湖',
+  district: 'pudong',
+  grade: 'B',
+  // OSM 度假区小镇的中心；局部 x 顺着湖岸，+z 朝星愿湖（湖岸在 z ≈ 17）。只做湖边小镇的氛围，乐园本身不在游戏里
+  lat: 31.14235,
+  lon: 121.65727,
+  rot: -0.85,
+  rect: [-24, -14, 24, 18],
+  focusY: 4,
+  photoR: 200,
+  build(c) {
+    const PASTEL = [0xf2c6c2, 0xf7e3a6, 0xbfe0d0, 0xc8d6f0, 0xf4d6a8, 0xe0c8f0]
+    // 小镇：一条步行街，两边彩色立面的两层小楼
+    c.box(-22, 0, -3, 22, 0.05, 3, 0xd8cfb8, FLAT)
+    for (const side of [-1, 1])
+      for (let i = 0; i < 7; i++) {
+        const x0 = -21 + i * 6
+        const h = 4 + ((i * 3 + (side > 0 ? 1 : 0)) % 3) * 0.8
+        const [z0, z1] = side > 0 ? [3.5, 10] : [-10, -3.5]
+        c.box(x0, 0, z0, x0 + 5.6, h, z1, PASTEL[(i + (side > 0 ? 3 : 0)) % PASTEL.length]!, { windows: 0.6 })
+        stepRoof(c, x0, z0, x0 + 5.6, z1, h, 1.2, 0x8a5a4a, 'x', 2)
+        c.box(x0 + 1, 2.2, side > 0 ? 3.3 : -3.5, x0 + 4.6, 2.5, side > 0 ? 3.5 : -3.3, WARM, { ...LIGHT, collide: false })
+      }
+    // 湖边步道、栏杆和一排路灯
+    c.box(-24, 0, 12, 24, 0.05, 16.6, 0xb9a98e, FLAT)
+    c.box(-24, 0, 16.6, 24, 1, 16.9, 0xf4f1ea, { windows: 0 })
+    for (let x = -20; x <= 20; x += 8) {
+      c.box(x - 0.1, 0, 12.2, x + 0.1, 3.6, 12.4, 0x4a4d52, { windows: 0 })
+      c.box(x - 0.35, 3.6, 12, x + 0.35, 4, 12.6, 0xfff1c9, LIGHT)
+    }
+  },
+  desc: '上海国际旅游度假区的湖边小镇：彩色小楼围着步行街，沿着星愿湖是一圈步道，晚上沿湖亮起灯。（乐园本身不在游戏里）',
+  tip: '地铁 11 号线的终点站就在度假区。'
+}
+
+const sheshan: LandmarkDef = {
+  id: 'sheshan',
+  name: '佘山 · 圣母大殿',
+  district: 'songjiang',
+  grade: 'B',
+  // 锚点是西佘山山顶（OSM）；山按台阶一层层堆起来，能一直走到山顶的大殿和天文台
+  lat: 31.09622,
+  lon: 121.18742,
+  rot: 0.215,
+  rect: [-19, -19, 19, 19],
+  loadR: 1100,
+  focusY: 14,
+  photoR: 400,
+  build(c) {
+    // 山：从半径 18 收到 8，每层高 0.42（走得上去），树林绿，越往上越深
+    const rings = 22
+    for (let i = 0; i < rings; i++) {
+      const r = 18 - (10 * i) / rings
+      c.column(0, 0, r, 0, 0.42 * (i + 1), i % 4 === 3 ? 0x5e8f4e : 0x6f9f5a, { windows: 0 })
+    }
+    const top = 0.42 * rings
+    // 圣母大殿：罗马式，长条殿身、钟楼，顶上一尊圣母像
+    c.box(-4.5, top, -2.4, 4.5, top + 5, 2.4, 0xd8cdb4, { windows: 0.4 })
+    stepRoof(c, -4.5, -2.4, 4.5, 2.4, top + 5, 1.6, 0x9a4b38, 'x', 3)
+    c.box(3.5, top, -1.6, 6.7, top + 9.5, 1.6, 0xd8cdb4, { windows: 0.3 })
+    c.box(4.4, top + 9.5, -0.7, 5.8, top + 11.5, 0.7, 0xd8cdb4, FLAT)
+    c.box(4.9, top + 11.5, -0.2, 5.3, top + 12.6, 0.2, 0xe8d8a0, FLAT)
+    // 天文台：白色圆顶
+    c.box(-6.8, top, 2.6, -2.8, top + 3, 6.2, 0xf0ede6, { windows: 0.3 })
+    c.ball(-4.8, top + 3.2, 4.4, 1.9, 0xe8eef2, { windows: 0 })
+  },
+  desc: '松江的佘山是上海陆地上少有的山。西佘山顶上是罗马式的佘山圣母大殿，旁边是一百多年历史的佘山天文台。',
+  tip: '地铁 9 号线佘山站往北；山坡一层层的台阶能一直走到山顶。'
+}
+
+const qibao: LandmarkDef = {
+  id: 'qibao',
+  name: '七宝古镇',
+  district: 'minhang',
+  grade: 'B',
+  // OSM 古镇范围的中心；一条老街，中间一段小河上架着石拱桥
+  lat: 31.1532,
+  lon: 121.34992,
+  rot: 0,
+  rect: [-9, -16, 16, 16],
+  focusY: 3,
+  photoR: 180,
+  build(c) {
+    // 老街：石板路，两边白墙黛瓦的店铺挂红灯笼
+    c.box(-2, 0, -16, 2, 0.05, 16, 0xa9a49a, FLAT)
+    for (const side of [-1, 1])
+      for (let i = 0; i < 8; i++) {
+        const z0 = -16 + i * 4
+        if (z0 >= -2 && z0 < 2) continue
+        const [x0, x1] = side > 0 ? [2.2, 7] : [-7, -2.2]
+        const h = 3.4 + (i % 3) * 0.4
+        c.box(x0, 0, z0 + 0.1, x1, h, z0 + 3.9, 0xf0ede4, { windows: 0.4 })
+        stepRoof(c, x0, z0 + 0.1, x1, z0 + 3.9, h, 1.2, 0x3a3b40, 'z')
+        const fx = side > 0 ? x0 - 0.3 : x1 + 0.3
+        c.box(fx - 0.15, h - 0.8, z0 + 1.85, fx + 0.15, h - 0.4, z0 + 2.15, 0xff4a3a, { ...LIGHT, collide: false })
+        c.box(side > 0 ? x0 - 0.05 : x1 - 0.05, 0, z0 + 0.6, side > 0 ? x0 + 0.05 : x1 + 0.05, 2.2, z0 + 3.4, 0x6b4a32, FLAT)
+      }
+    // 小河和石拱桥（蒲汇塘）
+    pond(c, -9, -1.8, 16, 1.8)
+    for (let k = 0; k < 5; k++) c.box(-2.4, 0, -2.6 + k * 0.25, 2.4, 0.3 * (k + 1), 2.6 - k * 0.25, 0xc2bcae, { windows: 0 })
+    c.box(-2.4, 0, -0.9, 2.4, 0.9, 0.9, 0x1e2b2b, FLAT)
+    // 老街口的牌楼
+    for (const x of [-2.6, 2.6]) c.box(x - 0.3, 0, 15, x + 0.3, 4, 15.6, 0x6b6560, { windows: 0 })
+    chineseRoof(c, 0, 15.3, 7, 1.6, 4, 2)
+  },
+  desc: '有上千年历史的江南古镇，老街上挤满小吃和老店，蒲汇塘上架着石拱桥，是市区边上最近的古镇。',
+  tip: '地铁 9 号线七宝站。'
+}
+
+const dishuihu: LandmarkDef = {
+  id: 'dishuihu',
+  name: '滴水湖',
+  district: 'pudong',
+  grade: 'B',
+  // 锚点是西岸的庆典广场（OSM），局部 +x 朝湖（湖岸在 x ≈ 5）
+  lat: 30.89982,
+  lon: 121.92313,
+  rot: 0,
+  rect: [-14, -12, 20, 12],
+  focusY: 4,
+  photoR: 260,
+  build(c) {
+    c.box(-12, 0, -10, 5, 0.05, 10, 0xd8cfb8, FLAT)
+    // 白色风帆一样的景观亭
+    for (const [z, h] of [
+      [-7, 7],
+      [0, 9],
+      [7, 6]
+    ] as const) {
+      c.box(-4.2, 0, z - 0.15, -3.9, h, z + 0.15, 0xdddddd, { windows: 0 })
+      for (let k = 0; k < 6; k++) c.box(-3.9, (h * k) / 6, z - 0.08, -3.9 + 3.2 * (1 - k / 6), (h * (k + 1)) / 6, z + 0.08, 0xf4f4f0, FLAT)
+    }
+    // 伸进湖里的观景栈桥，尽头一圈栏杆
+    c.box(4, 0.2, -1.2, 18, 0.45, 1.2, 0x8a6a4a, { windows: 0, collide: false })
+    c.platform(4, -1.2, 18, 1.2, 0.45)
+    c.box(14, 0.2, -3, 19, 0.45, 3, 0x8a6a4a, { windows: 0, collide: false })
+    c.platform(14, -3, 19, 3, 0.45)
+    for (const [x0, z0, x1, z1] of [
+      [14, -3.2, 19.2, -3],
+      [14, 3, 19.2, 3.2],
+      [19, -3, 19.2, 3]
+    ] as const)
+      c.box(x0, 0.45, z0, x1, 1.4, z1, 0xd8d4cc, { windows: 0, collide: true })
+    for (let x = 6; x < 14; x += 4) c.box(x, 0, -1.4, x + 0.3, 0.3, 1.4, 0x6b4a32, FLAT)
+  },
+  desc: '临港新城中心的圆形人工湖，直径约 2.6 公里，像一滴落入大海的水滴；西岸的栈桥伸进湖里。',
+  tip: '地铁 16 号线终点滴水湖站。'
+}
+
+const dongtan: LandmarkDef = {
+  id: 'dongtan',
+  name: '崇明东滩湿地',
+  district: 'chongming',
+  grade: 'B',
+  // OSM 湿地公园范围的中心；木栈道架在芦苇滩上，观鸟塔可以坐电梯上去
+  lat: 31.52014,
+  lon: 121.94499,
+  rot: 0,
+  rect: [-18, -12, 18, 12],
+  focusY: 4,
+  photoR: 220,
+  build(c) {
+    // 芦苇
+    for (let i = 0; i < 40; i++) {
+      const x = -17 + ((i * 7) % 34)
+      const z = -11 + ((i * 13) % 22)
+      if (Math.abs(z) < 2) continue
+      c.box(x - 0.6, 0, z - 0.6, x + 0.6, 1.4 + (i % 3) * 0.3, z + 0.6, i % 2 ? 0xc9b97a : 0xa8a060, { windows: 0, collide: false })
+    }
+    // 木栈道（之字形），平台架在滩涂上
+    for (const [x0, z0, x1, z1] of [
+      [-18, -1.2, -4, 1.2],
+      [-5.2, -1.2, -2.8, 8],
+      [-2.8, 5.6, 12, 8]
+    ] as const) {
+      c.box(x0, 0.4, z0, x1, 0.6, z1, 0x8a6a4a, { windows: 0, collide: false })
+      c.platform(x0, z0, x1, z1, 0.6)
+    }
+    // 观鸟塔
+    for (const dx of [-1.5, 1.5]) for (const dz of [-1.5, 1.5]) c.box(12 + dx - 0.2, 0, 4 + dz - 0.2, 12 + dx + 0.2, 8, 4 + dz + 0.2, 0x6b4a32, { windows: 0 })
+    c.box(10, 8, 2, 14, 8.3, 6, 0x8a6a4a, { windows: 0, collide: false })
+    c.platform(10, 2, 14, 6, 8.3)
+    for (const [x0, z0, x1, z1] of [
+      [10, 1.8, 14, 2],
+      [10, 6, 14, 6.2],
+      [14, 2, 14.2, 6]
+    ] as const)
+      c.box(x0, 8.3, z0, x1, 9.2, z1, 0x6b4a32, { windows: 0, collide: true })
+    stepRoof(c, 10, 2, 14, 6, 10.4, 1, 0x5a3a2a, 'x', 2)
+    c.elevator(9, 7, 12, 8.3, 4, '观鸟塔')
+    // 白鹭：站在滩上的和飞着的
+    for (const [x, z, y] of [
+      [-10, 6, 0],
+      [-8, -6, 0],
+      [4, -5, 0],
+      [8, 10, 0],
+      [-2, 10, 6],
+      [3, 0, 8],
+      [-12, -2, 7]
+    ] as const) {
+      c.box(x - 0.15, y + 0.6, z - 0.35, x + 0.15, y + 0.95, z + 0.35, 0xf8f8f8, FLAT)
+      c.box(x - 0.05, y + 0.95, z + 0.25, x + 0.05, y + 1.35, z + 0.35, 0xf8f8f8, FLAT)
+      if (y) c.box(x - 0.9, y + 0.8, z - 0.15, x + 0.9, y + 0.85, z + 0.15, 0xf8f8f8, FLAT)
+      else c.box(x - 0.03, y, z - 0.03, x + 0.03, y + 0.6, z + 0.03, 0x333333, FLAT)
+    }
+  },
+  desc: '崇明岛最东端的湿地，大片芦苇和滩涂，每年冬天有成千上万只候鸟在这里停歇。',
+  tip: '沿木栈道走到观鸟塔，坐电梯上去看滩涂（按 E）。'
+}
+
+const pvg: LandmarkDef = {
+  id: 'pvg',
+  name: '浦东国际机场',
+  district: 'pudong',
+  grade: 'B',
+  // 锚点是 2 号航站楼（OSM），局部 x 顺着航站楼的长边；+z 朝陆侧（出发层高架），-z 朝机坪
+  lat: 31.15345,
+  lon: 121.80536,
+  rot: 1.478,
+  rect: [-42, -34, 42, 9],
+  loadR: 1100,
+  focusY: 6,
+  photoR: 400,
+  build(c) {
+    // 航站楼：玻璃幕墙，屋顶起伏像海浪
+    c.box(-40, 0, -12, 40, 7, 8, 0x9fc3d6, { glass: true })
+    for (let x = -40; x < 40; x += 4) {
+      const h = 7.5 + 1.2 * Math.sin((x + 2) / 7)
+      c.box(x, h - 0.8, -13, x + 4, h, 9, 0xe8e8e2, { windows: 0, collide: false, bottom: true })
+      c.box(x, 7, -12, x + 4, h - 0.8, -11.8, 0x9fc3d6, { glass: true, collide: false })
+    }
+    // 廊桥和停着的飞机
+    for (const x of [-28, -10, 8, 26]) {
+      c.box(x - 0.8, 2, -21, x + 0.8, 4, -12, 0xc8ccd2, { windows: 0, collide: false, bottom: true })
+      c.box(x - 0.3, 0, -20.3, x + 0.3, 2, -19.7, 0x8a8f96, { windows: 0 })
+      plane(c, x + 2.4, -30, Math.PI)
+    }
+    // 塔台
+    c.column(-36, -26, 1.2, 0, 18, 0xe8e2d4, { windows: 0.2 })
+    c.column(-36, -26, 2.4, 18, 21, 0x6f8fa8, { glass: true })
+    c.column(-36, -26, 2.6, 21, 21.6, 0xe8e2d4, FLAT)
+    // 机坪的地面
+    c.box(-42, 0, -34, 42, 0.05, -13, 0x8a8f96, FLAT)
+  },
+  desc: '上海的主要国际机场，2 号航站楼的屋顶像起伏的海浪，1 号航站楼像展开的翅膀；磁浮从这里开往龙阳路。',
+  tip: '坐磁浮或地铁 2 号线到浦东国际机场。'
+}
+
+const hongqiao: LandmarkDef = {
+  id: 'hongqiao',
+  name: '虹桥枢纽',
+  district: 'minhang',
+  grade: 'B',
+  // 锚点是虹桥站（OSM），站房架在一排排南北向的站台上，出发层的高架路从南边接进来
+  lat: 31.19605,
+  lon: 121.3164,
+  rot: 0,
+  rect: [-18, -46, 18, 46],
+  focusY: 8,
+  photoR: 400,
+  build(c) {
+    // 站台和停着的高铁
+    for (let k = 0; k < 6; k++) {
+      const x = -13 + k * 5.2
+      c.box(x - 1.2, 0, -45, x + 1.2, 0.6, 45, 0xb8b2a6, { windows: 0 })
+      if (k % 2 === 0) bulletTrain(c, x + 2.3, -40 + k * 3, 30 - k * 4)
+      c.box(x - 1.6, 4.2, -40, x + 1.6, 4.5, 40, 0xd8d4cc, { ...FLAT, bottom: true })
+      for (let z = -36; z <= 36; z += 12) c.box(x - 0.15, 0.6, z - 0.15, x + 0.15, 4.2, z + 0.15, 0x8a8f96, { windows: 0 })
+    }
+    // 站房：架在站台上方的大厅，玻璃立面
+    c.box(-17, 6, -11, 17, 12, 11, 0xdfe6ec, { windows: 0.5, bottom: true, collide: false })
+    c.box(-17.2, 7, -11.2, 17.2, 11, -11, 0x9fc3d6, { glass: true, collide: false })
+    c.box(-17.2, 7, 11, 17.2, 11, 11.2, 0x9fc3d6, { glass: true, collide: false })
+    c.box(-17.5, 12, -11.5, 17.5, 12.6, 11.5, 0xc8ccd2, FLAT)
+    for (const x of [-16, 16]) for (const z of [-10, 0, 10]) c.box(x - 0.5, 0, z - 0.5, x + 0.5, 6, z + 0.5, 0xc8ccd2, { windows: 0 })
+  },
+  desc: '虹桥枢纽把高铁站、机场和地铁连在一起。虹桥站是亚洲最大的铁路客站之一，一列列白色高铁从这里开往全国。',
+  tip: '地铁 2、10、17 号线虹桥火车站站。'
+}
+
+const jdConfucius: LandmarkDef = {
+  id: 'jdconfucius',
+  name: '嘉定孔庙',
+  district: 'jiading',
+  grade: 'B',
+  // OSM 孔庙范围的中心；局部 x 顺着门前的塔城路，+z 往庙里（路在 z ≈ -4）
+  lat: 31.38346,
+  lon: 121.24842,
+  rot: -0.72,
+  rect: [-8, -1, 8, 14],
+  focusY: 4,
+  photoR: 180,
+  build(c) {
+    // 门前栏杆上一排石狮子
+    c.box(-7, 0, 0.6, 7, 0.8, 0.9, 0xc2bcae, { windows: 0 })
+    for (let x = -6.6; x <= 6.7; x += 0.95) c.box(x - 0.18, 0.8, 0.55, x + 0.18, 1.2, 0.95, 0xb5ad9e, FLAT)
+    // 棂星门：三道石牌坊
+    for (const x of [-3, 0, 3]) {
+      for (const dx of [-1, 1]) c.box(x + dx - 0.2, 0, 2.1, x + dx + 0.2, 3.4, 2.5, 0xb5ad9e, { windows: 0 })
+      c.box(x - 1.3, 3, 2, x + 1.3, 3.5, 2.6, 0xb5ad9e, FLAT)
+    }
+    // 泮池和大成殿，红墙围着
+    pond(c, -3, 4, 3, 6)
+    c.box(-2, 0, 4.7, 2, 0.5, 5.3, 0xc2bcae, { windows: 0 })
+    c.box(-4, 0, 8, 4, 0.6, 12.5, 0xb5ad9e, { windows: 0 })
+    c.box(-3.4, 0.6, 8.8, 3.4, 4, 12, 0x9e2f22, { windows: 0.3 })
+    chineseRoof(c, 0, 10.4, 9, 5.6, 4, 3)
+    chineseRoof(c, 0, 10.4, 7, 4.2, 5.8, 3)
+    for (const [x0, z0, x1, z1] of [
+      [-7.5, 1.5, -7.1, 13.5],
+      [7.1, 1.5, 7.5, 13.5],
+      [-7.5, 13.1, 7.5, 13.5]
+    ] as const)
+      c.box(x0, 0, z0, x1, 2.4, z1, 0x9e2f22, { windows: 0 })
+  },
+  desc: '始建于南宋的嘉定孔庙，有“吴中第一”之称；门前栏杆上蹲着一排石狮子，旁边是汇龙潭公园。',
+  tip: '在嘉定老城的塔城路上。'
+}
+
 export const bLandmarks: LandmarkDef[] = [
   yangpuBridge,
   yangpuRiverside,
@@ -643,6 +994,14 @@ export const bLandmarks: LandmarkDef[] = [
   expoCenter,
   pudongArt,
   shLibraryEast,
-  shMuseumEast
+  shMuseumEast,
+  resort,
+  sheshan,
+  qibao,
+  dishuihu,
+  dongtan,
+  pvg,
+  hongqiao,
+  jdConfucius
 ]
 

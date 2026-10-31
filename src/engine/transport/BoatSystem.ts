@@ -15,11 +15,11 @@ import { arrivalOf, boatsAt, nextDeparture, Polyline, runPose, type BoatLine, ty
 
 /** 船型：半长、半宽（格），玩家在船上的位置（局部坐标：x 朝船头、y 甲板高度） */
 const HULL = {
-  ferry: { halfLen: 8, halfBeam: 3, seat: [2.5, 3.1, 1.2] as const },
-  cruise: { halfLen: 11, halfBeam: 3.5, seat: [6, 5.1, 0] as const }
+  ferry: { halfLen: 8, halfBeam: 3, seat: [2.5, 3.1, 1.2] as const, jetty: 7 },
+  cruise: { halfLen: 11, halfBeam: 3.5, seat: [6, 5.1, 0] as const, jetty: 7 },
+  rowboat: { halfLen: 2.4, halfBeam: 0.9, seat: [-0.9, 0.55, 0] as const, jetty: 0.5 }
 }
-/** 栈桥（含趸船）最短长度（格） */
-const MIN_JETTY = 7
+type Kind = keyof typeof HULL
 /** 水面高度（和分块里水面网格一致） */
 const WATER_Y = 0.03
 
@@ -78,12 +78,21 @@ function toMesh(d: GeometryData | null, material: THREE.Material) {
 }
 
 // 船的模型（局部坐标：x 朝船头，z 横向，y 向上，水线在 y = 0）
-function boatGeometry(kind: 'ferry' | 'cruise') {
+function boatGeometry(kind: Kind) {
   const body = new GeoBuilder()
   const lights = new GeoBuilder()
   body.window = 0
   lights.window = 0
   const B = (g: GeoBuilder, x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, c: number, top = c) => g.box(x0, y0, z0, x1, y1, z1, rgb(c), rgb(top))
+  if (kind === 'rowboat') {
+    // 水乡的手摇船：木头船身、中间一段乌篷，船尾一支橹
+    B(body, -2.4, -0.3, -0.9, 2.4, 0.45, 0.9, 0x6b4a32, 0x8a6a4a)
+    B(body, 2.4, 0, -0.5, 2.9, 0.55, 0.5, 0x6b4a32)
+    B(body, -0.8, 0.45, -0.85, 1.2, 1.35, 0.85, 0x2f2a25)
+    B(body, -2.6, 0.5, -0.06, -1.6, 0.6, 0.06, 0x8a6a4a)
+    B(lights, 1.2, 1, -0.15, 1.5, 1.3, 0.15, 0xff4a3a)
+    return { body: body.build(), lights: lights.build() }
+  }
   if (kind === 'ferry') {
     // 黄浦江渡轮：两头一样（不用掉头），蓝色船身、白色船舱、顶层露天甲板
     B(body, -8, -0.8, -3, 8, 1, 3, 0x2f5f9e, 0x8a8d91)
@@ -126,8 +135,8 @@ export class BoatSystem {
   readonly piers: Pier[] = []
   /** 码头占地：程序化建筑避开 */
   readonly footprints: Lot[] = []
-  private readonly kinds = new Map<string, 'ferry' | 'cruise'>()
-  private readonly pool: { kind: 'ferry' | 'cruise'; group: THREE.Group; key: string | null }[] = []
+  private readonly kinds = new Map<string, Kind>()
+  private readonly pool: { kind: Kind; group: THREE.Group; key: string | null }[] = []
   private readonly geos: THREE.BufferGeometry[] = []
 
   constructor(defs: BoatLineDef[], proj: Projection, world: WorldData, materials: WorldMaterials, collision: CollisionWorld, interact: InteractRegistry) {
@@ -166,7 +175,7 @@ export class BoatSystem {
           ux /= dist
           uz /= dist
         }
-        const reach = Math.max(dist, MIN_JETTY + hull.halfLen)
+        const reach = Math.max(dist, hull.jetty + hull.halfLen)
         const dock: [number, number] = [land[0] + ux * reach, land[1] + uz * reach]
         // 换掉航线端点；离岸比靠岸点还近的航线点去掉，免得船先往岸边拐一下
         const near = (p: [number, number]) => Math.hypot(p[0] - land[0], p[1] - land[1]) < reach + 3
@@ -178,13 +187,16 @@ export class BoatSystem {
           while (pts.length > 2 && near(pts[pts.length - 2]!)) pts.splice(pts.length - 2, 1)
         }
         const len = reach - hull.halfLen - 0.3
-        this.buildPier(b, lights, decks, land, [ux, uz], len)
-        berths.push({ name, land, dock, pontoon: [land[0] + ux * (len - 2.5), land[1] + uz * (len - 2.5)], index: k })
+        const small = d.kind === 'rowboat'
+        this.buildPier(b, lights, decks, land, [ux, uz], len, small)
+        const at = small ? -0.5 : len - 2.5
+        berths.push({ name, land, dock, pontoon: [land[0] + ux * at, land[1] + uz * at], index: k })
       }
       const line: BoatLine = {
         id: d.id,
         name: d.name,
         kind: d.kind,
+        route: d.route,
         fare: d.fare,
         path: new Polyline(pts),
         piers: d.piers,
@@ -202,7 +214,7 @@ export class BoatSystem {
     const points: InteractPoint[] = this.piers.map((p) => ({
       x: p.pontoon[0],
       z: p.pontoon[1],
-      r: 6,
+      r: p.line.kind === 'rowboat' ? 3 : 6,
       label: `${p.name} · ${this.linesAt(p.name).map((b) => b.line.name).join(' / ')}`,
       action: '坐船',
       kind: 'boat',
@@ -213,9 +225,9 @@ export class BoatSystem {
     collision.add('boats', [...built.colliders, ...decks])
     for (const m of [toMesh(built.solid, materials.elevated), toMesh(lights.build(), materials.lights)]) if (m) this.root.add(m)
     // 船：每条渡轮一条，游船最多同时 3 条
-    const models = { ferry: boatGeometry('ferry'), cruise: boatGeometry('cruise') }
-    const count = { ferry: this.lines.filter((l) => l.kind === 'ferry').length, cruise: 3 }
-    for (const kind of ['ferry', 'cruise'] as const) {
+    const models = { ferry: boatGeometry('ferry'), cruise: boatGeometry('cruise'), rowboat: boatGeometry('rowboat') }
+    const count = { ferry: this.lines.filter((l) => l.kind === 'ferry').length, cruise: 3, rowboat: 2 * this.lines.filter((l) => l.kind === 'rowboat').length }
+    for (const kind of ['ferry', 'cruise', 'rowboat'] as const) {
       const body = toMesh(models[kind].body, materials.elevated)!
       const glow = toMesh(models[kind].lights, materials.lights)!
       this.geos.push(body.geometry, glow.geometry)
@@ -229,10 +241,26 @@ export class BoatSystem {
     }
   }
 
-  // 码头：岸边的站牌，伸到江里的栈桥，尽头一块宽一点的趸船平台带雨棚
-  private buildPier(b: Builder, lights: GeoBuilder, decks: Box[], land: [number, number], u: [number, number], len: number) {
+  // 码头：岸边的站牌，伸到江里的栈桥，尽头一块宽一点的趸船平台带雨棚；small（手摇船）只是岸边一段下到水边的石阶
+  private buildPier(b: Builder, lights: GeoBuilder, decks: Box[], land: [number, number], u: [number, number], len: number, small = false) {
     const [ux, uz] = u
     const angle = Math.atan2(uz, ux)
+    if (small) {
+      for (let i = 0; i < 3; i++) {
+        const d = -1.5 + i * 0.6
+        b.orientedBox(land[0] + ux * d, land[1] + uz * d, angle, 0.6, 2.4, 0, 0.45 - i * 0.15, 0xa9a49a, { windows: 0, collide: false })
+      }
+      decks.push({ ...orientedBox(land[0] + ux * (len / 2 - 0.5), land[1] + uz * (len / 2 - 0.5), angle, len + 2, 2.4, 0, 0.3), deck: true })
+      const vx = -uz
+      const vz = ux
+      const sx = land[0] - ux * 1.5 + vx * 1.8
+      const sz = land[1] - uz * 1.5 + vz * 1.8
+      b.orientedBox(sx, sz, angle, 0.2, 0.2, 0, 2.4, 0x6b4a32, { windows: 0 })
+      lights.window = 0
+      lights.orientedBox(sx, sz, angle, 0.24, 1.2, 1.8, 2.5, rgb(0xc8282a), rgb(0xc8282a))
+      this.footprints.push({ x0: land[0] - 3, z0: land[1] - 3, x1: land[0] + 3, z1: land[1] + 3 })
+      return
+    }
     const start = -2
     const mid = (start + len) / 2
     const cx = land[0] + ux * mid
@@ -268,7 +296,7 @@ export class BoatSystem {
 
   /** 每帧：按游戏时间摆好江面上的船（视距内） */
   update(t: number, fx: number, fz: number, radius: number) {
-    const want: { kind: 'ferry' | 'cruise'; key: string; pose: BoatPose }[] = []
+    const want: { kind: Kind; key: string; pose: BoatPose }[] = []
     for (const l of this.lines)
       for (const pose of boatsAt(l, t)) if (Math.hypot(pose.x - fx, pose.z - fz) < radius + 50) want.push({ kind: l.kind, key: `${l.id}@${pose.run}`, pose })
     const keys = new Set(want.map((w) => w.key))
