@@ -113,3 +113,33 @@ test('轨道在 h = 0 处切开：地上部分保留，切点放隧道口', asyn
   // 全在地下：什么都不画
   expect(splitAtGround([0, 0, -3, 10, 0, -3])).toEqual([])
 })
+
+test('景点撑着桥面的范围里不立桥墩', () => {
+  const g = buildElevated([[0, [0, 0, 7, 30, 0, 7]]], [info({ level: 1, width: 8 })], undefined, (x) => x > 20)!
+  // 只剩 x = 12 的一个桥墩
+  expect([...g.position].filter((_, i) => i % 3 === 1 && g.position[i]! === 0).length).toBe(8)
+})
+
+test('3D 方梁和斜放方块的底面：每个面的绕向和法线一致', async () => {
+  const { GeoBuilder } = await import('../src/engine/build/geometry.ts')
+  const segments = [
+    [[0, 0, 0], [10, 5, 3]],
+    [[2, 0, 1], [2, 30, 1]],
+    [[0, 3, 0], [-4, 1, -6]]
+  ]
+  for (const [a, b] of segments) {
+    const g = new GeoBuilder()
+    g.beam(a!, b!, 1, 0.5, [1, 1, 1])
+    g.orientedBottom(5, 5, 0.9, 4, 2, 3, [1, 1, 1])
+    const d = g.build()!
+    expect(d.index.length).toBe(7 * 6)
+    for (let i = 0; i < d.index.length; i += 3) {
+      const [p0, p1, p2] = [d.index[i]! * 3, d.index[i + 1]! * 3, d.index[i + 2]! * 3]
+      const p = d.position
+      const u = [p[p1]! - p[p0]!, p[p1 + 1]! - p[p0 + 1]!, p[p1 + 2]! - p[p0 + 2]!]
+      const v = [p[p2]! - p[p0]!, p[p2 + 1]! - p[p0 + 1]!, p[p2 + 2]! - p[p0 + 2]!]
+      const n = [u[1]! * v[2]! - u[2]! * v[1]!, u[2]! * v[0]! - u[0]! * v[2]!, u[0]! * v[1]! - u[1]! * v[0]!]
+      expect(n[0]! * d.normal[p0]! + n[1]! * d.normal[p0 + 1]! + n[2]! * d.normal[p0 + 2]!).toBeGreaterThan(0)
+    }
+  }
+})

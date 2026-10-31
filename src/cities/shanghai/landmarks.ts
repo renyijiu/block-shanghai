@@ -1,37 +1,12 @@
 // 上海景点（docs/05 第 2 节，P3 的 S 级和首批 A 级）。坐标来自 OSM（WGS-84，2026-10-30 查询）；
 // 高度按建筑尺度（1 格 ≈ 2.5 米），水平按地图尺度（核心区 1 格 ≈ 5 米），细部适当夸张以保留辨识度
 import type { LandmarkContext, LandmarkDef, PartOptions } from '../../engine/city.ts'
+import { aLandmarks } from './landmarks-a.ts'
+import { chineseRoof, hall, LIGHT, TILE, WARM } from './parts.ts'
 
 const STONE = 0xd8cdb4
 const STONE_DARK = 0xb8ab90
 const GREEN_ROOF = 0x2f6b55
-const TILE = 0x3a3b40
-const WARM = 0xffd79a
-const LIGHT = { light: true } satisfies PartOptions
-
-// 中式屋顶：几层逐渐收小的瓦顶，最下一层四角起翘（飞檐）
-function chineseRoof(c: LandmarkContext, cx: number, cz: number, w: number, d: number, y: number, tiers: number, color = TILE) {
-  for (let i = 0; i < tiers; i++) {
-    const k = 1 - i * 0.28
-    c.box(cx - (w / 2) * k, y + i * 0.7, cz - (d / 2) * k, cx + (w / 2) * k, y + i * 0.7 + 0.45, cz + (d / 2) * k, color, { windows: 0, collide: false })
-  }
-  for (const sx of [-1, 1])
-    for (const sz of [-1, 1]) {
-      const x = cx + sx * (w / 2)
-      const z = cz + sz * (d / 2)
-      c.box(Math.min(x, x + sx * 0.7), y + 0.3, Math.min(z, z + sz * 0.7), Math.max(x, x + sx * 0.7), y + 0.9, Math.max(z, z + sz * 0.7), color, { windows: 0, collide: false })
-    }
-  // 屋脊
-  c.box(cx - (w / 2) * (1 - (tiers - 1) * 0.28), y + tiers * 0.7 - 0.25, cz - 0.2, cx + (w / 2) * (1 - (tiers - 1) * 0.28), y + tiers * 0.7 + 0.2, cz + 0.2, color, { windows: 0, collide: false })
-}
-
-/** 中式殿堂：台基、红柱墙身、重檐（eaves 层屋顶） */
-function hall(c: LandmarkContext, cx: number, cz: number, w: number, d: number, h: number, wall: number, eaves = 1) {
-  c.box(cx - w / 2 - 0.6, 0, cz - d / 2 - 0.6, cx + w / 2 + 0.6, 0.4, cz + d / 2 + 0.6, 0xb5ad9e, { windows: 0 })
-  c.box(cx - w / 2, 0.4, cz - d / 2, cx + w / 2, h, cz + d / 2, wall, { windows: 0.35 })
-  for (let e = 0; e < eaves; e++) chineseRoof(c, cx, cz, w + 3 - e * 3, d + 3 - e * 3, h + e * 2.2, 3)
-}
-
 // ---------------------------------------------------------------- 外滩
 
 // 外滩是弯的：沿线每 5 格量一次 [局部 x, 中山东一路西侧 z, 东侧 z, 江边 z]，由烘焙的道路、水面数据量出
@@ -623,4 +598,4 @@ const peoplesSquare: LandmarkDef = {
   tip: '地铁 1、2、8 号线人民广场站，出站就到。'
 }
 
-export const landmarks: LandmarkDef[] = [bund, orientalPearl, shanghaiTower, yuyuan, swfc, jinmao, ljzBridge, nanjingRoad, peoplesSquare, waibaidu]
+export const landmarks: LandmarkDef[] = [bund, orientalPearl, shanghaiTower, yuyuan, swfc, jinmao, ljzBridge, nanjingRoad, peoplesSquare, waibaidu, ...aLandmarks]

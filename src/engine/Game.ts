@@ -275,7 +275,8 @@ export class Game {
         metro: metro.data,
         interact: this.interact,
         landmarks: [...this.landmarks.footprints, ...this.boats.footprints, ...lifeFootprints(this.city.content, this.landmarks.placed)],
-        season: () => this.season
+        season: () => this.season,
+        pierFree: (x, z) => this.landmarks?.pierFree(x, z) ?? false
       },
       { radius: QUALITY_PRESETS[this.quality].viewDistance, budgetMs: 6 }
     )

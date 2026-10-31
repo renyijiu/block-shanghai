@@ -16,6 +16,8 @@ export interface PlacedLandmark {
   z: number
   /** 局部坐标 → 世界坐标 */
   toWorld(lx: number, lz: number): [number, number]
+  /** 世界坐标 → 局部坐标 */
+  toLocal(wx: number, wz: number): [number, number]
   /** 占地的世界外接矩形 */
   bounds: Lot
   /** 避让范围的世界外接矩形 */
@@ -40,13 +42,14 @@ export function placeLandmark(def: LandmarkDef, proj: Projection): PlacedLandmar
   const c = Math.cos(def.rot)
   const s = Math.sin(def.rot)
   const toWorld = (lx: number, lz: number): [number, number] => [x + lx * c - lz * s, z + lx * s + lz * c]
+  const toLocal = (wx: number, wz: number): [number, number] => [(wx - x) * c + (wz - z) * s, -(wx - x) * s + (wz - z) * c]
   const aabb = ([x0, z0, x1, z1]: LandmarkDef['rect']): Lot => {
     const corners = [toWorld(x0, z0), toWorld(x1, z0), toWorld(x0, z1), toWorld(x1, z1)]
     const xs = corners.map((p) => p[0])
     const zs = corners.map((p) => p[1])
     return { x0: Math.min(...xs), z0: Math.min(...zs), x1: Math.max(...xs), z1: Math.max(...zs) }
   }
-  return { def, x, z, toWorld, bounds: aabb(def.rect), footprints: (def.footprint ?? [def.rect]).map(aabb) }
+  return { def, x, z, toWorld, toLocal, bounds: aabb(def.rect), footprints: (def.footprint ?? [def.rect]).map(aabb) }
 }
 
 /** 实现 LandmarkContext：局部坐标换算成世界坐标，写进 Builder（普通 / 玻璃）和灯光网格 */
@@ -107,6 +110,23 @@ export class LandmarkBuilder implements LandmarkContext {
   column(cx: number, cz: number, r: number, y0: number, y1: number, color: number, o: PartOptions = {}) {
     this.part(cx, cz, r * 1.75, r * 1.75, y0, y1, color, 0, o)
     this.part(cx, cz, r * 1.75, r * 1.75, y0, y1, color, Math.PI / 4, { ...o, collide: false })
+  }
+
+  beam(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, w: number, h: number, color: number, o: PartOptions = {}) {
+    const [ax, az] = this.p.toWorld(x0, z0)
+    const [bx, bz] = this.p.toWorld(x1, z1)
+    const a = [ax, y0, az]
+    const b = [bx, y1, bz]
+    const big = Math.hypot(x1 - x0, y1 - y0, z1 - z0) >= LOD_MIN && Math.max(w, h) >= 0.5
+    if (o.light) {
+      for (const g of big ? [this.lights, this.farLights] : [this.lights]) {
+        g.window = 0
+        g.beam(a, b, w, h, rgb(color))
+      }
+      return
+    }
+    this.b.beam(a, b, w, h, color, o)
+    if (big) this.far.beam(a, b, w, h, color, o)
   }
 
   platform(x0: number, z0: number, x1: number, z1: number, y: number) {
@@ -201,6 +221,16 @@ export class LandmarkManager {
       return p
     }
     return null
+  }
+
+  /** (x, z) 在某个景点的 pierFree 范围里：高架道路在这里不立桥墩 */
+  pierFree(x: number, z: number) {
+    for (const p of this.placed) {
+      if (!p.def.pierFree) continue
+      const [lx, lz] = p.toLocal(x, z)
+      if (p.def.pierFree.some(([x0, z0, x1, z1]) => lx >= x0 && lx <= x1 && lz >= z0 && lz <= z1)) return true
+    }
+    return false
   }
 
   isLoaded(id: string) {

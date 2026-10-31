@@ -35,6 +35,8 @@ export interface ChunkContext {
   landmarks: Lot[]
   /** 当前季节（行道树换季） */
   season: () => Season
+  /** 这个位置不立高架桥墩（景点自己撑着桥面） */
+  pierFree?: (x: number, z: number) => boolean
 }
 
 /**
@@ -184,7 +186,7 @@ export class ChunkManager {
     add(buildAreas(src.water, 0.03, {}, 0xffffff), this.materials.water, 'water')
     add(buildGroundRoads(src.roads, roads), this.materials.roads, 'roads')
     const piers: Box[] = []
-    add(buildElevated(src.roads, roads, piers), this.materials.elevated, 'elevated')
+    add(buildElevated(src.roads, roads, piers, this.ctx.pierFree), this.materials.elevated, 'elevated')
     const metro = this.ctx.metro
     const mc = metro?.chunks[key]
     if (metro && mc?.tracks.length) {

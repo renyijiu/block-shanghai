@@ -73,6 +73,8 @@ export interface PartOptions {
   windows?: number
   top?: number
   collide?: boolean | 'camera'
+  /** 加上底面：悬在空中、从下面看得见的构件（倒金字塔、挑檐） */
+  bottom?: boolean
 }
 
 /**
@@ -87,6 +89,8 @@ export interface LandmarkContext {
   ball(cx: number, cy: number, cz: number, r: number, color: number, o?: PartOptions): void
   /** 八角柱（两个错开 45° 的方柱） */
   column(cx: number, cz: number, r: number, y0: number, y1: number, color: number, o?: PartOptions): void
+  /** 沿任意 3D 线段的方梁（斜拉索、拱肋、斜撑）：截面宽 w、高 h；只做样子，不挡人 */
+  beam(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, w: number, h: number, color: number, o?: PartOptions): void
   /** 可站立的平台（不渲染，只登记碰撞）：顶面在 y；水面上也能走 */
   platform(x0: number, z0: number, x1: number, z1: number, y: number): void
   /** 观光电梯：在 (x, z) 按 E 上到 (tx, ty, tz)，在顶上按 E 回来；deck 是观光层的名字（“263 米观光层”） */
@@ -122,6 +126,8 @@ export interface LandmarkDef {
    * 斜着摆的长条景点（外滩、南京路）分成几段，免得外接矩形占掉旁边一大片
    */
   footprint?: [x0: number, z0: number, x1: number, z1: number][]
+  /** 这些范围（局部坐标）里不立高架道路的桥墩：斜拉桥、拱桥的主跨由景点自己的桥塔、拱肋撑着；龙柱一根柱子撑起整座立交 */
+  pierFree?: [x0: number, z0: number, x1: number, z1: number][]
   /** 拍照识别：瞄准高度、最远距离（格） */
   focusY: number
   photoR: number

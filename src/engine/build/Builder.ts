@@ -36,12 +36,20 @@ export class Builder {
     const g = o.glass ? this.glass : this.solid
     g.window = o.windows ?? 1
     g.orientedBox(cx, cz, angle, len, wid, y0, y1, rgb(color), rgb(o.top ?? color))
+    if (o.bottom) g.orientedBottom(cx, cz, angle, len, wid, y0, rgb(color))
     const c = o.collide ?? y0 < 1
     if (c) {
       const box = orientedBox(cx, cz, angle, len, wid, y0, y1)
       if (c === 'camera') box.soft = true
       this.colliders.push(box)
     }
+  }
+
+  /** 沿任意 3D 线段的方梁（斜拉索、拱肋），不登记碰撞 */
+  beam(a: number[], b: number[], w: number, h: number, color: number, o: BoxOptions = {}) {
+    const g = o.glass ? this.glass : this.solid
+    g.window = 0
+    g.beam(a, b, w, h, rgb(color))
   }
 
   /**

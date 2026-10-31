@@ -177,7 +177,7 @@ function addParapets(g: GeoBuilder, f: Frame, bottomDrop: number, deckY: number 
 }
 
 /** 高架：桥面（含厚度、底面）、护栏、桥墩，合并成一个网格；桥墩的碰撞盒写进 colliders */
-export function buildElevated(pieces: RoadPiece[], roads: RoadInfo[], colliders?: Box[]): GeometryData | null {
+export function buildElevated(pieces: RoadPiece[], roads: RoadInfo[], colliders?: Box[], skipPier?: (x: number, z: number) => boolean): GeometryData | null {
   const s = ROAD_STYLE
   const g = new GeoBuilder()
   const concrete = hex(s.colors.concrete)
@@ -209,9 +209,9 @@ export function buildElevated(pieces: RoadPiece[], roads: RoadInfo[], colliders?
       while (d <= segLen) {
         const t = d / segLen
         const h = ah! + (bh! - ah!) * t - s.deckThickness
-        if (h + s.deckThickness > s.pierMinHeight) {
-          const px = ax! + (bx! - ax!) * t
-          const pz = az! + (bz! - az!) * t
+        const px = ax! + (bx! - ax!) * t
+        const pz = az! + (bz! - az!) * t
+        if (h + s.deckThickness > s.pierMinHeight && !skipPier?.(px, pz)) {
           const hs = s.pierSize / 2
           g.box(px - hs, 0, pz - hs, px + hs, h, pz + hs, concrete)
           colliders?.push({ x0: px - hs, y0: 0, z0: pz - hs, x1: px + hs, y1: h, z1: pz + hs })

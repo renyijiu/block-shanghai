@@ -100,6 +100,54 @@ export class GeoBuilder {
     else this.quad(t[0]!, t[3]!, t[2]!, t[1]!, [0, 1, 0], top)
   }
 
+  /**
+   * 沿任意 3D 线段的方梁（含两端）：截面横向宽 w、竖向高 h。用于斜拉索、拱肋、斜撑。
+   * 面的绕向按法线自动校正
+   */
+  beam(a: number[], b: number[], w: number, h: number, c: RGB) {
+    const d = [b[0]! - a[0]!, b[1]! - a[1]!, b[2]! - a[2]!]
+    const len = Math.hypot(d[0]!, d[1]!, d[2]!)
+    if (len < 1e-6) return
+    const u = d.map((v) => v / len)
+    // 横向：方向 × 竖直；接近竖直的梁改用 x 轴
+    let s = [u[2]!, 0, -u[0]!]
+    let sl = Math.hypot(s[0]!, s[2]!)
+    if (sl < 1e-3) {
+      s = [1, 0, 0]
+      sl = 1
+    }
+    s = s.map((v) => v / sl)
+    // 竖向：横向 × 方向
+    const t = [s[1]! * u[2]! - s[2]! * u[1]!, s[2]! * u[0]! - s[0]! * u[2]!, s[0]! * u[1]! - s[1]! * u[0]!]
+    const P = (e: number[], i: number, j: number) => [e[0]! + (s[0]! * w * i + t[0]! * h * j) / 2, e[1]! + (s[1]! * w * i + t[1]! * h * j) / 2, e[2]! + (s[2]! * w * i + t[2]! * h * j) / 2]
+    const face = (p: number[], q: number[], r: number[], m: number[], n: number[]) => {
+      const cr = [(q[1]! - p[1]!) * (r[2]! - p[2]!) - (q[2]! - p[2]!) * (r[1]! - p[1]!), (q[2]! - p[2]!) * (r[0]! - p[0]!) - (q[0]! - p[0]!) * (r[2]! - p[2]!), (q[0]! - p[0]!) * (r[1]! - p[1]!) - (q[1]! - p[1]!) * (r[0]! - p[0]!)]
+      if (cr[0]! * n[0]! + cr[1]! * n[1]! + cr[2]! * n[2]! >= 0) this.quad(p, q, r, m, n, c)
+      else this.quad(p, m, r, q, n, c)
+    }
+    const neg = (v: number[]) => v.map((x) => -x)
+    face(P(a, 1, 1), P(b, 1, 1), P(b, 1, -1), P(a, 1, -1), s)
+    face(P(a, -1, 1), P(a, -1, -1), P(b, -1, -1), P(b, -1, 1), neg(s))
+    face(P(a, 1, 1), P(a, -1, 1), P(b, -1, 1), P(b, 1, 1), t)
+    face(P(a, 1, -1), P(b, 1, -1), P(b, -1, -1), P(a, -1, -1), neg(t))
+    face(P(a, 1, 1), P(a, 1, -1), P(a, -1, -1), P(a, -1, 1), neg(u))
+    face(P(b, 1, 1), P(b, -1, 1), P(b, -1, -1), P(b, 1, -1), u)
+  }
+
+  /** 任意朝向方块的底面（朝下），参数同 orientedBox */
+  orientedBottom(cx: number, cz: number, angle: number, len: number, wid: number, y0: number, c: RGB) {
+    const ux = Math.cos(angle)
+    const uz = Math.sin(angle)
+    const P = (a: number, b: number) => [cx + ux * a + uz * b, y0, cz + uz * a - ux * b]
+    const hl = len / 2
+    const hw = wid / 2
+    const t = [P(-hl, hw), P(hl, hw), P(hl, -hw), P(-hl, -hw)]
+    const cross = (t[1]![0]! - t[0]![0]!) * (t[2]![2]! - t[0]![2]!) - (t[1]![2]! - t[0]![2]!) * (t[2]![0]! - t[0]![0]!)
+    // 和顶面相反：从下往上看要逆时针
+    if (cross < 0) this.quad(t[0]!, t[3]!, t[2]!, t[1]!, [0, -1, 0], c)
+    else this.quad(t[0]!, t[1]!, t[2]!, t[3]!, [0, -1, 0], c)
+  }
+
   tri(a: number[], b: number[], c: number[], n: number[], col: RGB) {
     const i = this.vertex(a[0]!, a[1]!, a[2]!, n[0]!, n[1]!, n[2]!, col)
     this.vertex(b[0]!, b[1]!, b[2]!, n[0]!, n[1]!, n[2]!, col)

@@ -43,7 +43,12 @@ export const content: LifeContent = {
     { id: 'psbreakfast', name: '早餐摊', kind: 'food', at: { landmark: 'peoplessquare', x: -28, z: 4 }, items: ['cifantuan', 'youdunzi', 'scallionnoodle'] },
     // 东方明珠下的面馆和咖啡
     { id: 'ljznoodle', name: '陆家嘴面馆', kind: 'food', at: { landmark: 'orientalpearl', x: -9, z: 24 }, items: ['scallionnoodle', 'porkchop'] },
-    { id: 'ljzcoffee', name: '江景咖啡', kind: 'coffee', at: { landmark: 'orientalpearl', x: 9, z: 24 }, items: ['coffee'] }
+    { id: 'ljzcoffee', name: '江景咖啡', kind: 'coffee', at: { landmark: 'orientalpearl', x: 9, z: 24 }, items: ['coffee'] },
+    // 新天地北里的小广场、田子坊弄堂中间的小广场
+    { id: 'xtdcoffee', name: '弄堂咖啡', kind: 'coffee', at: { landmark: 'xintiandi', x: -2.9, z: -1.2, face: Math.PI }, items: ['coffee'] },
+    { id: 'xtdgift', name: '石库门礼品店', kind: 'gift', at: { landmark: 'xintiandi', x: 2.9, z: -1.2, face: Math.PI }, items: ['shikumen', 'postcards'] },
+    { id: 'tzfcoffee', name: '老厂房咖啡', kind: 'coffee', at: { landmark: 'tianzifang', x: 3.2, z: 7.8, face: Math.PI }, items: ['coffee'] },
+    { id: 'tzfgift', name: '田子坊小店', kind: 'gift', at: { landmark: 'tianzifang', x: 7.6, z: 7.8, face: Math.PI }, items: ['shikumen', 'qipaobookmark', 'candybox'] }
   ],
   culture: [
     {
