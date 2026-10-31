@@ -153,7 +153,14 @@ npm 活跃度为过去 12 个月的发版次数（2026-10-30 查询）。
 
 ## 9. 部署
 
-静态托管即可。但**主要玩家在国内**：GitHub Pages、Vercel、Cloudflare Pages 在大陆的访问速度和稳定性都没有保障；国内对象存储 + CDN（阿里云 OSS、腾讯云 COS）速度好，但绑定自定义域名需要 ICP 备案。P6 前再定。
+静态托管即可。但**主要玩家在国内**：GitHub Pages、Vercel、Cloudflare Pages 在大陆的访问速度和稳定性都没有保障；国内对象存储 + CDN（阿里云 OSS、腾讯云 COS）速度好，但绑定自定义域名需要 ICP 备案。
+
+**P6 的准备（托管位置仍待定）**：
+
+- `npm run build` 的产物 `dist/` 约 8 MB（最大的是道路数据 4.9 MB，开 gzip 后小很多），全部用相对路径，放在任意静态托管的根目录或子路径下都能用（已在本地静态服务器的子路径下验证）。
+- GitHub Pages：`.github/workflows/pages.yml` 只能手动触发（推送代码不会自动发布）。仓库 Settings → Pages 的 Source 选“GitHub Actions”，再到 Actions 页面运行“部署到 GitHub Pages”。
+- 国内对象存储：把 `dist/` 整个上传到存储桶，首页设成 `index.html`，开启 gzip / Brotli；`assets/` 下的文件名带内容哈希，可以设长缓存，`index.html` 和 `manifest.webmanifest` 设不缓存。绑定自定义域名需要 ICP 备案。
+- 定下来以后在 06 的“已定事项”里记一笔。
 
 ## 10. 迁移记录
 
