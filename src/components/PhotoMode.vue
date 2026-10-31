@@ -20,6 +20,7 @@
         <div>
           <div v-if="result.names.length" class="names">拍到：{{ result.names.join('、') }}</div>
           <div v-else class="names dim">画面里没有认出景点</div>
+          <div v-if="result.people" class="people">和 {{ result.people }} 位路人合影</div>
           <div v-if="result.newly.length" class="newly">图鉴新解锁 {{ result.newly.length }} 项：{{ result.newly.join('、') }}</div>
           <div class="hint">{{ result.saved ? '已存进相册 · 点这里查看' : '照片没能保存（浏览器不允许本地存储）' }}</div>
         </div>
@@ -41,7 +42,7 @@ const filter = ref(game.photoFilter.id)
 const view = ref(game.rig.viewName)
 const busy = ref(false)
 const flash = ref(false)
-const result = ref<{ url: string; names: string[]; newly: string[]; saved: boolean } | null>(null)
+const result = ref<{ url: string; names: string[]; newly: string[]; saved: boolean; people: number } | null>(null)
 let resultTimer = 0
 let viewTimer = 0
 
@@ -58,7 +59,7 @@ async function shoot() {
   try {
     const r = await game.takePhoto()
     if (result.value) URL.revokeObjectURL(result.value.url)
-    result.value = { url: URL.createObjectURL(r.thumb), names: r.recognized.map((id) => game.landmarkName(id)), newly: r.newly.map((id) => game.landmarkName(id)), saved: r.saved }
+    result.value = { url: URL.createObjectURL(r.thumb), names: r.recognized.map((id) => game.landmarkName(id)), newly: r.newly.map((id) => game.landmarkName(id)), saved: r.saved, people: r.people }
     emit('shot', r.newly.length)
     clearTimeout(resultTimer)
     resultTimer = window.setTimeout(() => (result.value = null), 4500)
@@ -275,6 +276,10 @@ onBeforeUnmount(() => {
 .dim {
   opacity: 0.75;
   font-weight: 400;
+}
+
+.people {
+  color: #9fd8ff;
 }
 
 .newly {

@@ -34,6 +34,7 @@
     </template>
     <DistrictToast :name="toast.name" :theme="toast.theme" />
     <DiscoverToast :landmark="discovered" />
+    <SpeechBubble :talk="speech" />
     <BigMap v-if="mapOpen" :game="game" :title="config.name" :here="districtName" @close="mapOpen = false" />
     <BoatPanel v-if="boatPanel" :game="game" :pier="boatPanel" @close="boatPanel = null" @board="board" />
     <CodexPanel v-if="codexTab" :game="game" :initial-tab="codexTab" @close="codexTab = null" />
@@ -59,6 +60,8 @@ import MetroHud from './components/MetroHud.vue'
 import MetroPanel from './components/MetroPanel.vue'
 import MiniMap from './components/MiniMap.vue'
 import PhotoMode from './components/PhotoMode.vue'
+import SpeechBubble from './components/SpeechBubble.vue'
+import type { Talk } from './engine/actors/NPCManager.ts'
 import TouchControls from './components/TouchControls.vue'
 import { emptyStats, Game, type GameStats } from './engine/Game.ts'
 import type { Route } from './engine/metro/network.ts'
@@ -192,6 +195,9 @@ async function rideElevator(p: InteractPoint) {
   if (text) showNotice(text)
 }
 
+// 和路人聊天
+const speech = ref<{ talk: Talk; key: number } | null>(null)
+
 // 发现景点：弹出景点卡片；同时发现好几个时排队，一个接一个弹
 const discovered = ref<DiscoverInfo | null>(null)
 const discoverQueue: DiscoverInfo[] = []
@@ -265,6 +271,10 @@ onMounted(async () => {
       else if (p.kind === 'interior' && p.go) void interiorGo(p.go)
       else if (p.kind === 'elevator') void rideElevator(p)
       else if (p.kind === 'boat' && p.pier) boatPanel.value = p.pier
+      else if (p.kind === 'npc' && p.npc !== undefined) {
+        const t = g.talk(p.npc)
+        if (t) speech.value = { talk: t, key: (speech.value?.key ?? 0) + 1 }
+      }
     }
     g.onRideEnd = (message) => showNotice(message)
     // 地铁成就、线路徽章、每日任务

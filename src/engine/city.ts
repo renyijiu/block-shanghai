@@ -4,7 +4,7 @@ import type { Builder } from './build/Builder.ts'
 import type { Rng } from './build/random.ts'
 import type { LatLon, ProjectionConfig } from './geo/projection.ts'
 import type { PhotoFilter } from './photo/filters.ts'
-import type { Season } from './sky/weather.ts'
+import type { Season, WeatherKind } from './sky/weather.ts'
 import type { Lot } from './world/lots.ts'
 import type { WorldDataUrls } from './world/WorldData.ts'
 
@@ -145,6 +145,39 @@ export interface CityPackage {
   landmarks: LandmarkDef[]
   /** 渡轮和游船（P3） */
   boats: BoatLineDef[]
+  /** 路人：类型、穿着、对白（P5） */
+  people: NpcContent
+}
+
+/** 一句对白；方言句子带普通话意思 */
+export interface NpcLine {
+  text: string
+  gloss?: string
+}
+
+export interface NpcType {
+  id: string
+  name: string
+  /** 说上海话、普通话还是英文 */
+  speech: 'wu' | 'mandarin' | 'english'
+  shirts: number[]
+  pants: number[]
+  hair: number[]
+  /** 老年人：走得慢 */
+  old?: boolean
+  /** 行为：走路（默认）、骑电动车、遛狗、跳广场舞、站着（相亲角） */
+  kind?: 'walk' | 'ride' | 'dog' | 'dance' | 'stand'
+  lines: NpcLine[]
+}
+
+export interface NpcContent {
+  types: NpcType[]
+  /** 下雨、梅雨、台风、下雪时本地人会说的 */
+  weatherLines: Partial<Record<WeatherKind, NpcLine[]>>
+  /** 晚上在外滩、陆家嘴附近会说的 */
+  nightLines: NpcLine[]
+  /** 相亲角的位置（周末出现） */
+  matchmaking: LatLon
 }
 
 /** 一条船线：渡轮在两个码头之间来回，游船从码头出发开到折返点再开回来 */

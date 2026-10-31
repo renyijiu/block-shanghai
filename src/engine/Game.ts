@@ -2,6 +2,7 @@
 import * as THREE from 'three/webgpu'
 import { CameraRig, type ViewMode } from './actors/CameraRig.ts'
 import { Input } from './actors/Input.ts'
+import { NPCManager, type Talk } from './actors/NPCManager.ts'
 import { Player, type PlayerWorld } from './actors/Player.ts'
 import type { CityPackage } from './city.ts'
 import { DevCamera } from './DevCamera.ts'
@@ -79,6 +80,8 @@ export interface GameStats {
   announce: (Announcement & { id: number }) | null
   /** 天气和季节：“⛅ 多云 · 秋” */
   weather: string
+  /** 附近的路人数 */
+  npcs: number
 }
 
 /** 拍照的结果，给界面显示 */
@@ -91,10 +94,12 @@ export interface PhotoResult {
   thumb: Blob
   /** 存进相册了没有（隐私模式等情况下 IndexedDB 不可用） */
   saved: boolean
+  /** 一起合影（摆姿势）的路人数 */
+  people: number
 }
 
 /** 统计和界面状态的初始值 */
-export const emptyStats = (): GameStats => ({ fps: 0, drawCalls: 0, triangles: 0, chunks: 0, pending: 0, buildAvg: 0, buildMax: 0, x: 0, z: 0, mode: 'player', view: 'third', district: null, time: '', money: 0, prompt: null, found: 0, landmarks: 0, ride: null, station: null, announce: null, weather: '' })
+export const emptyStats = (): GameStats => ({ fps: 0, drawCalls: 0, triangles: 0, chunks: 0, pending: 0, buildAvg: 0, buildMax: 0, x: 0, z: 0, mode: 'player', view: 'third', district: null, time: '', money: 0, prompt: null, found: 0, landmarks: 0, ride: null, station: null, announce: null, weather: '', npcs: 0 })
 
 /** 快速到达的结果，给界面提示用 */
 export interface TravelResult {
@@ -139,6 +144,7 @@ export class Game {
   /** 走近新景点时调用（界面弹出“发现景点”） */
   onDiscover: ((p: PlacedLandmark) => void) | null = null
   boats: BoatSystem | null = null
+  npcs: NPCManager | null = null
   /** 地铁站内（站厅、站台、车厢、换乘通道），独立场景 */
   interior: InteriorManager | null = null
   /** 地铁事件（进站、出站、乘车、换乘），界面和以后的成就系统用 */
@@ -245,6 +251,9 @@ export class Game {
     this.scene.add(this.landmarks.root)
     this.boats = new BoatSystem(this.city.boats, this.proj, world, this.materials, this.collision, this.interact)
     this.scene.add(this.boats.root)
+    this.npcs = new NPCManager(this.city.people, world, this.collision, this.proj)
+    this.npcs.setHotspots(this.landmarks.placed.map((p) => [p.x, p.z]))
+    this.scene.add(this.npcs.root)
     this.photo = new PhotoSystem(this.renderer, this.camera, this.collision, this.landmarks)
     Album.open()
       .then((a) => (this.disposed ? a.close() : (this.album = a)))
@@ -353,6 +362,7 @@ export class Game {
     this.camera.far = p.viewDistance * 1.3
     this.camera.updateProjectionMatrix()
     this.chunks?.setRadius(p.viewDistance)
+    if (this.npcs) this.npcs.target = p.npcs
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, p.pixelRatio))
     this.materials.setReflection(p.reflection, this.scene)
     this.resize()
@@ -444,6 +454,16 @@ export class Game {
       this.weather = this.weatherOverride ?? weatherAt(new Date(), this.clock.seconds)
     }
     this.weatherLook = mixLook(this.weatherLook, lookOf(this.weather), Math.min(1, dt * 0.25))
+  }
+
+  /** 和路人聊天：按天气、时间、在不在外滩陆家嘴挑一句 */
+  talk(id: number): Talk | null {
+    const p = this.player.pos
+    const near = ['bund', 'orientalpearl'].some((k) => {
+      const l = this.landmarks?.byId(k)
+      return !!l && Math.hypot(l.x - p.x, l.z - p.z) < 450
+    })
+    return this.npcs?.talk(id, p.x, p.z, this.weather, this.clock.daySeconds / 3600, near) ?? null
   }
 
   /** 天气预报式的说法：“⛅ 多云 · 秋” */
@@ -636,6 +656,7 @@ export class Game {
     const place = (district && this.city.config.districts[district]?.name) ?? ''
     const time = this.clock.format()
     const inside = this.interior?.active ? this.interior.status()?.where.split(' · ')[0] : null
+    const people = inside ? 0 : (this.npcs?.posingNear(this.player.pos.x, this.player.pos.z) ?? 0)
     const shot = await this.photo.shoot(
       this.photoFilter,
       (names) => [this.city.config.name, names.slice(0, 3).join('、') || inside || place, time].filter(Boolean).join(' · '),
@@ -673,7 +694,7 @@ export class Game {
       }
     }
     this.saveNow()
-    return { id, recognized: shot.recognized, newly, thumb: shot.thumb, saved }
+    return { id, recognized: shot.recognized, newly, thumb: shot.thumb, saved, people }
   }
 
   /** 立即存档（玩家模式且不是测试参数时） */
@@ -742,6 +763,13 @@ export class Game {
     this.landmarks?.update(f.x, f.z, this.camera.position.x, this.camera.position.z)
     this.trains?.update(this.clock.seconds, f.x, f.z, QUALITY_PRESETS[this.quality].viewDistance)
     this.precipitation.update(dt, this.camera.position, this.weatherLook)
+    if (this.npcs && !this.devCamera && !this.traveling) {
+      const d = new Date()
+      this.npcs.target = QUALITY_PRESETS[this.quality].npcs
+      // 拍照模式：附近的人看镜头摆姿势
+      this.npcs.pose(this.photoMode ? this.camera.position : null, f.x, f.z)
+      this.npcs.update(dt, f.x, f.z, this.clock.daySeconds / 3600, this.weather, this.weatherLook, d.getDay() === 0 || d.getDay() === 6)
+    }
     this.boats?.update(this.clock.seconds, f.x, f.z, QUALITY_PRESETS[this.quality].viewDistance)
     // 地面平面按分块对齐跟随
     this.ground.position.set(Math.round(f.x / CHUNK_SIZE) * CHUNK_SIZE, 0, Math.round(f.z / CHUNK_SIZE) * CHUNK_SIZE)
@@ -788,6 +816,11 @@ export class Game {
     this.rig.update(this.camera, this.player, this.input, world)
     const p = this.player.pos
     this.prompt = (inside ? inside.scene!.interact : this.interact).nearest(p.x, p.z, p.y)
+    // 没有别的交互时，身边的路人可以聊天
+    if (!this.prompt && !inside && p.y < 1) {
+      const n = this.npcs?.nearest(p.x, p.z)
+      if (n) this.prompt = { x: p.x, z: p.z, r: 2.4, label: n.name, action: '聊天', kind: 'npc', npc: n.id }
+    }
     if (this.input.consumeInteract() && this.prompt) this.onInteract?.(this.prompt)
     if (inside) return p
     const found = this.landmarks?.discover(p.x, p.z, this.clock.seconds)
@@ -861,6 +894,7 @@ export class Game {
       landmarks: this.landmarks?.placed.length ?? 0,
       station: this.interior?.status() ?? null,
       weather: this.weatherText,
+      npcs: this.npcs?.count ?? 0,
       announce: this.interior?.announcement ?? null,
       ride: this.ride
         ? {
@@ -893,6 +927,7 @@ export class Game {
     this.landmarks?.dispose()
     this.boats?.dispose()
     this.precipitation.dispose()
+    this.npcs?.dispose()
     this.interior?.dispose()
     this.album?.close()
     this.player.dispose()

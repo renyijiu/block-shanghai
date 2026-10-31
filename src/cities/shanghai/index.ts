@@ -4,6 +4,7 @@ import { boats } from './boats.ts'
 import { buildings } from './buildings.ts'
 import config from './config.ts'
 import { landmarks } from './landmarks.ts'
+import { people } from './people.ts'
 import world from './data/world.json?url'
 import water from './data/water.json?url'
 import parks from './data/parks.json?url'
@@ -18,5 +19,6 @@ export default {
   spawns: [{ id: 'peoplessquare', name: '人民广场', lat: 31.2325, lon: 121.4712 }],
   buildings,
   landmarks,
-  boats
+  boats,
+  people
 } satisfies CityPackage

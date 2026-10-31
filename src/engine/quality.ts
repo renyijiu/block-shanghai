@@ -1,4 +1,4 @@
-// 三档画质（docs/02 第 7 节）：视距、渲染分辨率上限、水面倒影。阴影、NPC 数量等以后的系统再加进来
+// 三档画质（docs/02 第 7 节）：视距、渲染分辨率上限、水面倒影、同屏路人数
 import type { QualityLevel } from './state/save.ts'
 
 export type { QualityLevel }
@@ -10,12 +10,14 @@ export interface QualityPreset {
   /** 渲染分辨率上限（设备像素比） */
   pixelRatio: number
   reflection: boolean
+  /** 同屏路人数 */
+  npcs: number
 }
 
 export const QUALITY_PRESETS: Record<QualityLevel, QualityPreset> = {
-  low: { label: '低', viewDistance: 800, pixelRatio: 1, reflection: false },
-  mid: { label: '中', viewDistance: 1050, pixelRatio: 1.5, reflection: false },
-  high: { label: '高', viewDistance: 1300, pixelRatio: 2, reflection: true }
+  low: { label: '低', viewDistance: 800, pixelRatio: 1, reflection: false, npcs: 22 },
+  mid: { label: '中', viewDistance: 1050, pixelRatio: 1.5, reflection: false, npcs: 40 },
+  high: { label: '高', viewDistance: 1300, pixelRatio: 2, reflection: true, npcs: 55 }
 }
 
 export const QUALITY_ORDER: QualityLevel[] = ['low', 'mid', 'high']
