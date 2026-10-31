@@ -5,6 +5,7 @@
     <div v-if="loading">{{ loading }}</div>
     <template v-else>
       <div class="status">🕘 {{ stats.time }} · {{ stats.weather }} · ¥{{ stats.money }} · 景点 {{ stats.found }}/{{ stats.landmarks }}</div>
+      <div v-if="stats.walk" class="walk">🚶 {{ stats.walk.name }} {{ stats.walk.k }}/{{ stats.walk.n }} · 下一站 {{ stats.walk.next }} · 约 {{ Math.max(10, Math.round(stats.walk.dist / 2) * 10) }} 米</div>
       <div>{{ backend }} · {{ stats.fps }} fps<span v-if="!touch"> · {{ stats.drawCalls }} 次绘制 · {{ (stats.triangles / 1000).toFixed(0) }}k 三角形</span></div>
       <div v-if="!touch">分块：{{ stats.chunks }}（待建 {{ stats.pending }}）· 位置：{{ stats.x }}, {{ stats.z }} 格</div>
       <div v-if="!touch" class="hint">{{ stats.mode === 'dev' ? 'WASD 移动 · Q/E 升降 · Shift 加速 · 拖动旋转 · 滚轮缩放' : 'WASD 移动 · Shift 奔跑 · 空格跳 · 拖动转视角 · 滚轮远近 · V 切换视角 · M 地图 · E 交互 · P 拍照 · C 图鉴' }}</div>
@@ -313,6 +314,20 @@ onMounted(async () => {
       ]
       if (parts.length) showNotice(parts.join('　'))
     }
+    // Citywalk：开始、打卡、走完都弹一张卡片（和发现景点共用一个队列）
+    g.onWalk = ({ kind, route, index }) => {
+      const s = route.stops[index]!
+      const n = route.stops.length
+      const next = route.stops[index + 1]
+      showDiscover({
+        id: `walk:${route.def.id}:${index}`,
+        name: s.name,
+        kicker: kind === 'start' ? `🚶 开始 Citywalk · ${route.def.name}` : kind === 'done' ? `🏅 走完 Citywalk · 获得徽章“${route.def.badge}”` : `🚶 Citywalk 打卡 ${index + 1}/${n}`,
+        district: route.def.area,
+        desc: s.text,
+        tip: next ? `下一站：${next.name}（跟着地上的步道和绿色标记走）` : ''
+      })
+    }
     g.onDiscover = ({ def }) => showDiscover({ id: def.id, name: def.name, grade: def.grade, district: config.districts[def.district as DistrictId]?.name ?? '', desc: def.desc, tip: def.tip ?? '' })
     g.start()
     // 引擎状态按 5 Hz 同步到界面（docs/07 第 5 节）
@@ -415,6 +430,10 @@ onBeforeUnmount(() => {
 
 .status {
   font-weight: 700;
+}
+
+.walk {
+  color: #7ee2a8;
 }
 
 .side {

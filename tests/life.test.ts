@@ -67,3 +67,41 @@ test('内容表自洽：商店卖的东西都存在、有价格；文化牌的�
   for (const s of content.souvenirs) if (s.price !== undefined) expect(content.shops.some((sh) => sh.items.includes(s.id)), s.id).toBe(true)
   for (const f of content.foods) expect(content.shops.some((sh) => sh.items.includes(f.id)), f.id).toBe(true)
 })
+
+test('Citywalk：起点开始，按顺序打卡，走过头、回头都不算，走完记完成', async () => {
+  const { walkStep } = await import('../src/engine/life/progress.ts')
+  const p = newLife()
+  expect(walkStep(p, 'wukang', 2, 4, 1)).toBeNull()
+  expect(walkStep(p, 'wukang', 0, 4, 1)).toBe('start')
+  expect(p.activeWalk).toBe('wukang')
+  expect(walkStep(p, 'wukang', 0, 4, 2)).toBeNull()
+  expect(walkStep(p, 'wukang', 2, 4, 3)).toBeNull()
+  expect(walkStep(p, 'wukang', 1, 4, 4)).toBe('stop')
+  expect(walkStep(p, 'wukang', 2, 4, 5)).toBe('stop')
+  // 中途去走另一条，再回来接着走
+  expect(walkStep(p, 'duolun', 0, 5, 6)).toBe('start')
+  expect(p.activeWalk).toBe('duolun')
+  expect(walkStep(p, 'wukang', 3, 4, 7)).toBe('done')
+  expect(p.walks.wukang).toEqual({ next: 4, done: 7 })
+  expect(walkStep(p, 'wukang', 0, 4, 8)).toBeNull()
+})
+
+test('Citywalk 路线：打卡点都在路线上，沿途咖啡馆有区域名', () => {
+  for (const w of content.walks) {
+    expect(w.stops.length).toBeGreaterThanOrEqual(3)
+    for (const s of w.stops) {
+      // 到折线各段的距离（米）
+      const m = (lat: number, lon: number) => [(lon - s.lon) * 95000, (lat - s.lat) * 111000] as const
+      const d = Math.min(
+        ...w.path.slice(1).map((q, i) => {
+          const [ax, ay] = m(...w.path[i]!)
+          const [bx, by] = m(...q)
+          const t = Math.max(0, Math.min(1, -(ax * (bx - ax) + ay * (by - ay)) / ((bx - ax) ** 2 + (by - ay) ** 2 || 1)))
+          return Math.hypot(ax + (bx - ax) * t, ay + (by - ay) * t)
+        })
+      )
+      expect(d, `${w.id}/${s.name}`).toBeLessThan(10)
+    }
+  }
+  for (const s of content.shops) if ('lat' in s.at) expect(s.area).toBeTruthy()
+})

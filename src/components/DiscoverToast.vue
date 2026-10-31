@@ -1,7 +1,8 @@
 <template>
   <Transition name="discover">
     <div v-if="visible && landmark" :key="landmark.id" class="card">
-      <div class="kicker">发现景点 <span class="grade" :class="landmark.grade">{{ landmark.grade }}</span></div>
+      <div v-if="landmark.kicker" class="kicker">{{ landmark.kicker }}</div>
+      <div v-else class="kicker">发现景点 <span class="grade" :class="landmark.grade">{{ landmark.grade }}</span></div>
       <div class="name">{{ landmark.name }}</div>
       <div v-if="landmark.district" class="district">{{ landmark.district }}</div>
       <div class="desc">{{ landmark.desc }}</div>
@@ -16,13 +17,15 @@ import { onBeforeUnmount, ref, watch } from 'vue'
 export interface DiscoverInfo {
   id: string
   name: string
-  grade: 'S' | 'A' | 'B'
+  grade?: 'S' | 'A' | 'B'
+  /** 换掉“发现景点”这行（Citywalk 打卡用） */
+  kicker?: string
   district: string
   desc: string
   tip: string
 }
 
-// 走近新景点时在屏幕左侧弹出景点卡片，4 秒后淡出（排队由 App 管）
+// 走近新景点、Citywalk 打卡时在屏幕左侧弹出卡片，4 秒后淡出（排队由 App 管）
 const props = defineProps<{ landmark: DiscoverInfo | null }>()
 const visible = ref(false)
 let timer = 0

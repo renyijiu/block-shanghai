@@ -166,6 +166,13 @@ export interface Anchor {
   face?: number
 }
 
+/** 不挂在景点上的位置（Citywalk 沿途的小店）：经纬度；face 同上，按世界坐标（0 时店面朝南 +z） */
+export interface GeoAnchor {
+  lat: number
+  lon: number
+  face?: number
+}
+
 export interface FoodDef {
   id: string
   name: string
@@ -192,7 +199,9 @@ export interface ShopDef {
   id: string
   name: string
   kind: 'food' | 'gift' | 'coffee'
-  at: Anchor
+  at: Anchor | GeoAnchor
+  /** 在哪一带（咖啡地图上显示）；挂在景点上的不写，用景点名 */
+  area?: string
   /** 卖的东西：美食或纪念品 id */
   items: string[]
 }
@@ -208,11 +217,36 @@ export interface CultureDef {
   unlock: CultureUnlock
 }
 
+/** Citywalk 沿途的打卡点 */
+export interface CitywalkStop {
+  name: string
+  lat: number
+  lon: number
+  /** 走到这里弹出的一段介绍 */
+  text: string
+}
+
+/** Citywalk 路线（docs/05 第 11 节）：按顺序走过各个打卡点，走完得徽章 */
+export interface CitywalkDef {
+  id: string
+  name: string
+  /** 在哪个区一带：“徐汇 · 梧桐区” */
+  area: string
+  desc: string
+  /** 走完得到的徽章名 */
+  badge: string
+  /** 沿街的路线（经纬度折线），地上铺一条步道，程序化建筑让开 */
+  path: [lat: number, lon: number][]
+  /** 打卡点，第一个是起点 */
+  stops: CitywalkStop[]
+}
+
 export interface LifeContent {
   foods: FoodDef[]
   souvenirs: SouvenirDef[]
   shops: ShopDef[]
   culture: CultureDef[]
+  walks: CitywalkDef[]
 }
 
 /** 一句对白；方言句子带普通话意思 */

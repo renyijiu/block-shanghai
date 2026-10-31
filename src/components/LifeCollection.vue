@@ -26,6 +26,35 @@
     </section>
 
     <section>
+      <h3>🚶 Citywalk {{ walks.filter((w) => w.done).length }}/{{ walks.length }}</h3>
+      <p class="intro">走到起点自动开始，按顺序走过每个打卡点（地上有浅色步道，下一站头顶有绿色标记），走完得徽章。</p>
+      <div class="cards">
+        <div v-for="w in walks" :key="w.id" class="card" :class="{ locked: !w.started }">
+          <div class="name">
+            {{ w.name }}
+            <span v-if="w.done" class="tag done">🏅 {{ w.badge }}</span>
+            <span v-else-if="w.started" class="tag">{{ w.next }}/{{ w.stops.length }}</span>
+          </div>
+          <div class="meta">{{ w.area }} · {{ w.desc }}</div>
+          <div class="stops">
+            <span v-for="(s, i) in w.stops" :key="s" :class="{ done: w.done || i < w.next }">{{ w.done || i < w.next ? '✓ ' : '' }}{{ s }}</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h3>☕ 咖啡地图 {{ coffee.filter((c) => c.visited).length }}/{{ coffee.length }}</h3>
+      <p class="intro">在咖啡馆点一杯就算去过；大地图上的 ☕ 是咖啡馆的位置。</p>
+      <div class="cards">
+        <div v-for="c in coffee" :key="c.id" class="card" :class="{ locked: !c.visited }">
+          <div class="name">{{ c.name }}<span v-if="c.visited" class="tag done">去过</span></div>
+          <div class="meta">{{ c.area }}</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
       <h3>📜 文化图鉴 {{ culture.filter((c) => c.unlocked).length }}/{{ culture.length }}</h3>
       <div class="cards">
         <div v-for="c in culture" :key="c.id" class="card" :class="{ locked: !c.unlocked, open: openId === c.id }" @click="openId = openId === c.id ? null : c.id">
@@ -76,6 +105,13 @@ const items = computed(() => c.souvenirs.map((s) => ({ id: s.id, name: s.name, d
 const foods = computed(() =>
   c.foods.map((f) => ({ id: f.id, name: f.name, desc: f.desc, when: foodWhen(f), eaten: game.life.foods[f.id] !== undefined, where: shopName(f.id).join('、') }))
 )
+const walks = computed(() =>
+  c.walks.map((w) => {
+    const p = game.life.walks[w.id]
+    return { id: w.id, name: w.name, area: w.area, desc: w.desc, badge: w.badge, stops: w.stops.map((s) => s.name), started: !!p, next: p?.next ?? 0, done: p?.done !== undefined }
+  })
+)
+const coffee = computed(() => game.coffeeSpots())
 const culture = computed(() => c.culture.map((d) => ({ id: d.id, name: d.name, text: d.text, unlocked: game.life.culture[d.id] !== undefined, how: howCulture(d) })))
 </script>
 
@@ -140,6 +176,32 @@ h3 {
 
 .where {
   color: #a0682a;
+}
+
+.intro {
+  color: #777;
+  font-size: 13px;
+  margin: 0 0 8px;
+}
+
+.stops {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.stops span {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #eee;
+  color: #888;
+  font-size: 12px;
+}
+
+.stops span.done {
+  background: #dff3e0;
+  color: #2e7d32;
 }
 
 .text {

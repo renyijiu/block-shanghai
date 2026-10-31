@@ -23,6 +23,7 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import type { Game } from '../engine/Game.ts'
 import { drawMap, toScreen, type MapView } from '../engine/map/drawMap.ts'
+import { drawWalks } from '../engine/map/drawWalks.ts'
 import { usePanZoom } from './usePanZoom.ts'
 
 const props = defineProps<{ game: Game; title: string; here: string | null }>()
@@ -59,6 +60,8 @@ function frame(now: number) {
   const ctx = c.getContext('2d')!
   const v: MapView = { ...view, width: innerWidth, height: innerHeight, dpr }
   drawMap(ctx, world, v, { districtColors, districtLines: true, labels: true })
+  // Citywalk 路线和咖啡地图（放大到能看清街道时才画）
+  if (v.scale > 0.15 && props.game.walks) drawWalks(ctx, v, { routes: props.game.walks.routes, progress: props.game.life.walks, coffee: props.game.coffeeSpots() })
   // 玩家：红色箭头
   const p = props.game.player
   const [px, py] = toScreen(v, props.game.mapPos.x, props.game.mapPos.z)

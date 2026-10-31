@@ -145,6 +145,10 @@ export class LandmarkBuilder implements LandmarkContext {
     this.points.push({ x: wx, z: wz, r: 6, y: ty, label: `${name} · 电梯回地面`, action: '下楼', kind, landmark, target: { x: bx, y: 0, z: bz }, arrive: `${name} · 回到地面` })
   }
 
+  toWorld(x: number, z: number): [number, number] {
+    return this.p.toWorld(x, z)
+  }
+
   local(lat: number, lon: number): [number, number] {
     const { x, z } = this.proj.project(lat, lon)
     const dx = x - this.p.x
@@ -155,7 +159,7 @@ export class LandmarkBuilder implements LandmarkContext {
   }
 }
 
-function toMesh(d: GeometryData | null, material: THREE.Material, name: string) {
+export function toMesh(d: GeometryData | null, material: THREE.Material, name: string) {
   if (!d) return null
   const g = new THREE.BufferGeometry()
   g.setAttribute('position', new THREE.BufferAttribute(d.position, 3))

@@ -10,6 +10,7 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import type { Game } from '../engine/Game.ts'
 import { drawMap } from '../engine/map/drawMap.ts'
+import { drawWalks } from '../engine/map/drawWalks.ts'
 
 const props = defineProps<{ game: Game; size: number }>()
 const emit = defineEmits<{ open: [] }>()
@@ -34,7 +35,12 @@ function frame(now: number) {
   }
   const p = props.game.player.pos
   facing.value = props.game.player.facing
-  drawMap(c.getContext('2d')!, world, { x: p.x, z: p.z, scale: SCALE, width: props.size, height: props.size, dpr })
+  const view = { x: p.x, z: p.z, scale: SCALE, width: props.size, height: props.size, dpr }
+  const ctx = c.getContext('2d')!
+  drawMap(ctx, world, view)
+  // 正在走的 Citywalk：路线和下一站
+  const g = props.game
+  if (g.walks && g.life.activeWalk) drawWalks(ctx, view, { routes: g.walks.routes, progress: g.life.walks, only: g.life.activeWalk })
 }
 
 onMounted(() => (raf = requestAnimationFrame(frame)))

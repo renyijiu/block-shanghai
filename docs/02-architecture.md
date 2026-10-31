@@ -170,7 +170,7 @@ export default {
 | `InteriorManager` | 站厅、站台、车厢、换乘通道等独立场景的构建与切换；乘车时间轴（按真实运行分钟推进时钟）、报站、出站计费，发出 `metroEnter` / `metroExit` / `metroRide` / `metroTransfer` 事件（P4） | 在室内时 |
 | `PhotoSystem` | 按快门那一帧渲染完从画布取图；滤镜按城市包参数逐像素处理（`photo/filters.ts`，取景时用 CSS filter 近似预览，像素风降低渲染分辨率）；识别景点（`photo/recognize.ts`：瞄准点在画面中间 90%、在 `photoR` 以内、视线没被碰撞盒挡住）；照片存 IndexedDB（`photo/album.ts`） | 拍照时 |
 | `Sky` | 昼夜、天气、季节、夜间材质（`sky/weather.ts` 季节和天气的纯函数，`sky/Precipitation.ts` 雨雪粒子） | ✅ |
-| 生活 | 小店、文化牌、美食、纪念品、文化图鉴（P5）：`life/progress.ts` 是纯函数，生活事件（吃、买、自动纪念品、聊天、拍照、读文化牌、走完 Citywalk）进来，更新进度、返回新收获；`life/kiosks.ts` 按城市包里的锚点（景点局部坐标）把小店和文化牌挂在景点上，随景点加载 / 卸载，占地加进分块的避让 | 事件 |
+| 生活 | 小店、文化牌、美食、纪念品、文化图鉴（P5）：`life/progress.ts` 是纯函数，生活事件（吃、买、自动纪念品、聊天、拍照、读文化牌、走完 Citywalk）进来，更新进度、返回新收获；`life/kiosks.ts` 按城市包里的锚点（景点局部坐标）把小店和文化牌挂在景点上，随景点加载 / 卸载，占地加进分块的避让；`life/WalkSystem.ts` 开局建好 Citywalk 的步道、打卡路牌和沿途小店（按经纬度摆），每 0.3 秒查一次玩家是否走到打卡点 | 事件 |
 | `store` | 响应式 UI 状态 + 存档 + 事件 → 任务结算 | — |
 
 ### 场景切换

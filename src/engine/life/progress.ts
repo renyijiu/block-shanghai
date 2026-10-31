@@ -13,6 +13,8 @@ export interface LifeProgress {
   coffee: Record<string, number>
   /** Citywalk：路线 → 下一个打卡点序号，走完记完成时间 */
   walks: Record<string, { next: number; done?: number }>
+  /** 正在走的 Citywalk（界面显示下一站） */
+  activeWalk?: string
   /** 任务：任务 id → 当前步骤，完成记完成时间 */
   quests: Record<string, { step: number; done?: number }>
   /** 计数器：聊天次数、合影次数等 */
@@ -50,6 +52,28 @@ export function foodWhen(f: FoodDef) {
   if (f.months) parts.push(`${f.months[0]}–${f.months[f.months.length - 1]} 月`)
   if (f.hours) parts.push(`${f.hours[0]}–${f.hours[1]} 点`)
   return parts.join('，')
+}
+
+/**
+ * Citywalk 打卡：走到第 index 个打卡点（共 count 个）。起点开始一条路线；按顺序走到下一站算打卡，最后一站算走完。
+ * 返回 'start' / 'stop' / 'done'，不算数（走过头、走回头路、已经走完）返回 null
+ */
+export function walkStep(p: LifeProgress, route: string, index: number, count: number, t: number): 'start' | 'stop' | 'done' | null {
+  const w = p.walks[route]
+  if (w?.done !== undefined) return null
+  if (!w) {
+    if (index !== 0) return null
+    p.walks[route] = { next: 1 }
+    p.activeWalk = route
+    return 'start'
+  }
+  if (index !== w.next) return null
+  p.activeWalk = route
+  w.next++
+  if (w.next < count) return 'stop'
+  w.done = t
+  delete p.activeWalk
+  return 'done'
 }
 
 // 文化图鉴：这个事件能不能解锁它

@@ -9,8 +9,9 @@ import { DevCamera } from './DevCamera.ts'
 import { CollisionWorld } from './geo/CollisionWorld.ts'
 import { createProjection, type Projection } from './geo/projection.ts'
 import { LandmarkManager, type PlacedLandmark } from './landmarks/LandmarkManager.ts'
-import { buildLife, lifeFootprints } from './life/kiosks.ts'
-import { foodAvailable, newLife, recordLife, type LifeEvent, type LifeGain, type LifeProgress } from './life/progress.ts'
+import { anchorWorld, buildLife, isGeo, lifeFootprints } from './life/kiosks.ts'
+import { foodAvailable, newLife, recordLife, walkStep, type LifeEvent, type LifeGain, type LifeProgress } from './life/progress.ts'
+import { WalkSystem, type WalkRoute } from './life/WalkSystem.ts'
 import { Album, newPhotoId } from './photo/album.ts'
 import { previewCss, type PhotoFilter } from './photo/filters.ts'
 import { PhotoSystem } from './photo/PhotoSystem.ts'
@@ -82,6 +83,8 @@ export interface GameStats {
   announce: (Announcement & { id: number }) | null
   /** 天气和季节：“⛅ 多云 · 秋” */
   weather: string
+  /** 正在走的 Citywalk：路线名、已到几站 / 共几站、下一站和距离（格） */
+  walk: { name: string; k: number; n: number; next: string; dist: number } | null
   /** 附近的路人数 */
   npcs: number
 }
@@ -101,7 +104,7 @@ export interface PhotoResult {
 }
 
 /** 统计和界面状态的初始值 */
-export const emptyStats = (): GameStats => ({ fps: 0, drawCalls: 0, triangles: 0, chunks: 0, pending: 0, buildAvg: 0, buildMax: 0, x: 0, z: 0, mode: 'player', view: 'third', district: null, time: '', money: 0, prompt: null, found: 0, landmarks: 0, ride: null, station: null, announce: null, weather: '', npcs: 0 })
+export const emptyStats = (): GameStats => ({ fps: 0, drawCalls: 0, triangles: 0, chunks: 0, pending: 0, buildAvg: 0, buildMax: 0, x: 0, z: 0, mode: 'player', view: 'third', district: null, time: '', money: 0, prompt: null, found: 0, landmarks: 0, ride: null, station: null, announce: null, weather: '', npcs: 0, walk: null })
 
 /** 快速到达的结果，给界面提示用 */
 export interface TravelResult {
@@ -175,6 +178,11 @@ export class Game {
   life: LifeProgress = newLife()
   /** 第一次吃到美食、得到纪念品、解锁文化图鉴时调用（界面提示） */
   onLife: ((g: LifeGain) => void) | null = null
+  /** Citywalk 步道、路牌和沿途小店 */
+  walks: WalkSystem | null = null
+  /** Citywalk 开始、打卡、走完时调用（界面弹卡片） */
+  onWalk: ((e: { kind: 'start' | 'stop' | 'done'; route: WalkRoute; index: number }) => void) | null = null
+  private walkCheck = 0
   /** 附近的交互点 */
   prompt: InteractPoint | null = null
   /** 按 E / 点按钮触发交互时调用（界面打开地铁面板） */
@@ -257,6 +265,8 @@ export class Game {
     this.scene.add(this.landmarks.root)
     this.boats = new BoatSystem(this.city.boats, this.proj, world, this.materials, this.collision, this.interact)
     this.scene.add(this.boats.root)
+    this.walks = new WalkSystem(this.city.content, this.proj, this.materials, this.collision, this.interact)
+    this.scene.add(this.walks.root)
     this.npcs = new NPCManager(this.city.people, world, this.collision, this.proj)
     this.npcs.setHotspots(this.landmarks.placed.map((p) => [p.x, p.z]))
     this.scene.add(this.npcs.root)
@@ -274,7 +284,7 @@ export class Game {
         proj: this.proj,
         metro: metro.data,
         interact: this.interact,
-        landmarks: [...this.landmarks.footprints, ...this.boats.footprints, ...lifeFootprints(this.city.content, this.landmarks.placed)],
+        landmarks: [...this.landmarks.footprints, ...this.boats.footprints, ...lifeFootprints(this.city.content, this.landmarks.placed, this.proj), ...this.walks.footprints],
         season: () => this.season,
         pierFree: (x, z) => this.landmarks?.pierFree(x, z) ?? false
       },
@@ -504,6 +514,41 @@ export class Game {
     this.clock.addMinutes(food ? 10 : 2)
     this.saveNow()
     return { ok: true, message: food ? `吃了${food.name} · ${price} 元` : `买了${gift!.name} · ${price} 元，放进背包` }
+  }
+
+  // Citywalk：走到打卡点上按顺序打卡，走完记一次 citywalk 事件（解锁文化图鉴）
+  private checkWalk(x: number, z: number) {
+    const walks = this.walks
+    if (!walks) return
+    for (const [ri, si] of walks.at(x, z)) {
+      const route = walks.routes[ri]!
+      const kind = walkStep(this.life, route.def.id, si, route.stops.length, this.clock.seconds)
+      if (!kind) continue
+      if (kind === 'done') this.lifeEvent({ type: 'citywalk', route: route.def.id })
+      this.onWalk?.({ kind, route, index: si })
+      this.saveNow()
+    }
+  }
+
+  /** 咖啡地图：所有咖啡馆的位置、在哪一带、去过没有 */
+  coffeeSpots() {
+    return this.city.content.shops.flatMap((s) => {
+      if (s.kind !== 'coffee' || !this.landmarks) return []
+      const w = anchorWorld(s.at, this.landmarks.placed, this.proj)
+      if (!w) return []
+      const area = s.area ?? (isGeo(s.at) ? '' : this.landmarkName(s.at.landmark))
+      return [{ id: s.id, name: s.name, area, x: w[0], z: w[1], visited: this.life.coffee[s.id] !== undefined }]
+    })
+  }
+
+  /** 正在走的 Citywalk 的下一站 */
+  nextWalkStop() {
+    const id = this.life.activeWalk
+    const route = id ? this.walks?.routes.find((r) => r.def.id === id) : undefined
+    const w = id ? this.life.walks[id] : undefined
+    if (!route || !w || w.done !== undefined) return null
+    const stop = route.stops[w.next]
+    return stop ? { route, k: w.next, stop } : null
   }
 
   /** 读文化牌：第一次读解锁文化图鉴 */
@@ -815,6 +860,7 @@ export class Game {
     this.landmarks?.update(f.x, f.z, this.camera.position.x, this.camera.position.z)
     this.trains?.update(this.clock.seconds, f.x, f.z, QUALITY_PRESETS[this.quality].viewDistance)
     this.precipitation.update(dt, this.camera.position, this.weatherLook)
+    this.walks?.update(now / 1000, this.nextWalkStop()?.stop ?? null, f.x, f.z)
     if (this.npcs && !this.devCamera && !this.traveling) {
       const d = new Date()
       this.npcs.target = QUALITY_PRESETS[this.quality].npcs
@@ -875,6 +921,10 @@ export class Game {
     }
     if (this.input.consumeInteract() && this.prompt) this.onInteract?.(this.prompt)
     if (inside) return p
+    if (now - this.walkCheck > 300) {
+      this.walkCheck = now
+      this.checkWalk(p.x, p.z)
+    }
     const found = this.landmarks?.discover(p.x, p.z, this.clock.seconds)
     if (found) {
       this.onDiscover?.(found)
@@ -947,6 +997,7 @@ export class Game {
       station: this.interior?.status() ?? null,
       weather: this.weatherText,
       npcs: this.npcs?.count ?? 0,
+      walk: this.walkStats(),
       announce: this.interior?.announcement ?? null,
       ride: this.ride
         ? {
@@ -959,6 +1010,13 @@ export class Game {
     })
     this.frames = 0
     this.statsAt = now
+  }
+
+  private walkStats(): GameStats['walk'] {
+    const n = this.nextWalkStop()
+    if (!n) return null
+    const p = this.mapPos
+    return { name: n.route.def.name, k: n.k, n: n.route.stops.length, next: n.stop.name, dist: Math.round(Math.hypot(n.stop.x - p.x, n.stop.z - p.z)) }
   }
 
   stop() {
@@ -980,6 +1038,7 @@ export class Game {
     this.boats?.dispose()
     this.precipitation.dispose()
     this.npcs?.dispose()
+    this.walks?.dispose()
     this.interior?.dispose()
     this.album?.close()
     this.player.dispose()
