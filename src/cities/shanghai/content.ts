@@ -332,6 +332,19 @@ export const content: LifeContent = {
         { text: '去崇明东滩看鸟', goal: { found: ['dongtan'] } }
       ]
     },
+    {
+      id: 'theme-transport',
+      kind: 'theme',
+      name: '交通达人',
+      reward: 30,
+      badge: '交通达人',
+      steps: [
+        { text: '坐一次观光巴士', goal: { stat: 'bus' } },
+        { text: '骑一次共享单车', goal: { stat: 'bike' } },
+        { text: '打一次车', goal: { stat: 'taxi' } },
+        { text: '坐一次黄浦江轮渡', goal: { stat: 'boat:ferry' } }
+      ]
+    },
     { id: 'theme-citywalk', kind: 'theme', name: '城市漫步者', reward: 50, badge: '城市漫步者', steps: [{ text: '走完 3 条 Citywalk', goal: { count: 'walks', n: 3 } }] },
     // 每日生活任务：每天挑 3 个，各 10 元
     { id: 'daily-talk', kind: 'daily', name: '和路人聊天', reward: 10, steps: [{ text: '和 3 位路人聊天', goal: { stat: 'talk', n: 3 } }] },
@@ -339,6 +352,7 @@ export const content: LifeContent = {
     { id: 'daily-photo', kind: 'daily', name: '随手拍', reward: 10, steps: [{ text: '拍 2 张照片', goal: { stat: 'photo', n: 2 } }] },
     { id: 'daily-group', kind: 'daily', name: '合个影', reward: 10, steps: [{ text: '和路人合影一次', goal: { stat: 'groupPhoto' } }] },
     { id: 'daily-coffee', kind: 'daily', name: '喝杯咖啡', reward: 10, steps: [{ text: '在咖啡馆喝一杯咖啡', goal: { stat: 'eat:coffee' } }] },
-    { id: 'daily-plaque', kind: 'daily', name: '读文化牌', reward: 10, steps: [{ text: '读一块文化牌', goal: { stat: 'plaque' } }] }
+    { id: 'daily-plaque', kind: 'daily', name: '读文化牌', reward: 10, steps: [{ text: '读一块文化牌', goal: { stat: 'plaque' } }] },
+    { id: 'daily-bike', kind: 'daily', name: '骑单车', reward: 10, steps: [{ text: '骑一次共享单车', goal: { stat: 'bike' } }] }
   ]
 }

@@ -151,6 +151,8 @@ export interface CityPackage {
   landmarks: LandmarkDef[]
   /** 渡轮和游船（P3） */
   boats: BoatLineDef[]
+  /** 观光巴士（P6） */
+  buses: BusLineDef[]
   /** 路人：类型、穿着、对白（P5） */
   people: NpcContent
   /** 美食、纪念品、商店、文化图鉴（P5） */
@@ -316,6 +318,26 @@ export interface NpcContent {
 }
 
 /** 一条船线：渡轮在两个码头之间来回，游船从码头出发开到折返点再开回来 */
+/** 观光巴士（docs/05 第 4 节）：沿地面道路开，到头掉头往回开；路线是游戏里设计的，不是真实线路 */
+export interface BusLineDef {
+  id: string
+  name: string
+  /** 票价（元，一站到底一个价） */
+  fare: number
+  /** 路线（WGS-84 [lat, lon]，沿游戏里的地面道路） */
+  path: [lat: number, lon: number][]
+  /** 站：按路线顺序，第一站和最后一站是两头的终点 */
+  stops: { name: string; at: [lat: number, lon: number] }[]
+  /** 车速（格 / 游戏秒） */
+  speed: number
+  /** 首班、末班（两头同时发车） */
+  first: string
+  last: string
+  headwayMin: number
+  /** 每站停多久（游戏秒） */
+  dwellSec: number
+}
+
 export interface BoatLineDef {
   id: string
   name: string

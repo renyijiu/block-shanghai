@@ -6,10 +6,11 @@
     <template v-else>
       <div class="status">🕘 {{ stats.time }} · {{ stats.weather }} · ¥{{ stats.money }} · 景点 {{ stats.found }}/{{ stats.landmarks }}</div>
       <div v-if="stats.quest" class="quest" @click="codexTab = 'quests'">📌 {{ stats.quest.name }} {{ stats.quest.k + 1 }}/{{ stats.quest.n }}：{{ stats.quest.text }}</div>
+      <div v-if="stats.bike" class="bikeline">🚲 骑行 {{ stats.bike.minutes }} 分钟 · ¥{{ stats.bike.fare }}<span v-if="!touch">（B 还车）</span></div>
       <div v-if="stats.walk" class="walk">🚶 {{ stats.walk.name }} {{ stats.walk.k }}/{{ stats.walk.n }} · 下一站 {{ stats.walk.next }} · 约 {{ Math.max(10, Math.round(stats.walk.dist / 2) * 10) }} 米</div>
       <div>{{ backend }} · {{ stats.fps }} fps<span v-if="!touch"> · {{ stats.drawCalls }} 次绘制 · {{ (stats.triangles / 1000).toFixed(0) }}k 三角形</span></div>
       <div v-if="!touch">分块：{{ stats.chunks }}（待建 {{ stats.pending }}）· 位置：{{ stats.x }}, {{ stats.z }} 格</div>
-      <div v-if="!touch" class="hint">{{ stats.mode === 'dev' ? 'WASD 移动 · Q/E 升降 · Shift 加速 · 拖动旋转 · 滚轮缩放' : 'WASD 移动 · Shift 奔跑 · 空格跳 · 拖动转视角 · 滚轮远近 · V 切换视角 · M 地图 · E 交互 · P 拍照 · C 图鉴' }}</div>
+      <div v-if="!touch" class="hint">{{ stats.mode === 'dev' ? 'WASD 移动 · Q/E 升降 · Shift 加速 · 拖动旋转 · 滚轮缩放' : 'WASD 移动 · Shift 奔跑 · 空格跳 · 拖动转视角 · 滚轮远近 · V 切换视角 · M 地图 · E 交互 · P 拍照 · C 图鉴 · B 单车 · T 打车' }}</div>
     </template>
   </div>
   <template v-if="game && !loading && stats.mode === 'player'">
@@ -21,10 +22,12 @@
           <button title="拍照（P）" @click="photoOpen = true">📷 拍照</button>
           <button title="图鉴和相册（C）" @click="codexTab = 'codex'">📖 图鉴</button>
           <button title="地铁线路图" @click="openMetro(null)">🚇 地铁</button>
+          <button v-if="!stats.station" :title="stats.bike ? '还车（B）' : '扫一辆共享单车（B）'" @click="toggleBike">{{ stats.bike ? '🚲 还车' : '🚲 单车' }}</button>
+          <button v-if="!stats.station" title="打车（T）" @click="openTaxi">🚕 打车</button>
           <button title="切换画质" @click="cycleQuality">画质 {{ QUALITY_PRESETS[quality].label }}</button>
         </div>
         <div v-if="stats.ride" class="prompt ride">
-          ⛴ {{ stats.ride.name }} · {{ stats.ride.to }} · {{ stats.ride.sailing ? `还有 ${stats.ride.minutes} 分钟` : '马上开船' }}
+          {{ game.busRide ? '🚌' : '⛴' }} {{ stats.ride.name }} · {{ stats.ride.to }} · {{ stats.ride.sailing ? `还有 ${stats.ride.minutes} 分钟` : game.busRide ? '车马上到' : '马上开船' }}
           <button @click="skipRide">跳过</button>
         </div>
         <div v-else-if="stats.prompt" class="prompt">
@@ -39,6 +42,8 @@
     <SpeechBubble :talk="speech" />
     <BigMap v-if="mapOpen" :game="game" :title="config.name" :here="districtName" @close="mapOpen = false" />
     <BoatPanel v-if="boatPanel" :game="game" :pier="boatPanel" @close="boatPanel = null" @board="board" />
+    <BusPanel v-if="busPanel" :game="game" :line-id="busPanel.line" :stop="busPanel.stop" @close="busPanel = null" @board="boardBus" />
+    <TaxiPanel v-if="taxiPanel" :game="game" @close="taxiPanel = false" @go="takeTaxi" />
     <CodexPanel v-if="codexTab" :game="game" :initial-tab="codexTab" @close="codexTab = null" />
     <ShopPanel v-if="shopPanel" :game="game" :shop-id="shopPanel" @close="shopPanel = null" />
     <CultureCard v-if="cultureCard" :entry="cultureCard" @close="cultureCard = null" />
@@ -57,6 +62,8 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import BigMap from './components/BigMap.vue'
 import BoatPanel from './components/BoatPanel.vue'
+import BusPanel from './components/BusPanel.vue'
+import TaxiPanel from './components/TaxiPanel.vue'
 import CodexPanel, { type CodexTab } from './components/CodexPanel.vue'
 import CultureCard from './components/CultureCard.vue'
 import DiscoverToast, { type DiscoverInfo } from './components/DiscoverToast.vue'
@@ -97,10 +104,13 @@ const photoOpen = ref(false)
 const codexTab = ref<CodexTab | null>(null)
 // 码头的船票面板：码头名
 const boatPanel = ref<string | null>(null)
+// 观光巴士站：线路和站；打车面板
+const busPanel = ref<{ line: string; stop: number } | null>(null)
+const taxiPanel = ref(false)
 // 小店面板：店 id；文化牌：读到的文化图鉴条目
 const shopPanel = ref<string | null>(null)
 const cultureCard = ref<CultureDef | null>(null)
-const panelOpen = computed(() => mapOpen.value || !!metroPanel.value || !!codexTab.value || !!boatPanel.value || !!shopPanel.value || !!cultureCard.value)
+const panelOpen = computed(() => mapOpen.value || !!metroPanel.value || !!codexTab.value || !!boatPanel.value || !!shopPanel.value || !!cultureCard.value || !!busPanel.value || taxiPanel.value)
 function openAlbum() {
   photoOpen.value = false
   codexTab.value = 'album'
@@ -194,11 +204,51 @@ async function board(berth: Pier) {
 
 async function skipRide() {
   const g = game.value
-  if (!g?.ride) return
-  travelText.value = '船靠岸了…'
-  g.skipRide()
-  await new Promise((r) => setTimeout(r, 800))
+  if (!g?.ride && !g?.busRide) return
+  travelText.value = g.busRide ? '巴士到站了…' : '船靠岸了…'
+  try {
+    await g.skipRide((t) => (travelText.value = t))
+    await new Promise((r) => setTimeout(r, 800))
+  } finally {
+    travelText.value = ''
+  }
+}
+
+// 观光巴士：关面板 → 淡出（要等车时显示“等车”）→ 站牌下等车、上车 → 淡入
+async function boardBus(line: string, from: number, to: number) {
+  const g = game.value
+  if (!g) return
+  busPanel.value = null
+  travelText.value = '等车…'
+  await new Promise((r) => setTimeout(r, 700))
+  const r = g.boardBus(line, from, to)
   travelText.value = ''
+  showNotice(r.message)
+}
+
+// 共享单车：开锁 / 还车
+function toggleBike() {
+  const g = game.value
+  if (g) showNotice(g.toggleBike().message)
+}
+
+// 打车：离马路太远不弹面板；选好地方 → 淡出（预建目的地）→ 淡入
+function openTaxi() {
+  const g = game.value
+  if (!g) return
+  if (!g.canHailTaxi) return showNotice('要走到马路边才能打到车')
+  taxiPanel.value = true
+}
+async function takeTaxi(id: string) {
+  const g = game.value
+  if (!g) return
+  taxiPanel.value = false
+  travelText.value = '上车…'
+  try {
+    showNotice((await g.taxi(id, (t) => (travelText.value = t))).message)
+  } finally {
+    travelText.value = ''
+  }
 }
 
 // 观光电梯：淡出 → 上下 → 淡入
@@ -267,6 +317,8 @@ function onKey(e: KeyboardEvent) {
   if (e.code === 'KeyM' && !metroPanel.value && !codexTab.value) mapOpen.value = !mapOpen.value
   else if (e.code === 'KeyP' && !panelOpen.value) photoOpen.value = true
   else if (e.code === 'KeyC' && !mapOpen.value && !metroPanel.value && !shopPanel.value && !cultureCard.value) codexTab.value = codexTab.value ? null : 'codex'
+  else if (e.code === 'KeyB' && !panelOpen.value && !stats.station) toggleBike()
+  else if (e.code === 'KeyT' && !panelOpen.value && !stats.station) openTaxi()
   else if (e.code === 'Escape') {
     mapOpen.value = false
     metroPanel.value = null
@@ -288,6 +340,7 @@ onMounted(async () => {
       else if (p.kind === 'interior' && p.go) void interiorGo(p.go)
       else if (p.kind === 'elevator') void rideElevator(p)
       else if (p.kind === 'boat' && p.pier) boatPanel.value = p.pier
+      else if (p.kind === 'bus' && p.bus && p.stop !== undefined) busPanel.value = { line: p.bus, stop: p.stop }
       else if (p.kind === 'shop' && p.shop) shopPanel.value = p.shop
       else if (p.kind === 'culture' && p.culture) cultureCard.value = g.readPlaque(p.culture)
       else if (p.kind === 'npc' && p.npc !== undefined) {
@@ -446,6 +499,10 @@ onBeforeUnmount(() => {
 
 .walk {
   color: #7ee2a8;
+}
+
+.bikeline {
+  color: #ffe08a;
 }
 
 .quest {

@@ -165,7 +165,7 @@ export default {
 | `CollisionWorld` | 碰撞盒和可站立平台，按 owner 增删。斜放的方块带 `obb`，查询时按实际朝向判断；`deck` 平台在水面上也能走 | 查询 |
 | `Player` | 移动、跳跃、骑乘、第一/第三人称、脚本动画（电梯等）。`actors/Input` 把键鼠和触屏统一成一份输入状态，`actors/CameraRig` 管跟随相机（撞墙拉近，碰撞盒带 `soft` 的只挡相机） | ✅ |
 | `NPCManager` | 路人生成、行为、人群区域、对白、拍照摆姿势（P5，`actors/NPCManager.ts`）：每个身体部件一个 InstancedMesh，所有路人十几次绘制 | ✅ |
-| `Transport` | 渡轮、游船（P3：`transport/boats.ts` 按游戏时间算船的位置，`BoatSystem` 开局建好码头的栈桥和趸船、每帧摆船、坐船时玩家站在甲板上跟着走、到站下船）；巴士、观光车以后加；观光电梯是景点的交互点 | ✅ |
+| `Transport` | 渡轮、游船、手摇船（P3、P6：`transport/boats.ts` 按游戏时间算船的位置，`BoatSystem` 开局建好码头的栈桥和趸船、每帧摆船、坐船时玩家站在甲板上跟着走、到站下船）；观光巴士（P6：`transport/buses.ts` 纯函数算车的位置和下一班，`BusSystem` 站牌、车、坐车）；共享单车是玩家的一种移动方式（`Player.riding`，可走范围限制在地面道路附近）；出租车是带计价的传送；观光电梯是景点的交互点 | ✅ |
 | `MetroSystem` | 线网、路线规划、按时刻表算列车位置（`metro/MetroSystem.ts`）；`TrainRenderer` 负责高架列车渲染（`metro/trains.ts`）；乘车流程（P4） | ✅ |
 | `InteriorManager` | 站厅、站台、车厢、换乘通道等独立场景的构建与切换；乘车时间轴（按真实运行分钟推进时钟）、报站、出站计费，发出 `metroEnter` / `metroExit` / `metroRide` / `metroTransfer` 事件（P4） | 在室内时 |
 | `PhotoSystem` | 按快门那一帧渲染完从画布取图；滤镜按城市包参数逐像素处理（`photo/filters.ts`，取景时用 CSS filter 近似预览，像素风降低渲染分辨率）；识别景点（`photo/recognize.ts`：瞄准点在画面中间 90%、在 `photoR` 以内、视线没被碰撞盒挡住）；照片存 IndexedDB（`photo/album.ts`） | 拍照时 |
