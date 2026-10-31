@@ -363,6 +363,7 @@ export class Game {
         for (const [id, t] of Object.entries(save.codex.found)) this.landmarks.found.set(id, t)
         this.codexShot = { ...save.codex.shot }
         this.life = structuredClone(save.life)
+        this.player.setLook(save.character)
       }
       this.route = (params.get('walk') ?? '')
         .split(';')
@@ -1017,7 +1018,8 @@ export class Game {
       money: this.money,
       metro: this.metroProgress,
       codex: { found: Object.fromEntries(this.landmarks?.found ?? []), shot: this.codexShot },
-      life: this.life
+      life: this.life,
+      character: this.player.look
     })
   }
 

@@ -22,6 +22,7 @@ const sample = {
     daily: { date: '2026-10-31', lines: ['L2'], done: [] }
   },
   life: { foods: { xiaolongbao: 31000 }, items: { metrocard: 1 }, culture: {}, coffee: {}, walks: { wukang: { next: 2 } }, quests: { novice: { step: 1 } }, stats: { talk: 3 } },
+  character: { skin: 0xd9a77c, hair: 0x5a3a24, hairStyle: 'long' as const, shirt: 0xc8282a, pants: 0x222222, hat: 'cap' as const, glasses: true, skinImage: null },
   codex: { found: { bund: 32400, orientalpearl: 33000 }, shot: { orientalpearl: 'p-1' } }
 }
 
@@ -57,7 +58,7 @@ test('没有存档返回 null', () => {
 
 test('v1 存档逐级迁移到最新：补上时间、钱包、地铁进度、图鉴、生活进度，写回新 key 并删掉旧的', () => {
   const s = memory()
-  const { time: _t, money: _m, metro: _x, codex: _c, life: _l, ...v1 } = sample
+  const { time: _t, money: _m, metro: _x, codex: _c, life: _l, character: _h, ...v1 } = sample
   s.setItem('block-shanghai:save:v1', JSON.stringify({ ...v1, schema: 1, savedAt: '2026-10-30T00:00:00Z' }))
   const loaded = loadSave(s, 'shanghai')!
   expect(loaded.schema).toBe(SAVE_SCHEMA)
@@ -73,7 +74,7 @@ test('v1 存档逐级迁移到最新：补上时间、钱包、地铁进度、�
 
 test('v2 存档迁移到最新：保留钱包、乘车次数和到访车站，图鉴为空', () => {
   const s = memory()
-  const { codex: _c, metro: _m, life: _l, ...v2 } = sample
+  const { codex: _c, metro: _m, life: _l, character: _h, ...v2 } = sample
   s.setItem('block-shanghai:save:v2', JSON.stringify({ ...v2, schema: 2, metro: { rides: 2, visited: ['peoples-square', 'lujiazui'] }, savedAt: '2026-10-31T00:00:00Z' }))
   const loaded = loadSave(s, 'shanghai')!
   expect(loaded.schema).toBe(SAVE_SCHEMA)
@@ -87,7 +88,7 @@ test('v2 存档迁移到最新：保留钱包、乘车次数和到访车站，�
 
 test('v3 存档迁移到最新：地铁统计扩成收集进度，景点图鉴原样保留', () => {
   const s = memory()
-  const { life: _l, ...v3 } = sample
+  const { life: _l, character: _h, ...v3 } = sample
   s.setItem('block-shanghai:save:v3', JSON.stringify({ ...v3, schema: 3, metro: { rides: 1, visited: ['lujiazui'] }, savedAt: '2026-10-31T00:00:00Z' }))
   const loaded = loadSave(s, 'shanghai')!
   expect(loaded.schema).toBe(SAVE_SCHEMA)
@@ -95,20 +96,34 @@ test('v3 存档迁移到最新：地铁统计扩成收集进度，景点图鉴�
   expect(loaded.codex).toEqual(sample.codex)
 })
 
-test('v4 存档迁移到 v5：加空的生活进度，地铁进度原样保留', () => {
+test('v4 存档迁移到最新：加空的生活进度，地铁进度原样保留', () => {
   const s = memory()
-  const { life: _l, ...v4 } = sample
+  const { life: _l, character: _h, ...v4 } = sample
   s.setItem('block-shanghai:save:v4', JSON.stringify({ ...v4, schema: 4, savedAt: '2026-11-01T00:00:00Z' }))
   const loaded = loadSave(s, 'shanghai')!
-  expect(loaded.schema).toBe(5)
+  expect(loaded.schema).toBe(SAVE_SCHEMA)
   expect(loaded.metro).toEqual(sample.metro)
   expect(loaded.life).toEqual({ foods: {}, items: {}, culture: {}, coffee: {}, walks: {}, quests: {}, stats: {} })
 })
 
-test('写入再读出：生活进度原样保留', () => {
+test('v5 存档迁移到 v6：加默认外观；外观字段不对当坏档', () => {
+  const s = memory()
+  const { character: _h, ...v5 } = sample
+  s.setItem('block-shanghai:save:v5', JSON.stringify({ ...v5, schema: 5, savedAt: '2026-11-01T00:00:00Z' }))
+  const loaded = loadSave(s, 'shanghai')!
+  expect(loaded.schema).toBe(6)
+  expect(loaded.character.hairStyle).toBe('short')
+  expect(loaded.character.skinImage).toBeNull()
+  const bad = memory()
+  bad.setItem('block-shanghai:save:v6', JSON.stringify({ ...sample, schema: 6, character: { ...sample.character, hat: 'crown' }, savedAt: '2026-11-01T00:00:00Z' }))
+  expect(loadSave(bad, 'shanghai')).toBeNull()
+})
+
+test('写入再读出：生活进度、外观原样保留', () => {
   const s = memory()
   writeSave(s, sample)
   expect(loadSave(s, 'shanghai')!.life).toEqual(sample.life)
+  expect(loadSave(s, 'shanghai')!.character).toEqual(sample.character)
 })
 
 test('地铁进度字段不全当坏档', () => {

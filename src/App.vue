@@ -24,7 +24,7 @@
           <button title="地铁线路图" @click="openMetro(null)">🚇 地铁</button>
           <button v-if="!stats.station" :title="stats.bike ? '还车（B）' : '扫一辆共享单车（B）'" @click="toggleBike">{{ stats.bike ? '🚲 还车' : '🚲 单车' }}</button>
           <button v-if="!stats.station" title="打车（T）" @click="openTaxi">🚕 打车</button>
-          <button title="切换画质" @click="cycleQuality">画质 {{ QUALITY_PRESETS[quality].label }}</button>
+          <button title="菜单：形象、画质…" @click="menuOpen = true">☰ 菜单</button>
         </div>
         <div v-if="stats.ride" class="prompt ride">
           {{ game.busRide ? '🚌' : '⛴' }} {{ stats.ride.name }} · {{ stats.ride.to }} · {{ stats.ride.sailing ? `还有 ${stats.ride.minutes} 分钟` : game.busRide ? '车马上到' : '马上开船' }}
@@ -44,6 +44,8 @@
     <BoatPanel v-if="boatPanel" :game="game" :pier="boatPanel" @close="boatPanel = null" @board="board" />
     <BusPanel v-if="busPanel" :game="game" :line-id="busPanel.line" :stop="busPanel.stop" @close="busPanel = null" @board="boardBus" />
     <TaxiPanel v-if="taxiPanel" :game="game" @close="taxiPanel = false" @go="takeTaxi" />
+    <MenuPanel v-if="menuOpen" :quality-label="QUALITY_PRESETS[quality].label" @close="menuOpen = false" @quality="cycleQuality" @open="openFromMenu" />
+    <CharacterPanel v-if="characterOpen" :game="game" @close="characterOpen = false" />
     <CodexPanel v-if="codexTab" :game="game" :initial-tab="codexTab" @close="codexTab = null" />
     <ShopPanel v-if="shopPanel" :game="game" :shop-id="shopPanel" @close="shopPanel = null" />
     <CultureCard v-if="cultureCard" :entry="cultureCard" @close="cultureCard = null" />
@@ -63,6 +65,8 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch 
 import BigMap from './components/BigMap.vue'
 import BoatPanel from './components/BoatPanel.vue'
 import BusPanel from './components/BusPanel.vue'
+import CharacterPanel from './components/CharacterPanel.vue'
+import MenuPanel from './components/MenuPanel.vue'
 import TaxiPanel from './components/TaxiPanel.vue'
 import CodexPanel, { type CodexTab } from './components/CodexPanel.vue'
 import CultureCard from './components/CultureCard.vue'
@@ -107,10 +111,17 @@ const boatPanel = ref<string | null>(null)
 // 观光巴士站：线路和站；打车面板
 const busPanel = ref<{ line: string; stop: number } | null>(null)
 const taxiPanel = ref(false)
+// 菜单和角色外观
+const menuOpen = ref(false)
+const characterOpen = ref(false)
+function openFromMenu(what: string) {
+  menuOpen.value = false
+  if (what === 'character') characterOpen.value = true
+}
 // 小店面板：店 id；文化牌：读到的文化图鉴条目
 const shopPanel = ref<string | null>(null)
 const cultureCard = ref<CultureDef | null>(null)
-const panelOpen = computed(() => mapOpen.value || !!metroPanel.value || !!codexTab.value || !!boatPanel.value || !!shopPanel.value || !!cultureCard.value || !!busPanel.value || taxiPanel.value)
+const panelOpen = computed(() => mapOpen.value || !!metroPanel.value || !!codexTab.value || !!boatPanel.value || !!shopPanel.value || !!cultureCard.value || !!busPanel.value || taxiPanel.value || menuOpen.value || characterOpen.value)
 function openAlbum() {
   photoOpen.value = false
   codexTab.value = 'album'

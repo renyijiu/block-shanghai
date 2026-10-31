@@ -1,10 +1,11 @@
 // 存档：localStorage，key 带结构版本；结构变化时提升版本并在 MIGRATIONS 里写迁移函数（docs/02 第 6 节）。
 // 照片存 IndexedDB（photo/album.ts），存档里只存 id。本模块不依赖浏览器 API，Node 里也能测
 
+import { DEFAULT_LOOK, validLook, type Look } from '../actors/look.ts'
 import { newLife, type LifeProgress } from '../life/progress.ts'
 import { newProgress, type MetroProgress } from '../metro/collection.ts'
 
-export const SAVE_SCHEMA = 5
+export const SAVE_SCHEMA = 6
 const PREFIX = 'block-shanghai:save:v'
 export const saveKey = (schema = SAVE_SCHEMA) => PREFIX + schema
 
@@ -31,10 +32,12 @@ export interface SaveData {
   codex: { found: Record<string, number>; shot: Record<string, string> }
   /** 生活进度：美食、背包、文化图鉴、咖啡地图、Citywalk、任务、计数器（life/progress.ts） */
   life: LifeProgress
+  /** 角色外观（P6）：颜色、发型、帽子、眼镜、上传的皮肤 */
+  character: Look
 }
 
 /** 新游戏的初始值 */
-export const NEW_GAME = { time: 8.5 * 3600, money: 200, metro: newProgress(), codex: { found: {}, shot: {} }, life: newLife() }
+export const NEW_GAME = { time: 8.5 * 3600, money: 200, metro: newProgress(), codex: { found: {}, shot: {} }, life: newLife(), character: { ...DEFAULT_LOOK } }
 
 /** 只用到的 Storage 接口，测试时可以传假的 */
 export type SaveStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
@@ -55,7 +58,9 @@ const MIGRATIONS: Record<number, (s: Record<string, unknown>) => Record<string, 
     return { ...s, schema: 4, metro: { ...newProgress(), rides: old.rides ?? 0, visits: Object.fromEntries((old.visited ?? []).map((id) => [id, t])) } }
   },
   // v4 → v5（P5）：加生活进度
-  4: (s) => ({ ...s, schema: 5, life: newLife() })
+  4: (s) => ({ ...s, schema: 5, life: newLife() }),
+  // v5 → v6（P6）：加角色外观
+  5: (s) => ({ ...s, schema: 6, character: { ...DEFAULT_LOOK } })
 }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
@@ -74,6 +79,7 @@ function valid(s: Record<string, unknown>): s is SaveData & Record<string, unkno
     isNum(s.time) && isNum(s.money) &&
     validMetro(s.metro) &&
     validLife(s.life) &&
+    validLook(s.character) &&
     !!s.codex && isRecord((s.codex as SaveData['codex']).found, isNum) && isRecord((s.codex as SaveData['codex']).shot, (v) => typeof v === 'string')
   )
 }

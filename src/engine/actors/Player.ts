@@ -1,6 +1,8 @@
 // 玩家：方块小人，移动、奔跑、跳跃、碰撞。人物尺度 1 格 ≈ 1 米（docs/03 第 3 节）
 import * as THREE from 'three/webgpu'
 import type { Box } from '../geo/CollisionWorld.ts'
+import { buildCharacter, type Character } from './character.ts'
+import { DEFAULT_LOOK, type Look } from './look.ts'
 
 export const PLAYER = {
   /** 半宽（格） */
@@ -46,15 +48,25 @@ export class Player {
   readonly model: THREE.Group
   private readonly body: THREE.Group
   private readonly bike: THREE.Group
-  private readonly limbs: { armL: THREE.Object3D; armR: THREE.Object3D; legL: THREE.Object3D; legR: THREE.Object3D }
+  private readonly limbs: Character['limbs']
+  private readonly character: Character
   private phase = 0
+  /** 当前外观 */
+  look: Look = { ...DEFAULT_LOOK }
 
   constructor() {
-    const { group, body, bike, limbs } = buildCharacter()
-    this.model = group
-    this.body = body
-    this.bike = bike
-    this.limbs = limbs
+    this.character = buildCharacter()
+    this.model = this.character.group
+    this.body = this.character.body
+    this.bike = this.character.bike
+    this.limbs = this.character.limbs
+    this.character.apply(this.look)
+  }
+
+  /** 换外观（肤色、衣服、发型、帽子、眼镜、上传的皮肤） */
+  setLook(look: Look) {
+    this.look = { ...look }
+    this.character.apply(this.look)
   }
 
   /** 上车 / 下车（共享单车） */
@@ -179,60 +191,6 @@ export class Player {
   }
 
   dispose() {
-    this.model.traverse((o) => {
-      if (o instanceof THREE.Mesh) o.geometry.dispose()
-    })
+    this.character.dispose()
   }
-}
-
-// 方块小人：头、身体、双臂、双腿；四肢以关节为原点，摆动时绕关节转
-function buildCharacter() {
-  const group = new THREE.Group()
-  group.name = 'player'
-  const body = new THREE.Group()
-  group.add(body)
-  const mat = (c: number) => new THREE.MeshLambertMaterial({ color: c })
-  const skin = mat(0xf0c8a0)
-  const shirt = mat(0x3a7bd5)
-  const pants = mat(0x2f3440)
-  const hair = mat(0x2a2220)
-  const part = (w: number, h: number, d: number, m: THREE.Material, y: number) => {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m)
-    mesh.position.y = y
-    return mesh
-  }
-  const joint = (x: number, y: number, child: THREE.Mesh) => {
-    const j = new THREE.Group()
-    j.position.set(x, y, 0)
-    child.position.y = -(child.geometry as THREE.BoxGeometry).parameters.height / 2
-    j.add(child)
-    body.add(j)
-    return j
-  }
-  body.add(part(0.5, 0.62, 0.28, shirt, 1.12))
-  body.add(part(0.42, 0.42, 0.42, skin, 1.64))
-  body.add(part(0.44, 0.12, 0.44, hair, 1.88))
-  const armL = joint(-0.34, 1.4, new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.62, 0.17), shirt))
-  const armR = joint(0.34, 1.4, new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.62, 0.17), shirt))
-  const legL = joint(-0.12, 0.82, new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.82, 0.24), pants))
-  const legR = joint(0.12, 0.82, new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.82, 0.24), pants))
-  // 共享单车：黄色车架、两个轮子、车座、车把和前筐（人朝 -z，车头在 -z）
-  const bike = new THREE.Group()
-  bike.visible = false
-  const frame = mat(0xf2c12e)
-  const black = mat(0x222222)
-  const bpart = (w: number, h: number, d: number, m: THREE.Material, x: number, y: number, z: number) => {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m)
-    mesh.position.set(x, y, z)
-    bike.add(mesh)
-  }
-  for (const z of [-0.62, 0.62]) bpart(0.1, 0.66, 0.66, black, 0, 0.33, z)
-  bpart(0.08, 0.1, 1.2, frame, 0, 0.62, 0)
-  bpart(0.08, 0.5, 0.1, frame, 0, 0.5, 0.1)
-  bpart(0.08, 0.55, 0.1, frame, 0, 0.62, -0.55)
-  bpart(0.22, 0.08, 0.3, black, 0, 0.9, 0.15)
-  bpart(0.56, 0.06, 0.06, black, 0, 1.0, -0.62)
-  bpart(0.34, 0.22, 0.26, frame, 0, 0.82, -0.86)
-  group.add(bike)
-  return { group, body, bike, limbs: { armL, armR, legL, legR } }
 }
