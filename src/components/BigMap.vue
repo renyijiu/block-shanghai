@@ -8,7 +8,7 @@
       @pointerup="onUp"
       @pointercancel="onUp"
     ></canvas>
-    <div class="title">{{ title }}<span v-if="here"> · 你在{{ here }}</span></div>
+    <div class="title">{{ title }}<span v-if="here"> · {{ t('你在') }} {{ here }}</span></div>
     <div class="tools">
       <button title="放大" @click="zoom(1.5)">＋</button>
       <button title="缩小" @click="zoom(1 / 1.5)">－</button>
@@ -24,6 +24,7 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import type { Game } from '../engine/Game.ts'
 import { drawMap, toScreen, type MapView } from '../engine/map/drawMap.ts'
 import { drawWalks } from '../engine/map/drawWalks.ts'
+import { t } from '../i18n/index.ts'
 import { usePanZoom } from './usePanZoom.ts'
 
 const props = defineProps<{ game: Game; title: string; here: string | null }>()

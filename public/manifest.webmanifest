@@ -1,0 +1,16 @@
+{
+  "name": "方块上海 · Block Shanghai",
+  "short_name": "方块上海",
+  "description": "方块风格的上海开放世界：真实街道、地铁、轮渡、景点拍照收集",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#9cc4e4",
+  "theme_color": "#2f6fb5",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

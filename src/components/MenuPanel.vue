@@ -2,21 +2,24 @@
   <div class="menu" @click.self="emit('close')">
     <div class="card">
       <div class="head">
-        <b>☰ 菜单</b>
-        <button class="close" title="关闭（Esc）" @click="emit('close')">✕</button>
+        <b>{{ t('☰ 菜单') }}</b>
+        <button class="close" :title="t('关闭')" @click="emit('close')">✕</button>
       </div>
-      <button class="item" @click="emit('open', 'character')">👤 形象<small>颜色、发型、帽子，或者上传皮肤</small></button>
-      <button class="item" @click="emit('quality')">⚙️ 画质：{{ qualityLabel }}<small>低 / 中 / 高，手机默认低</small></button>
-      <slot />
+      <button class="item" @click="emit('open', 'character')">{{ t('👤 形象') }}<small>{{ t('颜色、发型、帽子，或者上传皮肤') }}</small></button>
+      <button class="item" @click="emit('quality')">{{ t('⚙️ 画质：{q}', { q: qualityLabel }) }}<small>{{ t('低 / 中 / 高，手机默认低；太卡会自动调低') }}</small></button>
+      <button class="item" @click="emit('fullscreen')">{{ t(fullscreen ? '⛶ 退出全屏' : '⛶ 全屏') }}<small>{{ t('手机上会同时锁成横屏') }}</small></button>
+      <button class="item" @click="setLocale(locale === 'zh' ? 'en' : 'zh')">{{ locale === 'zh' ? t('🌐 语言：中文') : t('🌐 语言：English') }}<small>{{ t('英文模式下景点介绍、对白暂时还是中文') }}</small></button>
+      <button class="item" @click="emit('open', 'about')">{{ t('ℹ️ 关于') }}<small>{{ t('数据来源、致谢') }}</small></button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted } from 'vue'
+import { locale, setLocale, t } from '../i18n/index.ts'
 
-defineProps<{ qualityLabel: string }>()
-const emit = defineEmits<{ close: []; open: [what: string]; quality: [] }>()
+defineProps<{ qualityLabel: string; fullscreen: boolean }>()
+const emit = defineEmits<{ close: []; open: [what: string]; quality: []; fullscreen: [] }>()
 function onKey(e: KeyboardEvent) {
   if (e.code === 'Escape') emit('close')
 }
@@ -66,8 +69,7 @@ onBeforeUnmount(() => removeEventListener('keydown', onKey))
   cursor: pointer;
 }
 
-.item,
-:slotted(.item) {
+.item {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -82,8 +84,7 @@ onBeforeUnmount(() => removeEventListener('keydown', onKey))
   cursor: pointer;
 }
 
-.item small,
-:slotted(.item small) {
+.item small {
   color: #888;
   font-size: 12px;
 }

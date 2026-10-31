@@ -4,13 +4,13 @@
     <div class="title">{{ config.name }}<span v-if="!touch"> · {{ config.nameEn }}</span></div>
     <div v-if="loading">{{ loading }}</div>
     <template v-else>
-      <div class="status">🕘 {{ stats.time }} · {{ stats.weather }} · ¥{{ stats.money }} · 景点 {{ stats.found }}/{{ stats.landmarks }}</div>
+      <div class="status">🕘 {{ stats.time }} · {{ tPhrase(stats.weather) }} · ¥{{ stats.money }} · {{ t('景点') }} {{ stats.found }}/{{ stats.landmarks }}</div>
       <div v-if="stats.quest" class="quest" @click="codexTab = 'quests'">📌 {{ stats.quest.name }} {{ stats.quest.k + 1 }}/{{ stats.quest.n }}：{{ stats.quest.text }}</div>
-      <div v-if="stats.bike" class="bikeline">🚲 骑行 {{ stats.bike.minutes }} 分钟 · ¥{{ stats.bike.fare }}<span v-if="!touch">（B 还车）</span></div>
-      <div v-if="stats.walk" class="walk">🚶 {{ stats.walk.name }} {{ stats.walk.k }}/{{ stats.walk.n }} · 下一站 {{ stats.walk.next }} · 约 {{ Math.max(10, Math.round(stats.walk.dist / 2) * 10) }} 米</div>
-      <div>{{ backend }} · {{ stats.fps }} fps<span v-if="!touch"> · {{ stats.drawCalls }} 次绘制 · {{ (stats.triangles / 1000).toFixed(0) }}k 三角形</span></div>
-      <div v-if="!touch">分块：{{ stats.chunks }}（待建 {{ stats.pending }}）· 位置：{{ stats.x }}, {{ stats.z }} 格</div>
-      <div v-if="!touch" class="hint">{{ stats.mode === 'dev' ? 'WASD 移动 · Q/E 升降 · Shift 加速 · 拖动旋转 · 滚轮缩放' : 'WASD 移动 · Shift 奔跑 · 空格跳 · 拖动转视角 · 滚轮远近 · V 切换视角 · M 地图 · E 交互 · P 拍照 · C 图鉴 · B 单车 · T 打车' }}</div>
+      <div v-if="stats.bike" class="bikeline">🚲 {{ t('骑行 {m} 分钟', { m: stats.bike.minutes }) }} · ¥{{ stats.bike.fare }}<span v-if="!touch">{{ t('（B 还车）') }}</span></div>
+      <div v-if="stats.walk" class="walk">🚶 {{ stats.walk.name }} {{ stats.walk.k }}/{{ stats.walk.n }} · {{ t('下一站') }} {{ stats.walk.next }} · {{ t('约 {m} 米', { m: Math.max(10, Math.round(stats.walk.dist / 2) * 10) }) }}</div>
+      <div>{{ backend }} · {{ stats.fps }} fps<span v-if="!touch"> · {{ stats.drawCalls }} {{ t('次绘制') }} · {{ (stats.triangles / 1000).toFixed(0) }}k {{ t('三角形') }}</span></div>
+      <div v-if="!touch">{{ t('分块') }}：{{ stats.chunks }}（{{ t('待建') }} {{ stats.pending }}）· {{ t('位置') }}：{{ stats.x }}, {{ stats.z }} {{ t('格') }}</div>
+      <div v-if="!touch" class="hint">{{ t(stats.mode === 'dev' ? 'WASD 移动 · Q/E 升降 · Shift 加速 · 拖动旋转 · 滚轮缩放' : 'WASD 移动 · Shift 奔跑 · 空格跳 · 拖动转视角 · 滚轮远近 · V 切换视角 · M 地图 · E 交互 · P 拍照 · C 图鉴 · B 单车 · T 打车') }}</div>
     </template>
   </div>
   <template v-if="game && !loading && stats.mode === 'player'">
@@ -19,22 +19,22 @@
         <MiniMap v-if="!stats.station" :game="game" :size="mapSize" @open="mapOpen = true" />
         <MetroHud v-else :status="stats.station" :announce="stats.announce" @skip-wait="game.interior?.skipWait(game.player.pos.x)" @skip-next="game.interior?.skipNext()" @skip-to="(i) => game?.interior?.skipTo(i)" />
         <div class="side" :style="{ top: stats.station ? 'max(12px, env(safe-area-inset-top))' : `calc(max(12px, env(safe-area-inset-top)) + ${mapSize + 10}px)` }">
-          <button title="拍照（P）" @click="photoOpen = true">📷 拍照</button>
-          <button title="图鉴和相册（C）" @click="codexTab = 'codex'">📖 图鉴</button>
-          <button title="地铁线路图" @click="openMetro(null)">🚇 地铁</button>
-          <button v-if="!stats.station" :title="stats.bike ? '还车（B）' : '扫一辆共享单车（B）'" @click="toggleBike">{{ stats.bike ? '🚲 还车' : '🚲 单车' }}</button>
-          <button v-if="!stats.station" title="打车（T）" @click="openTaxi">🚕 打车</button>
-          <button title="菜单：形象、画质…" @click="menuOpen = true">☰ 菜单</button>
+          <button :title="t('拍照（P）')" @click="photoOpen = true">{{ t('📷 拍照') }}</button>
+          <button :title="t('图鉴和相册（C）')" @click="codexTab = 'codex'">{{ t('📖 图鉴') }}</button>
+          <button :title="t('地铁线路图')" @click="openMetro(null)">{{ t('🚇 地铁') }}</button>
+          <button v-if="!stats.station" :title="t(stats.bike ? '还车（B）' : '扫一辆共享单车（B）')" @click="toggleBike">{{ t(stats.bike ? '🚲 还车' : '🚲 单车') }}</button>
+          <button v-if="!stats.station" :title="t('打车（T）')" @click="openTaxi">{{ t('🚕 打车') }}</button>
+          <button :title="t('菜单：形象、画质…')" @click="menuOpen = true">{{ t('☰ 菜单') }}</button>
         </div>
         <div v-if="stats.ride" class="prompt ride">
-          {{ game.busRide ? '🚌' : '⛴' }} {{ stats.ride.name }} · {{ stats.ride.to }} · {{ stats.ride.sailing ? `还有 ${stats.ride.minutes} 分钟` : game.busRide ? '车马上到' : '马上开船' }}
-          <button @click="skipRide">跳过</button>
+          {{ game.busRide ? '🚌' : '⛴' }} {{ stats.ride.name }} · {{ stats.ride.to }} · {{ stats.ride.sailing ? t('还有 {m} 分钟', { m: stats.ride.minutes }) : t(game.busRide ? '车马上到' : '马上开船') }}
+          <button @click="skipRide">{{ t('跳过') }}</button>
         </div>
         <div v-else-if="stats.prompt" class="prompt">
-          <b v-if="!touch">E</b> {{ stats.prompt.action }} · {{ stats.prompt.label }}
+          <b v-if="!touch">E</b> {{ t(stats.prompt.action) }} · {{ stats.prompt.label }}
         </div>
       </template>
-      <TouchControls v-if="touch" :input="game.input" :action="photoOpen ? null : (stats.prompt?.action ?? null)" :buttons="!photoOpen" />
+      <TouchControls v-if="touch" :input="game.input" :action="photoOpen ? null : stats.prompt ? t(stats.prompt.action) : null" :buttons="!photoOpen" />
       <PhotoMode v-if="photoOpen" :game="game" :touch="touch" @close="photoOpen = false" @album="openAlbum" />
     </template>
     <DistrictToast :name="toast.name" :theme="toast.theme" />
@@ -44,7 +44,8 @@
     <BoatPanel v-if="boatPanel" :game="game" :pier="boatPanel" @close="boatPanel = null" @board="board" />
     <BusPanel v-if="busPanel" :game="game" :line-id="busPanel.line" :stop="busPanel.stop" @close="busPanel = null" @board="boardBus" />
     <TaxiPanel v-if="taxiPanel" :game="game" @close="taxiPanel = false" @go="takeTaxi" />
-    <MenuPanel v-if="menuOpen" :quality-label="QUALITY_PRESETS[quality].label" @close="menuOpen = false" @quality="cycleQuality" @open="openFromMenu" />
+    <MenuPanel v-if="menuOpen" :quality-label="t(QUALITY_PRESETS[quality].label)" :fullscreen="fullscreen" @close="menuOpen = false" @quality="cycleQuality" @open="openFromMenu" @fullscreen="toggleFullscreen" />
+    <AboutPanel v-if="aboutOpen" :city="config.name" :city-en="config.nameEn" @close="aboutOpen = false" />
     <CharacterPanel v-if="characterOpen" :game="game" @close="characterOpen = false" />
     <CodexPanel v-if="codexTab" :game="game" :initial-tab="codexTab" @close="codexTab = null" />
     <ShopPanel v-if="shopPanel" :game="game" :shop-id="shopPanel" @close="shopPanel = null" />
@@ -58,6 +59,10 @@
     </TransitionGroup>
   </template>
   <div v-if="!panelOpen" class="credit">© OpenStreetMap contributors</div>
+  <div v-if="portraitHint && !loading && !panelOpen" class="portrait">
+    <span>📱↻ {{ t('横过来玩，视野更大') }}</span>
+    <button @click="dismissPortrait">{{ t('知道了') }}</button>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -67,6 +72,8 @@ import BoatPanel from './components/BoatPanel.vue'
 import BusPanel from './components/BusPanel.vue'
 import CharacterPanel from './components/CharacterPanel.vue'
 import MenuPanel from './components/MenuPanel.vue'
+import AboutPanel from './components/AboutPanel.vue'
+import { locale, t, tPhrase } from './i18n/index.ts'
 import TaxiPanel from './components/TaxiPanel.vue'
 import CodexPanel, { type CodexTab } from './components/CodexPanel.vue'
 import CultureCard from './components/CultureCard.vue'
@@ -114,14 +121,46 @@ const taxiPanel = ref(false)
 // 菜单和角色外观
 const menuOpen = ref(false)
 const characterOpen = ref(false)
+const aboutOpen = ref(false)
 function openFromMenu(what: string) {
   menuOpen.value = false
   if (what === 'character') characterOpen.value = true
+  else if (what === 'about') aboutOpen.value = true
+}
+
+// 竖着拿手机时提示横过来（点“知道了”这次不再提示）
+const portraitHint = ref(false)
+let portraitDismissed = sessionStorage.getItem('block-shanghai:portrait') === '1'
+function checkPortrait() {
+  portraitHint.value = touch && !portraitDismissed && innerHeight > innerWidth
+}
+function dismissPortrait() {
+  portraitDismissed = true
+  sessionStorage.setItem('block-shanghai:portrait', '1')
+  portraitHint.value = false
+}
+checkPortrait()
+addEventListener('resize', checkPortrait)
+
+// 全屏：手机上同时锁成横屏（浏览器不支持就提示用“添加到主屏幕”）
+const fullscreen = ref(!!document.fullscreenElement)
+document.addEventListener('fullscreenchange', () => (fullscreen.value = !!document.fullscreenElement))
+async function toggleFullscreen() {
+  menuOpen.value = false
+  try {
+    if (document.fullscreenElement) return void (await document.exitFullscreen())
+    if (!document.documentElement.requestFullscreen) return showNotice(t('这个浏览器不能全屏，可以用“添加到主屏幕”打开'))
+    await document.documentElement.requestFullscreen()
+    const orientation = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> }
+    if (touch) await orientation.lock?.('landscape').catch(() => {})
+  } catch {
+    showNotice(t('这个浏览器不能全屏，可以用“添加到主屏幕”打开'))
+  }
 }
 // 小店面板：店 id；文化牌：读到的文化图鉴条目
 const shopPanel = ref<string | null>(null)
 const cultureCard = ref<CultureDef | null>(null)
-const panelOpen = computed(() => mapOpen.value || !!metroPanel.value || !!codexTab.value || !!boatPanel.value || !!shopPanel.value || !!cultureCard.value || !!busPanel.value || taxiPanel.value || menuOpen.value || characterOpen.value)
+const panelOpen = computed(() => mapOpen.value || !!metroPanel.value || !!codexTab.value || !!boatPanel.value || !!shopPanel.value || !!cultureCard.value || !!busPanel.value || taxiPanel.value || menuOpen.value || characterOpen.value || aboutOpen.value)
 function openAlbum() {
   photoOpen.value = false
   codexTab.value = 'album'
@@ -296,6 +335,8 @@ function cycleQuality() {
   const g = game.value
   if (!g) return
   const next = QUALITY_ORDER[(QUALITY_ORDER.indexOf(quality.value) + 1) % QUALITY_ORDER.length]!
+  // 手动选过画质就不再自动调
+  g.autoQuality = false
   g.setQuality(next)
   g.saveNow()
   quality.value = next
@@ -303,13 +344,17 @@ function cycleQuality() {
 
 // 区名：进入新的区时弹出提示（docs/06 P1 验收）
 type DistrictId = keyof typeof config.districts
-const districtName = computed(() => (stats.district ? config.districts[stats.district as DistrictId]?.name ?? null : null))
+// 英文模式下的地名（城市包的 namesEn），没有就用中文
+const enDistrict = (id: string) => (locale.value === 'en' ? city.namesEn?.districts[id] : undefined)
+const placeName = (id: string, zh: string) => (locale.value === 'en' ? (city.namesEn?.landmarks[id] ?? zh) : zh)
+const districtName = computed(() => (stats.district ? (enDistrict(stats.district)?.[0] ?? config.districts[stats.district as DistrictId]?.name ?? null) : null))
 const toast = reactive({ name: '', theme: '' })
 watch(
   () => stats.district,
   (id) => {
     const d = id ? config.districts[id as DistrictId] : null
-    if (d) Object.assign(toast, { name: d.name, theme: d.theme })
+    const en = id ? enDistrict(id) : undefined
+    if (d) Object.assign(toast, { name: en?.[0] ?? d.name, theme: en?.[1] ?? d.theme })
   }
 )
 
@@ -360,6 +405,11 @@ onMounted(async () => {
       }
     }
     g.onRideEnd = (message) => showNotice(message)
+    g.onQualityAuto = (level) => {
+      quality.value = level
+      showNotice(t('画质自动调到“{q}”（帧率太低）', { q: t(QUALITY_PRESETS[level].label) }))
+      g.saveNow()
+    }
     // 地铁成就、线路徽章、每日任务
     g.onProgress = (gain) => {
       const parts = [
@@ -404,7 +454,8 @@ onMounted(async () => {
         tip: next ? `下一站：${next.name}（跟着地上的步道和绿色标记走）` : ''
       })
     }
-    g.onDiscover = ({ def }) => showDiscover({ id: def.id, name: def.name, grade: def.grade, district: config.districts[def.district as DistrictId]?.name ?? '', desc: def.desc, tip: def.tip ?? '' })
+    g.onDiscover = ({ def }) =>
+      showDiscover({ id: def.id, name: placeName(def.id, def.name), grade: def.grade, district: enDistrict(def.district)?.[0] ?? config.districts[def.district as DistrictId]?.name ?? '', desc: def.desc, tip: def.tip ?? '' })
     g.start()
     // 引擎状态按 5 Hz 同步到界面（docs/07 第 5 节）
     timer = window.setInterval(() => Object.assign(stats, g.stats), 200)
@@ -624,6 +675,31 @@ onBeforeUnmount(() => {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+.portrait {
+  position: fixed;
+  left: 50%;
+  bottom: max(150px, calc(env(safe-area-inset-bottom) + 150px));
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.portrait button {
+  padding: 4px 10px;
+  border: none;
+  border-radius: 8px;
+  background: #fff;
+  font-family: inherit;
+  font-size: 13px;
 }
 
 .credit {

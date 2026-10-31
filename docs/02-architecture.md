@@ -55,6 +55,7 @@ block-shanghai/
     ├── main.ts
     ├── App.vue
     ├── style.css
+    ├── i18n/                  界面语言：中文原文查英文表（t()），城市包另给英文地名（namesEn）
     ├── components/            MiniMap / BigMap / DistrictToast / TouchControls / Menu / Panels / MetroMap …
     ├── engine/
     │   ├── Game.ts            主循环、系统调度

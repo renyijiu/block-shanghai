@@ -1,8 +1,8 @@
 <template>
-  <button class="minimap" title="打开地图（M）" @click="emit('open')">
+  <button class="minimap" :title="t('打开地图（M）')" @click="emit('open')">
     <canvas ref="canvas"></canvas>
     <div class="arrow" :style="{ transform: `translate(-50%, -50%) rotate(${-facing}rad)` }"></div>
-    <div class="north">北</div>
+    <div class="north">{{ t('北') }}</div>
   </button>
 </template>
 
@@ -10,6 +10,7 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import type { Game } from '../engine/Game.ts'
 import { drawMap } from '../engine/map/drawMap.ts'
+import { t } from '../i18n/index.ts'
 import { drawWalks } from '../engine/map/drawWalks.ts'
 
 const props = defineProps<{ game: Game; size: number }>()

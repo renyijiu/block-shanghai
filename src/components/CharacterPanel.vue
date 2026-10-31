@@ -1,49 +1,49 @@
 <template>
   <div class="sheet">
     <div class="head">
-      <b>👤 形象</b>
-      <button class="close" title="完成（Esc）" @click="close">完成</button>
+      <b>👤 {{ t('形象') }}</b>
+      <button class="close" @click="close">{{ t('完成') }}</button>
     </div>
     <div class="body">
       <template v-if="!look.skinImage">
         <section v-for="k in colorKeys" :key="k.key">
-          <h4>{{ k.name }}</h4>
+          <h4>{{ t(k.name) }}</h4>
           <div class="swatches">
             <button v-for="c in LOOK_PALETTE[k.key]" :key="c" class="sw" :class="{ on: look[k.key] === c }" :style="{ background: hex(c) }" :title="hex(c)" @click="set(k.key, c)"></button>
-            <label v-if="k.key === 'shirt' || k.key === 'pants'" class="sw pick" title="自选颜色">
+            <label v-if="k.key === 'shirt' || k.key === 'pants'" class="sw pick" :title="t('自选颜色')">
               <input type="color" :value="hex(look[k.key])" @input="set(k.key, parseInt(($event.target as HTMLInputElement).value.slice(1), 16))" />
             </label>
           </div>
         </section>
         <section>
-          <h4>发型</h4>
+          <h4>{{ t('发型') }}</h4>
           <div class="opts">
-            <button v-for="o in HAIR" :key="o.v" :class="{ on: look.hairStyle === o.v }" @click="set('hairStyle', o.v)">{{ o.name }}</button>
+            <button v-for="o in HAIR" :key="o.v" :class="{ on: look.hairStyle === o.v }" @click="set('hairStyle', o.v)">{{ t(o.name) }}</button>
           </div>
         </section>
         <section>
-          <h4>帽子和眼镜</h4>
+          <h4>{{ t('帽子和眼镜') }}</h4>
           <div class="opts">
-            <button v-for="o in HATS" :key="o.v" :class="{ on: look.hat === o.v }" @click="set('hat', o.v)">{{ o.name }}</button>
-            <button :class="{ on: look.glasses }" @click="set('glasses', !look.glasses)">眼镜</button>
+            <button v-for="o in HATS" :key="o.v" :class="{ on: look.hat === o.v }" @click="set('hat', o.v)">{{ t(o.name) }}</button>
+            <button :class="{ on: look.glasses }" @click="set('glasses', !look.glasses)">{{ t('眼镜') }}</button>
           </div>
         </section>
       </template>
       <section>
-        <h4>皮肤</h4>
-        <p class="note">可以上传一张 64×64 的方块人皮肤（PNG，常见方块游戏的皮肤格式，老的 64×32 也行）。用了皮肤，上面的颜色设置就不生效。</p>
+        <h4>{{ t('皮肤') }}</h4>
+        <p class="note">{{ t('可以上传一张 64×64 的方块人皮肤（PNG，常见方块游戏的皮肤格式，老的 64×32 也行）。用了皮肤，上面的颜色设置就不生效。') }}</p>
         <div class="opts">
           <label class="upload">
-            上传皮肤
+            {{ t('上传皮肤') }}
             <input type="file" accept="image/png" @change="upload" />
           </label>
-          <button @click="sample">示例皮肤</button>
-          <button v-if="look.skinImage" @click="set('skinImage', null)">去掉皮肤</button>
+          <button @click="sample">{{ t('示例皮肤') }}</button>
+          <button v-if="look.skinImage" @click="set('skinImage', null)">{{ t('去掉皮肤') }}</button>
         </div>
         <img v-if="look.skinImage" class="skin" :src="look.skinImage" alt="皮肤" />
         <p v-if="error" class="error">{{ error }}</p>
       </section>
-      <button class="reset" @click="reset">恢复默认</button>
+      <button class="reset" @click="reset">{{ t('恢复默认') }}</button>
     </div>
   </div>
 </template>
@@ -52,6 +52,7 @@
 import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { DEFAULT_LOOK, LOOK_PALETTE, type Look } from '../engine/actors/look.ts'
 import type { Game } from '../engine/Game.ts'
+import { t } from '../i18n/index.ts'
 
 const props = defineProps<{ game: Game }>()
 const emit = defineEmits<{ close: [] }>()

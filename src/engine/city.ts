@@ -153,6 +153,8 @@ export interface CityPackage {
   boats: BoatLineDef[]
   /** 观光巴士（P6） */
   buses: BusLineDef[]
+  /** 英文模式的地名（P6）：景点和子景点 id → 英文名；区 id → [英文区名, 英文主题] */
+  namesEn?: { landmarks: Record<string, string>; districts: Record<string, [string, string]> }
   /** 路人：类型、穿着、对白（P5） */
   people: NpcContent
   /** 美食、纪念品、商店、文化图鉴（P5） */

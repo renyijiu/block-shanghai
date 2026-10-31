@@ -8,14 +8,15 @@
     <div class="look" @pointerdown="startLook" @pointermove="moveLook" @pointerup="endLook" @pointercancel="endLook"></div>
     <div v-if="buttons" class="buttons">
       <button v-if="action" class="act" @pointerdown.prevent="input.press('interact')">{{ action }}</button>
-      <button :class="{ on: running }" @pointerdown.prevent="toggleRun">跑</button>
-      <button @pointerdown.prevent="input.press('view')">视角</button>
-      <button class="jump" @pointerdown.prevent="input.press('jump')">跳</button>
+      <button :class="{ on: running }" @pointerdown.prevent="toggleRun">{{ t('跑') }}</button>
+      <button @pointerdown.prevent="input.press('view')">{{ t('视角') }}</button>
+      <button class="jump" @pointerdown.prevent="input.press('jump')">{{ t('跳') }}</button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '../i18n/index.ts'
 import { reactive, ref } from 'vue'
 import type { Input } from '../engine/actors/Input.ts'
 

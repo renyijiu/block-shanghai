@@ -2,7 +2,7 @@
   <Transition name="discover">
     <div v-if="visible && landmark" :key="landmark.id" class="card">
       <div v-if="landmark.kicker" class="kicker">{{ landmark.kicker }}</div>
-      <div v-else class="kicker">发现景点 <span class="grade" :class="landmark.grade">{{ landmark.grade }}</span></div>
+      <div v-else class="kicker">{{ t('发现景点') }} <span class="grade" :class="landmark.grade">{{ landmark.grade }}</span></div>
       <div class="name">{{ landmark.name }}</div>
       <div v-if="landmark.district" class="district">{{ landmark.district }}</div>
       <div class="desc">{{ landmark.desc }}</div>
@@ -13,6 +13,7 @@
 
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from 'vue'
+import { t } from '../i18n/index.ts'
 
 export interface DiscoverInfo {
   id: string

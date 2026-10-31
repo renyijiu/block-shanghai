@@ -130,6 +130,12 @@ export class Game {
   readonly player = new Player()
   readonly rig = new CameraRig()
   quality: QualityLevel = defaultQuality()
+  /** 帧率持续太低时自动降一档画质；手动选过画质后不再自动调 */
+  autoQuality = true
+  /** 自动降了画质时调用（界面提示、存档） */
+  onQualityAuto: ((level: QualityLevel) => void) | null = null
+  private slowSince = 0
+  private startedAt = 0
   /** 每帧渲染之后调用（调试面板的帧率统计用） */
   afterRender: (() => void) | null = null
   devCamera: DevCamera | null = null
@@ -305,7 +311,8 @@ export class Game {
         season: () => this.season,
         pierFree: (x, z) => this.landmarks?.pierFree(x, z) ?? false
       },
-      { radius: QUALITY_PRESETS[this.quality].viewDistance, budgetMs: 6 }
+      // 手机上每帧少建一点，免得走动时掉帧
+      { radius: QUALITY_PRESETS[this.quality].viewDistance, budgetMs: matchMedia('(pointer: coarse)').matches ? 4 : 6 }
     )
     this.scene.add(this.chunks.root)
     this.interior = new InteriorManager(metro, this.clock)
@@ -1040,6 +1047,7 @@ export class Game {
     // init() 期间组件可能已经卸载
     if (this.disposed) return
     this.last = performance.now()
+    this.startedAt = this.last
     this.renderer.setAnimationLoop((now) => this.frame(now))
   }
 
@@ -1237,6 +1245,23 @@ export class Game {
     })
     this.frames = 0
     this.statsAt = now
+    this.adaptQuality(now)
+  }
+
+  // 自动画质：开局 15 秒以后，帧率连续 6 秒低于 28 就降一档（拍照、乘车、页面在后台时不算）
+  private adaptQuality(now: number) {
+    const slow = this.stats.fps > 0 && this.stats.fps < 28
+    if (!this.autoQuality || this.devCamera || this.quality === 'low' || !slow || this.traveling || this.photoMode || now - this.startedAt < 15_000 || document.visibilityState !== 'visible') {
+      this.slowSince = 0
+      return
+    }
+    if (!this.slowSince) this.slowSince = now
+    else if (now - this.slowSince > 6000) {
+      this.slowSince = 0
+      const next = this.quality === 'high' ? 'mid' : 'low'
+      this.setQuality(next)
+      this.onQualityAuto?.(next)
+    }
   }
 
   private walkStats(): GameStats['walk'] {
