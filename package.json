@@ -1,6 +1,7 @@
 {
   "name": "block-shanghai",
   "private": true,
+  "license": "MIT",
   "version": "0.1.0",
   "description": "方块上海 · Block Shanghai —— 方块风格的上海城市漫游、拍照收集与真实地铁网络",
   "type": "module",

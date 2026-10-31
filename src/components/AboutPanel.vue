@@ -13,7 +13,7 @@
         <h4>Credits</h4>
         <p>Built with Vue, three.js (WebGPU) and Vite. Inspired by <a href="https://github.com/ns2250225/guangzhou" target="_blank" rel="noopener">Block Guangzhou</a> (ideas only, no code reused).</p>
         <h4>Notes</h4>
-        <p>Landmarks are blocky reinterpretations, not exact replicas. Shops and goods use generic names. The Shanghainese lines have not been proofread by native speakers yet. The project license is still to be decided.</p>
+        <p>Landmarks are blocky reinterpretations, not exact replicas. Shops and goods use generic names. The Shanghainese lines have not been proofread by native speakers yet. The code is released under the MIT License; map data is used under the ODbL.</p>
       </template>
       <template v-else>
         <p>方块风格的上海开放世界：在按地图数据生成的真实街道上走路，坐地铁、轮渡、观光巴士、共享单车，拍景点、吃小吃，一路收集。</p>
@@ -22,7 +22,7 @@
         <h4>致谢</h4>
         <p>用 Vue、three.js（WebGPU）和 Vite 搭建。玩法参考了<a href="https://github.com/ns2250225/guangzhou" target="_blank" rel="noopener">方块羊城</a>（只借鉴思路，没有复制代码）。</p>
         <h4>说明</h4>
-        <p>景点是方块风格的再创作，不是精确复原；店铺和商品用通用名，不用品牌。路人的沪语对白还没请上海话母语者校对。项目许可证待定。</p>
+        <p>景点是方块风格的再创作，不是精确复原；店铺和商品用通用名，不用品牌。路人的沪语对白还没请上海话母语者校对。代码按 MIT 许可证开源，地图数据按 ODbL 许可使用。</p>
       </template>
     </div>
   </div>

@@ -127,4 +127,4 @@ block-shanghai/
 
 ## 许可证
 
-待定。
+代码按 [MIT 许可证](./LICENSE) 开源。地图和地铁数据来自 OpenStreetMap，按 ODbL 许可使用，转载数据时需要保留 © OpenStreetMap contributors 署名。
