@@ -5,3 +5,6 @@ dist/
 
 # OSM 原始下载缓存（可随时重新拉取，不入库）
 tools/.cache/
+
+# 本机编辑器 / 助手配置
+.claude/

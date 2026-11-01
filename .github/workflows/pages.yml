@@ -1,10 +1,11 @@
-# 部署到 GitHub Pages（docs/07 第 9 节）。托管位置还没最终定（海外静态托管 / 国内 OSS + CDN），
-# 所以这个工作流只能手动触发，推送代码不会自动发布：
-#   1. 仓库 Settings → Pages → Build and deployment → Source 选 “GitHub Actions”
-#   2. Actions 页面选“部署到 GitHub Pages”，点 Run workflow
+# 部署到 GitHub Pages（docs/07 第 9 节）：推送到 main 自动发布，也可以在 Actions 页面手动运行。
+# 仓库是私有的时候跳过（免费账号的私有仓库开不了 Pages）。第一次发布前：
+#   仓库 Settings → Pages → Build and deployment → Source 选 “GitHub Actions”
 name: 部署到 GitHub Pages
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -18,6 +19,7 @@ concurrency:
 
 jobs:
   build:
+    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

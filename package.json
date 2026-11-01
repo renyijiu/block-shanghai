@@ -4,6 +4,26 @@
   "license": "MIT",
   "version": "0.1.0",
   "description": "方块上海 · Block Shanghai —— 方块风格的上海城市漫游、拍照收集与真实地铁网络",
+  "keywords": [
+    "shanghai",
+    "voxel",
+    "open-world",
+    "game",
+    "threejs",
+    "webgpu",
+    "vue",
+    "openstreetmap",
+    "metro"
+  ],
+  "homepage": "https://renyijiu.github.io/block-shanghai/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/renyijiu/block-shanghai.git"
+  },
+  "bugs": {
+    "url": "https://github.com/renyijiu/block-shanghai/issues"
+  },
+  "author": "renyijiu",
   "type": "module",
   "engines": {
     "node": "^22.18.0 || ^24.0.0 || >=26.0.0"

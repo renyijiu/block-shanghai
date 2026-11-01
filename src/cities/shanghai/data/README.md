@@ -13,4 +13,15 @@
 | `metro.json` | 地铁线路、站点、出入口、轨道（标明地下/高架）（P2） |
 | `world.json` | 烘焙范围、分块范围、OSM 数据时间 |
 
-这些文件由 OSM 数据派生，适用 **ODbL**：必须注明“© OpenStreetMap contributors”，公开分发时这些数据文件本身也须按 ODbL 提供。
+## 许可：ODbL 1.0（不是 MIT）
+
+这些文件由 OpenStreetMap 数据派生，按 [开放数据库许可 ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/) 提供，仓库其余代码的 MIT 许可证不适用于它们。
+
+- 数据 © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors，使用或转载时要保留这条署名
+- 修改后再公开的数据，也要按 ODbL 提供
+- 来源：[Geofabrik](https://download.geofabrik.de/asia/china.html) 的上海、江苏提取包，OSM 数据时间 2026-10-29T21:21:26Z，2026-10-30 烘焙（`world.json`、`metro.json` 里的 `osmTimestamp`、`generatedAt`）
+- 复现：`npm run fetch-osm && npm run bake`，脚本在 [tools/](../../../../tools/)
+
+## License: ODbL 1.0 (not MIT)
+
+These files are derived from OpenStreetMap and are available under the [Open Database License (ODbL) 1.0](https://opendatacommons.org/licenses/odbl/1-0/); the MIT License of the rest of the repository does not apply to them. Data © OpenStreetMap contributors. Source: Geofabrik extracts for Shanghai and Jiangsu, OSM data as of 2026-10-29T21:21:26Z. Rebuild with `npm run fetch-osm && npm run bake`.

@@ -1,0 +1,23 @@
+# 每次推送和 PR：类型检查、单元测试、打包（和本地提交前跑的一样，见 CONTRIBUTING.md）
+name: 检查
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      # 类型检查 + 打包
+      - run: npm run build

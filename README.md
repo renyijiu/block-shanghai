@@ -2,13 +2,20 @@
 
 > 方块风格的上海城市漫游：在真实形状的上海里散步、拍照收集景点、坐遍真实的地铁网络。
 
+[English](./README.en.md) · 在线试玩：<https://renyijiu.github.io/block-shanghai/>（电脑或手机浏览器打开即可，手机建议横屏）
+
 基于 **Vue 3 + Three.js（WebGPU，自动回退 WebGL 2）+ TypeScript**，纯前端运行。地理和地铁数据来自 OpenStreetMap，离线烘焙成游戏坐标。
 
-**当前阶段：P4 · 地铁第 3、4 层已完成**（真机帧率待确认），下一步 P5 生活与内容（路线图见 [docs/06-roadmap.md](./docs/06-roadmap.md)）
+**v0.1.0：路线图 P1–P6 都已完成**（手机真机帧率还在确认），见 [docs/06-roadmap.md](./docs/06-roadmap.md)。
+
+| | |
+| --- | --- |
+| ![外滩夜景，对岸是陆家嘴](./docs/images/bund-night.jpg) | ![陆家嘴和黄浦江](./docs/images/lujiazui.jpg) |
+| ![2 号线车厢里的报站](./docs/images/metro.jpg) | ![地铁线路图：徐家汇到陆家嘴](./docs/images/metro-map.jpg) |
 
 ---
 
-## 核心特色（规划）
+## 核心特色
 
 - 🗺️ **真实城市格局**：黄浦江、苏州河、高架路网、16 个区；市中心 1:1 比例（1km ≈ 200 格），远郊按比例压缩
 - 🚇 **真实地铁网络**：1–18 号线、浦江线、磁浮；路线规划和票价；3/4 号线高架上有列车跑；进站、乘车、换乘、选出口出站
@@ -68,7 +75,26 @@ npm run bench      # 渲染基准，需先 npm run dev（见 docs/07 第 4 节�
 
 ## 部署
 
-`npm run build` 生成的 `dist/` 是纯静态文件（相对路径），放到任意静态托管即可。GitHub Pages 的工作流（`.github/workflows/pages.yml`）需要手动触发；国内对象存储的做法见 [07 第 9 节](docs/07-tech-selection.md#9-部署)。
+`npm run build` 生成的 `dist/` 是纯静态文件（相对路径），放到任意静态托管即可。
+
+- GitHub Pages：仓库公开后，推送到 `main` 会自动测试、打包并发布（`.github/workflows/pages.yml`，也可以在 Actions 页面手动运行）；仓库是私有的时候工作流会跳过。第一次要在仓库 Settings → Pages 把 Source 选成“GitHub Actions”
+- 每次推送和 PR 都会跑类型检查、单元测试和打包（`.github/workflows/ci.yml`）
+- 国内对象存储 + CDN 的做法见 [07 第 9 节](docs/07-tech-selection.md#9-部署)
+
+## 隐私
+
+游戏完全在浏览器里运行，除了加载游戏自己的文件，不访问任何其他服务，也不收集任何数据。存档、设置和相册只存在本机浏览器里（localStorage / IndexedDB），换设备或清除网站数据就没有了。
+
+## 已知限制
+
+- 手机真机帧率还在确认：目前在 Mac（M1 Max）和无头 Chrome 的手机尺寸里测过，太卡时游戏会自动降画质
+- 景点是方块风格的再创作，不是精确复原；城市里的普通建筑是按区域风格程序生成的，不对应真实楼栋
+- 路人的上海话对白还没请母语者校对；英文是 AI 翻译的，还没请英语母语者通读——欢迎指正
+- 需要支持 WebGL 2 的浏览器（有 WebGPU 时优先用 WebGPU）
+
+## 参与贡献
+
+欢迎提 issue 和 PR，尤其是上海话对白、英文翻译、景点细节和真机性能反馈。开发流程见 [CONTRIBUTING.md](./CONTRIBUTING.md)。
 
 ## 项目结构
 
@@ -128,4 +154,6 @@ block-shanghai/
 
 ## 许可证
 
-代码按 [MIT 许可证](./LICENSE) 开源。地图和地铁数据来自 OpenStreetMap，按 ODbL 许可使用，转载数据时需要保留 © OpenStreetMap contributors 署名。
+- **代码**：[MIT 许可证](./LICENSE)，适用于仓库里除下面数据目录以外的内容。
+- **地图和地铁数据**：`src/cities/shanghai/data/` 里的文件由 OpenStreetMap 派生，按 [开放数据库许可 ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/) 提供，**不适用 MIT**。使用或转载要注明 © OpenStreetMap contributors；修改后再公开的数据也要按 ODbL 提供。来源和数据时间见[这个目录的说明](./src/cities/shanghai/data/README.md)。代码里少量的经纬度（景点位置、渡轮航线等）同样取自 OpenStreetMap。
+- 游戏画面右下角和“关于”页一直显示 OpenStreetMap 署名，部署或截图时请保留。
