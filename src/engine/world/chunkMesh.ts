@@ -118,10 +118,18 @@ function roadColor(info: RoadInfo): RGB {
   return hex(c[info.class as 'motorway'] ?? c.secondary)
 }
 
-/** 地面道路（含过河小桥）：贴地的路面带 */
-export function buildGroundRoads(pieces: RoadPiece[], roads: RoadInfo[]): GeometryData | null {
+/**
+ * 地面道路（含过河小桥）：贴地的路面带。onWater 判断一点在不在水面上，传了才给小桥加护栏：
+ * 只在河面上方（两头各伸到岸边一点）、只画外侧（上下行两幅桥并排时中间不画），两头立桥头柱
+ */
+export function buildGroundRoads(pieces: RoadPiece[], roads: RoadInfo[], onWater?: (x: number, z: number) => boolean): GeometryData | null {
   const g = new GeoBuilder()
-  for (const [idx, flat] of pieces) {
+  const decks: { k: number; flat: number[]; half: number }[] = []
+  pieces.forEach(([idx, flat], k) => {
+    const info = roads[idx]!
+    if (info.bridge && info.level <= 0) decks.push({ k, flat, half: info.width / 2 })
+  })
+  for (const [k, [idx, flat]] of pieces.entries()) {
     const info = roads[idx]!
     if (info.level > 0) continue
     const f = frame(flat, info.width / 2)
@@ -135,16 +143,90 @@ export function buildGroundRoads(pieces: RoadPiece[], roads: RoadInfo[]): Geomet
       const [box, boz] = f.off[i]!
       g.quad([ax! - aox!, y, az! - aoz!], [bx! - box!, y, bz! - boz!], [bx! + box!, y, bz! + boz!], [ax! + aox!, y, az! + aoz!], [0, 1, 0], col)
     }
-    if (info.bridge) addParapets(g, f, 0, y)
+    if (info.bridge && onWater) {
+      // 护栏外侧这一点落在另一幅桥面上，说明两幅桥并排
+      const onOtherDeck = (x: number, z: number) =>
+        decks.some((d) => d.k !== k && distToFlat(d.flat, x, z) <= d.half + 0.2)
+      bridgeRails(g, resample(f, 2), y, onWater, onOtherDeck)
+    }
   }
   return g.build()
 }
 
+/** 点到折线（[x, z, h, ...]）的距离 */
+function distToFlat(flat: number[], x: number, z: number) {
+  let best = Infinity
+  for (let i = 3; i < flat.length; i += 3) {
+    const ax = flat[i - 3]!, az = flat[i - 2]!, vx = flat[i]! - ax, vz = flat[i + 1]! - az
+    const l2 = vx * vx + vz * vz
+    const t = l2 ? Math.max(0, Math.min(1, ((x - ax) * vx + (z - az) * vz) / l2)) : 0
+    best = Math.min(best, Math.hypot(x - ax - t * vx, z - az - t * vz))
+  }
+  return best
+}
+
+/** 把 frame 的每一段切成不超过 step 格的小段（偏移向量线性插值），护栏才能按段决定画不画 */
+function resample(f: Frame, step: number): Frame {
+  const pts: number[][] = [f.pts[0]!]
+  const off: number[][] = [f.off[0]!]
+  for (let i = 1; i < f.pts.length; i++) {
+    const a = f.pts[i - 1]!, b = f.pts[i]!, oa = f.off[i - 1]!, ob = f.off[i]!
+    const n = Math.max(1, Math.ceil(Math.hypot(b[0]! - a[0]!, b[1]! - a[1]!) / step))
+    for (let j = 1; j <= n; j++) {
+      const t = j / n
+      pts.push(a.map((v, c) => v + (b[c]! - v) * t))
+      off.push([oa[0]! + (ob[0]! - oa[0]!) * t, oa[1]! + (ob[1]! - oa[1]!) * t])
+    }
+  }
+  return { pts, off }
+}
+
+/** 过河小桥的护栏和桥头柱（见 buildGroundRoads） */
+function bridgeRails(g: GeoBuilder, f: Frame, deckY: number, onWater: (x: number, z: number) => boolean, onOtherDeck: (x: number, z: number) => boolean) {
+  const s = ROAD_STYLE
+  const n = f.pts.length - 1
+  // 每一小段的中心和两侧外缘，有一点在水面上就算“在河上”；再往两头各延一段（伸到岸边）
+  const wet = Array.from({ length: n }, (_, i) => {
+    const a = f.pts[i]!, b = f.pts[i + 1]!, o = f.off[i]!
+    const [cx, cz] = [(a[0]! + b[0]!) / 2, (a[1]! + b[1]!) / 2]
+    return onWater(cx, cz) || onWater(cx + o[0]!, cz + o[1]!) || onWater(cx - o[0]!, cz - o[1]!)
+  })
+  const over = wet.map((_, i) => wet[i] || !!wet[i - 1] || !!wet[i + 1])
+  const post = hex(s.colors.parapet)
+  for (const side of [1, -1]) {
+    const keep = over.map((w, i) => {
+      if (!w) return false
+      const a = f.pts[i]!, b = f.pts[i + 1]!, o = f.off[i]!
+      const len = Math.hypot(o[0]!, o[1]!) || 1
+      const out = (len + s.parapetWidth + 0.8) / len
+      return !onOtherDeck((a[0]! + b[0]!) / 2 + o[0]! * side * out, (a[1]! + b[1]!) / 2 + o[1]! * side * out)
+    })
+    // 连续要画的段落成一截护栏，两头立桥头柱
+    for (let i = 0; i < n; ) {
+      if (!keep[i]) {
+        i++
+        continue
+      }
+      let j = i
+      while (j < n && keep[j]) j++
+      addParapets(g, { pts: f.pts.slice(i, j + 1), off: f.off.slice(i, j + 1) }, 0, deckY, [side])
+      for (const e of [i, j]) {
+        const p = f.pts[e]!, o = f.off[e]!
+        const len = Math.hypot(o[0]!, o[1]!) || 1
+        const r = (len - s.parapetWidth / 2) / len
+        const [px, pz] = [p[0]! + o[0]! * side * r, p[1]! + o[1]! * side * r]
+        g.box(px - 0.3, deckY, pz - 0.3, px + 0.3, deckY + s.parapetHeight + 0.45, pz + 0.3, post)
+      }
+      i = j
+    }
+  }
+}
+
 // 护栏：沿两侧边缘的矮墙（外侧面、内侧面、顶面）
-function addParapets(g: GeoBuilder, f: Frame, bottomDrop: number, deckY: number | null) {
+function addParapets(g: GeoBuilder, f: Frame, bottomDrop: number, deckY: number | null, sides = [1, -1]) {
   const s = ROAD_STYLE
   const col = hex(s.colors.parapet)
-  for (const side of [1, -1]) {
+  for (const side of sides) {
     for (let i = 1; i < f.pts.length; i++) {
       const p0 = f.pts[i - 1]!
       const p1 = f.pts[i]!

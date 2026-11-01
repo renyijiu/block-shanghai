@@ -185,7 +185,7 @@ export class ChunkManager {
     }
     add(buildAreas(src.parks, 0.02, WORLD_COLORS.parks, WORLD_COLORS.park), this.materials.parks, 'parks')
     add(buildAreas(src.water, 0.03, {}, 0xffffff), this.materials.water, 'water')
-    add(buildGroundRoads(src.roads, roads), this.materials.roads, 'roads')
+    add(buildGroundRoads(src.roads, roads, (x, z) => isWater(this.data, x, z)), this.materials.roads, 'roads')
     const piers: Box[] = []
     add(buildElevated(src.roads, roads, piers, this.ctx.pierFree), this.materials.elevated, 'elevated')
     const metro = this.ctx.metro
