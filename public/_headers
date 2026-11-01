@@ -1,0 +1,3 @@
+# Cloudflare 的响应头：assets/ 下的文件名带内容哈希，可以长期缓存
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

@@ -2,7 +2,7 @@
 
 > 方块风格的上海城市漫游：在真实形状的上海里散步、拍照收集景点、坐遍真实的地铁网络。
 
-[English](./README.en.md) · 在线试玩：<https://renyijiu.github.io/block-shanghai/>（电脑或手机浏览器打开即可，手机建议横屏）
+[English](./README.en.md) · 在线试玩：<https://block-shanghai.lanyuejin1108.workers.dev/>（电脑或手机浏览器打开即可，手机建议横屏）
 
 基于 **Vue 3 + Three.js（WebGPU，自动回退 WebGL 2）+ TypeScript**，纯前端运行。地理和地铁数据来自 OpenStreetMap，离线烘焙成游戏坐标。
 
@@ -77,7 +77,8 @@ npm run bench      # 渲染基准，需先 npm run dev（见 docs/07 第 4 节�
 
 `npm run build` 生成的 `dist/` 是纯静态文件（相对路径），放到任意静态托管即可。
 
-- GitHub Pages：仓库公开后，推送到 `main` 会自动测试、打包并发布（`.github/workflows/pages.yml`，也可以在 Actions 页面手动运行）；仓库是私有的时候工作流会跳过。第一次要在仓库 Settings → Pages 把 Source 选成“GitHub Actions”
+- Cloudflare（当前线上）：`npm run deploy:cloudflare` 打包并用 `wrangler` 发布到 Cloudflare Workers 的静态托管（配置在 `wrangler.jsonc`，需要先 `npx wrangler login`）；`public/_headers` 让带哈希的资源长期缓存
+- GitHub Pages（备用）：仓库公开后，推送到 `main` 会自动测试、打包并发布（`.github/workflows/pages.yml`，也可以在 Actions 页面手动运行）；仓库是私有的时候工作流会跳过。第一次要在仓库 Settings → Pages 把 Source 选成“GitHub Actions”
 - 每次推送和 PR 都会跑类型检查、单元测试和打包（`.github/workflows/ci.yml`）
 - 国内对象存储 + CDN 的做法见 [07 第 9 节](docs/07-tech-selection.md#9-部署)
 

@@ -1,0 +1,6 @@
+// Cloudflare 部署（docs/07 第 9 节）：npm run deploy:cloudflare 打包后把 dist/ 当静态文件发布到 Workers
+{
+  "name": "block-shanghai",
+  "compatibility_date": "2026-11-01",
+  "assets": { "directory": "./dist" }
+}

@@ -2,7 +2,7 @@
 
 > A blocky open-world Shanghai: stroll through a city with the real shape of Shanghai, photograph and collect its landmarks, and ride the real metro network.
 
-[中文](./README.md) · Play online: <https://renyijiu.github.io/block-shanghai/> (desktop or mobile browser; turn your phone sideways)
+[中文](./README.md) · Play online: <https://block-shanghai.lanyuejin1108.workers.dev/> (desktop or mobile browser; turn your phone sideways)
 
 Built with **Vue 3 + Three.js (WebGPU, falling back to WebGL 2) + TypeScript**, running entirely in the browser. Geography and metro data come from OpenStreetMap and are baked offline into game coordinates. The game has a full English mode: open **☰ Menu → Language**.
 
@@ -53,7 +53,7 @@ Developer URL parameters: `?debug=1` debug panel, `?quality=low|mid|high`, `?cam
 
 ## Deployment
 
-`npm run build` produces plain static files with relative paths, so `dist/` can be hosted anywhere, including a sub-path. Once the repository is public, every push to `main` is tested, built and published to GitHub Pages (`.github/workflows/pages.yml`). Every push and pull request also runs the type check, tests and build (`.github/workflows/ci.yml`).
+`npm run build` produces plain static files with relative paths, so `dist/` can be hosted anywhere, including a sub-path. The live site runs on Cloudflare: `npm run deploy:cloudflare` builds and publishes with `wrangler` (config in `wrangler.jsonc`; run `npx wrangler login` first). As a backup, once the repository is public, every push to `main` is tested, built and published to GitHub Pages (`.github/workflows/pages.yml`). Every push and pull request also runs the type check, tests and build (`.github/workflows/ci.yml`).
 
 ## Privacy
 

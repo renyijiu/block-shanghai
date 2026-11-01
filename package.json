@@ -15,7 +15,7 @@
     "openstreetmap",
     "metro"
   ],
-  "homepage": "https://renyijiu.github.io/block-shanghai/",
+  "homepage": "https://block-shanghai.lanyuejin1108.workers.dev/",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/renyijiu/block-shanghai.git"
@@ -36,7 +36,8 @@
     "test": "vitest run",
     "bench": "node bench/run-bench.ts",
     "fetch-osm": "node tools/fetch-osm.ts",
-    "bake": "node tools/bake-world.ts && node tools/bake-metro.ts"
+    "bake": "node tools/bake-world.ts && node tools/bake-metro.ts",
+    "deploy:cloudflare": "npm run build && wrangler deploy"
   },
   "dependencies": {
     "lil-gui": "0.21.0",
