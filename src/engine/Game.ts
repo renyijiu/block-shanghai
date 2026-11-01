@@ -22,6 +22,7 @@ import { MetroSystem } from './metro/MetroSystem.ts'
 import { entranceFootprint } from './metro/structures.ts'
 import type { MetroData } from './metro/data.ts'
 import { TrainRenderer } from './metro/trains.ts'
+import { EntranceSigns } from './metro/EntranceSigns.ts'
 import type { Route } from './metro/network.ts'
 import { Sky } from './sky/Sky.ts'
 import { Precipitation } from './sky/Precipitation.ts'
@@ -158,6 +159,8 @@ export class Game {
   readonly interact = new InteractRegistry()
   metro: MetroSystem | null = null
   trains: TrainRenderer | null = null
+  /** 地铁口的站名灯箱（只挂玩家附近的车站） */
+  entranceSigns: EntranceSigns | null = null
   landmarks: LandmarkManager | null = null
   /** 图鉴：拍到过的景点 / 子景点 → 第一张照片 id（发现记录在 landmarks.found） */
   codexShot: Record<string, string> = {}
@@ -321,6 +324,8 @@ export class Game {
     this.interior = new InteriorManager(metro, this.clock)
     this.interior.onEvent = (e) => this.onMetroEvent(e)
     this.trains = new TrainRenderer(metro, this.materials.elevated)
+    this.entranceSigns = new EntranceSigns(metro.data)
+    this.scene.add(this.entranceSigns.root)
     this.scene.add(this.trains.root)
     this.playerWorld = {
       boxes: (x0, z0, x1, z1) => this.collision.query(x0, z0, x1, z1),
@@ -1099,6 +1104,7 @@ export class Game {
     const f = this.devCamera ? this.updateDev(dt) : this.updatePlayer(dt, now)
     this.chunks?.update(f.x, f.z)
     this.landmarks?.update(f.x, f.z, this.camera.position.x, this.camera.position.z)
+    this.entranceSigns?.update(f.x, f.z, now)
     this.trains?.update(this.clock.seconds, f.x, f.z, QUALITY_PRESETS[this.quality].viewDistance)
     this.precipitation.update(dt, this.camera.position, this.weatherLook)
     this.walks?.update(now / 1000, this.nextWalkStop()?.stop ?? null, f.x, f.z)
@@ -1309,6 +1315,7 @@ export class Game {
     this.devCamera?.dispose()
     this.chunks?.dispose()
     this.trains?.dispose()
+    this.entranceSigns?.dispose()
     this.landmarks?.dispose()
     this.boats?.dispose()
     this.buses?.dispose()

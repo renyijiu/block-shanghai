@@ -37,31 +37,51 @@ export function buildEntrance(b: Builder, f: ReturnType<typeof entranceFootprint
   if (open !== 'w') b.box(x0, 0, z0, x0 + t, h, z1, GLASS, wall)
   if (open !== 'e') b.box(x1 - t, 0, z0, x1, h, z1, GLASS, wall)
   b.box(x0 - 0.2, h, z0 - 0.2, x1 + 0.2, h + 0.3, z1 + 0.2, ROOF, { windows: 0, collide: false })
-  // M 标志柱：在开口一侧的角上
-  const px = open === 'w' ? x0 - 0.6 : open === 'e' ? x1 + 0.6 : x1 - 0.3
-  const pz = open === 'n' ? z0 - 0.6 : open === 's' ? z1 + 0.6 : z1 - 0.3
+  // M 标志柱：在开口一侧的角上（柱子中段挂站名灯箱，见 EntranceSigns）
+  const { px, pz } = entrancePole(f)
   b.box(px - 0.25, 0, pz - 0.25, px + 0.25, 3.6, pz + 0.25, 0x5a5d62, { windows: 0 })
   b.box(px - 0.75, 3.6, pz - 0.75, px + 0.75, 5.1, pz + 0.75, RED, { windows: 0, collide: false })
-  // 白色方块拼的“M”：两竖、一横、中间一短竖，四面都看得到
   letterM(b, px, pz, 0.76, 3.85, 4.85)
 }
 
-// 在标志牌四个侧面贴一个方块拼的 M
+/** M 标志柱的位置：开口一侧的角上、离出入口 0.6 格 */
+export function entrancePole(f: ReturnType<typeof entranceFootprint>) {
+  const { x0, z0, x1, z1, open } = f
+  const px = open === 'w' ? x0 - 0.6 : open === 'e' ? x1 + 0.6 : x1 - 0.3
+  const pz = open === 'n' ? z0 - 0.6 : open === 's' ? z1 + 0.6 : z1 - 0.3
+  return { px, pz }
+}
+
+/** 粗体 M 的像素图（7 列 × 6 行，# 是白块）：通用字母，不用上海地铁的官方标志 */
+const BOLD_M = ['##...##', '###.###', '#######', '##.#.##', '##...##', '##...##']
+
+// 在标志牌四个侧面贴一个方块拼的粗体 M
 function letterM(b: Builder, px: number, pz: number, s: number, y0: number, y1: number) {
   const o = { windows: 0, collide: false }
   const d = 0.04
-  const bars = (u0: number, u1: number, v0: number, v1: number) => {
-    // 东西两面（法线 ±x）：u 沿 z；南北两面（法线 ±z）：u 沿 x
-    b.box(px + s, v0, pz + u0, px + s + d, v1, pz + u1, WHITE, o)
-    b.box(px - s - d, v0, pz + u0, px - s, v1, pz + u1, WHITE, o)
-    b.box(px + u0, v0, pz + s, px + u1, v1, pz + s + d, WHITE, o)
-    b.box(px + u0, v0, pz - s - d, px + u1, v1, pz - s, WHITE, o)
-  }
-  const h = y1 - y0
-  bars(-0.5, -0.32, y0, y1) // 左竖
-  bars(0.32, 0.5, y0, y1) // 右竖
-  bars(-0.5, 0.5, y1 - 0.18, y1) // 顶横
-  bars(-0.09, 0.09, y0 + h * 0.35, y1) // 中竖
+  const cols = BOLD_M[0]!.length
+  const rows = BOLD_M.length
+  const w = 1.1 / cols
+  const h = (y1 - y0) / rows
+  BOLD_M.forEach((line, r) => {
+    // 同一行连着的白块合成一条，少几个面
+    for (let c = 0; c < cols; ) {
+      if (line[c] !== '#') {
+        c++
+        continue
+      }
+      let e = c
+      while (e < cols && line[e] === '#') e++
+      const [u0, u1] = [-0.55 + c * w, -0.55 + e * w]
+      const [v0, v1] = [y1 - (r + 1) * h, y1 - r * h]
+      // 东西两面（法线 ±x）：u 沿 z，从外面看左右要反过来，M 左右对称所以不用管；南北两面：u 沿 x
+      b.box(px + s, v0, pz + u0, px + s + d, v1, pz + u1, WHITE, o)
+      b.box(px - s - d, v0, pz + u0, px - s, v1, pz + u1, WHITE, o)
+      b.box(px + u0, v0, pz + s, px + u1, v1, pz + s + d, WHITE, o)
+      b.box(px + u0, v0, pz - s - d, px + u1, v1, pz - s, WHITE, o)
+      c = e
+    }
+  })
 }
 
 /** 地下站的风亭：车站附近一两个带百叶的小方楼 */
