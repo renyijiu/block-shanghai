@@ -15,6 +15,8 @@
   </div>
   <template v-if="game && !loading && stats.mode === 'player'">
     <template v-if="!panelOpen">
+      <!-- 触屏控件放在最下层：右半屏的拖动区不能盖住小地图、侧栏和站内按钮 -->
+      <TouchControls v-if="touch" :input="game.input" :action="photoOpen ? null : stats.prompt ? t(stats.prompt.action) : null" :buttons="!photoOpen" />
       <template v-if="!photoOpen">
         <MiniMap v-if="!stats.station" :game="game" :size="mapSize" @open="mapOpen = true" />
         <MetroHud v-else :status="stats.station" :announce="stats.announce" @skip-wait="game.interior?.skipWait(game.player.pos.x)" @skip-next="game.interior?.skipNext()" @skip-to="(i) => game?.interior?.skipTo(i)" />
@@ -34,7 +36,6 @@
           <b v-if="!touch">E</b> {{ t(stats.prompt.action) }} · {{ stats.prompt.label }}
         </div>
       </template>
-      <TouchControls v-if="touch" :input="game.input" :action="photoOpen ? null : stats.prompt ? t(stats.prompt.action) : null" :buttons="!photoOpen" />
       <PhotoMode v-if="photoOpen" :game="game" :touch="touch" @close="photoOpen = false" @album="openAlbum" />
     </template>
     <DistrictToast :name="toast.name" :theme="toast.theme" />
