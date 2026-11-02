@@ -33,7 +33,7 @@
           <button @click="skipRide">{{ t('下来') }}</button>
         </div>
         <div v-else-if="stats.ride" class="prompt ride">
-          {{ game.busRide ? '🚌' : '⛴' }} {{ stats.ride.name }} · {{ stats.ride.to }} · {{ stats.ride.sailing ? t('还有 {m} 分钟', { m: stats.ride.minutes }) : t(game.busRide ? '车马上到' : '马上开船') }}
+          {{ game.rides.busRide ? '🚌' : '⛴' }} {{ stats.ride.name }} · {{ stats.ride.to }} · {{ stats.ride.sailing ? t('还有 {m} 分钟', { m: stats.ride.minutes }) : t(game.rides.busRide ? '车马上到' : '马上开船') }}
           <button @click="skipRide">{{ t('跳过') }}</button>
         </div>
         <div v-else-if="stats.prompt" class="prompt">
@@ -253,7 +253,7 @@ async function board(berth: Pier) {
   boatPanel.value = null
   travelText.value = t('上船…')
   await new Promise((r) => setTimeout(r, 700))
-  const r = g.boardBoat(berth)
+  const r = g.rides.boardBoat(berth)
   travelText.value = ''
   showNotice(r.message)
 }
@@ -261,11 +261,11 @@ async function board(berth: Pier) {
 async function skipRide() {
   const g = game.value
   // 游乐设施：直接下来，回到入口
-  if (g?.attraction) return g.endAttraction()
-  if (!g?.ride && !g?.busRide) return
-  travelText.value = t(g.busRide ? '巴士到站了…' : '船靠岸了…')
+  if (g?.rides.attraction) return g.rides.endAttraction()
+  if (!g?.rides.ride && !g?.rides.busRide) return
+  travelText.value = t(g.rides.busRide ? '巴士到站了…' : '船靠岸了…')
   try {
-    await g.skipRide((t) => (travelText.value = t))
+    await g.rides.skipRide((t) => (travelText.value = t))
     await new Promise((r) => setTimeout(r, 800))
   } finally {
     travelText.value = ''
@@ -279,7 +279,7 @@ async function boardBus(line: string, from: number, to: number) {
   busPanel.value = null
   travelText.value = t('等车…')
   await new Promise((r) => setTimeout(r, 700))
-  const r = g.boardBus(line, from, to)
+  const r = g.rides.boardBus(line, from, to)
   travelText.value = ''
   showNotice(r.message)
 }
@@ -287,14 +287,14 @@ async function boardBus(line: string, from: number, to: number) {
 // 共享单车：开锁 / 还车
 function toggleBike() {
   const g = game.value
-  if (g) showNotice(g.toggleBike().message)
+  if (g) showNotice(g.rides.toggleBike().message)
 }
 
 // 打车：离马路太远不弹面板；选好地方 → 淡出（预建目的地）→ 淡入
 function openTaxi() {
   const g = game.value
   if (!g) return
-  if (!g.canHailTaxi) return showNotice(t('要走到马路边才能打到车'))
+  if (!g.rides.canHailTaxi) return showNotice(t('要走到马路边才能打到车'))
   taxiPanel.value = true
 }
 async function takeTaxi(id: string) {
@@ -303,7 +303,7 @@ async function takeTaxi(id: string) {
   taxiPanel.value = false
   travelText.value = t('上车…')
   try {
-    showNotice((await g.taxi(id, (t) => (travelText.value = t))).message)
+    showNotice((await g.rides.taxi(id, (t) => (travelText.value = t))).message)
   } finally {
     travelText.value = ''
   }
@@ -401,7 +401,7 @@ onMounted(async () => {
       else if (p.kind === 'elevator') void rideElevator(p)
       else if (p.kind === 'boat' && p.pier) boatPanel.value = p.pier
       else if (p.kind === 'bus' && p.bus && p.stop !== undefined) busPanel.value = { line: p.bus, stop: p.stop }
-      else if (p.kind === 'ride') showNotice(g.startAttraction(p).message)
+      else if (p.kind === 'ride') showNotice(g.rides.startAttraction(p).message)
       else if (p.kind === 'shop' && p.shop) shopPanel.value = p.shop
       else if (p.kind === 'culture' && p.culture) cultureCard.value = g.readPlaque(p.culture)
       else if (p.kind === 'npc' && p.npc !== undefined) {

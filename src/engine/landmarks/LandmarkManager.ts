@@ -179,7 +179,7 @@ export class LandmarkBuilder implements LandmarkContext {
 }
 
 /** 一个会动的部件在场景里的样子：外层 group 摆位置和朝向，里面的网格挪到以参考点为原点 */
-interface Mover {
+export interface Mover {
   group: THREE.Group
   pose(t: number): void
   /** 能坐的设施：设施定义和座位（建模时的世界坐标，跟着部件动） */
@@ -202,7 +202,7 @@ export interface Seat {
 const smooth = (x: number) => x * x * (3 - 2 * x)
 
 /** 按 motion 把部件摆到 t 秒（现实时间）时的位置 */
-function makeMover(p: PlacedLandmark, motion: Motion, content: THREE.Group): Mover {
+export function makeMover(p: PlacedLandmark, motion: Motion, content: THREE.Group): Mover {
   const w = ([x, y, z]: Vec3) => {
     const [wx, wz] = p.toWorld(x, z)
     return new THREE.Vector3(wx, y, wz)

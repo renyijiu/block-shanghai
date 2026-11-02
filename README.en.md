@@ -55,7 +55,7 @@ Developer URL parameters: `?debug=1` debug panel, `?quality=low|mid|high`, `?cam
 
 ## Deployment
 
-`npm run build` produces plain static files with relative paths, so `dist/` can be hosted anywhere, including a sub-path. The live site runs on Cloudflare: `npm run deploy:cloudflare` builds and publishes with `wrangler` (config in `wrangler.jsonc`; run `npx wrangler login` first). As a backup, once the repository is public, every push to `main` is tested, built and published to GitHub Pages (`.github/workflows/pages.yml`). Every push and pull request also runs the type check, tests and build (`.github/workflows/ci.yml`).
+`npm run build` produces plain static files with relative paths, so `dist/` can be hosted anywhere, including a sub-path. The live site runs on Cloudflare: `npm run deploy:cloudflare` builds and publishes with `wrangler` (config in `wrangler.jsonc`; run `npx wrangler login` first). As a backup, every push to `main` is tested, built and published to GitHub Pages at <https://blog.renyijiu.com/block-shanghai/> (`.github/workflows/pages.yml`). Every push and pull request also runs the type check, tests and build (`.github/workflows/ci.yml`).
 
 ## Privacy
 

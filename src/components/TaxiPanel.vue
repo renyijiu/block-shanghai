@@ -36,7 +36,7 @@ const districts = game.city.config.districts as Record<string, { name: string } 
 // 所有景点按离这里的远近排；没发现的显示问号，但能搜区名
 const all = (game.landmarks?.placed ?? [])
   .map((p) => {
-    const quote = game.taxiQuote(p.x, p.z)
+    const quote = game.rides.taxiQuote(p.x, p.z)
     return { id: p.def.id, name: p.def.name, district: districts[p.def.district]?.name ?? '', found: game.landmarks!.found.has(p.def.id), ...quote }
   })
   .filter((r) => r.km > 0.3)

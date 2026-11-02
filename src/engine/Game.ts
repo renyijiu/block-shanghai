@@ -8,7 +8,7 @@ import type { CityPackage, CultureDef } from './city.ts'
 import { DevCamera } from './DevCamera.ts'
 import { CollisionWorld } from './geo/CollisionWorld.ts'
 import { createProjection, type Projection } from './geo/projection.ts'
-import { distToRect, LandmarkManager, type PlacedLandmark, type Seat } from './landmarks/LandmarkManager.ts'
+import { distToRect, LandmarkManager, type PlacedLandmark } from './landmarks/LandmarkManager.ts'
 import { goalProgress, updateQuests, type QuestGain, type QuestWorld } from './life/quests.ts'
 import { anchorWorld, buildLife, isGeo, lifeFootprints } from './life/kiosks.ts'
 import { foodAvailable, newLife, recordLife, walkStep, type LifeEvent, type LifeGain, type LifeProgress } from './life/progress.ts'
@@ -30,8 +30,9 @@ import { Sky } from './sky/Sky.ts'
 import { Precipitation } from './sky/Precipitation.ts'
 import { lookOf, mixLook, SEASON_NAMES, seasonOf, WEATHER_ICONS, WEATHER_NAMES, weatherAt, type Season, type WeatherKind, type WeatherLook } from './sky/weather.ts'
 import { GameClock } from './state/clock.ts'
-import { BoatSystem, type Pier, type Ride } from './transport/BoatSystem.ts'
-import { BusSystem, type BusRide } from './transport/BusSystem.ts'
+import { BoatSystem } from './transport/BoatSystem.ts'
+import { BusSystem } from './transport/BusSystem.ts'
+import { Rides } from './transport/Rides.ts'
 import { InteriorManager, type InteriorResult, type StationStatus } from './interior/InteriorManager.ts'
 import { DAILY_REWARD, dailyTasks, newProgress, recheck, record, type DailyTask, type ExitTarget, type Gain, type MetroEvent, type MetroProgress } from './metro/collection.ts'
 import type { Announcement } from './interior/trip.ts'
@@ -41,7 +42,7 @@ import { DistrictIndex } from './world/districts.ts'
 import { defaultQuality, QUALITY_PRESETS, type QualityLevel } from './quality.ts'
 import { loadSave, NEW_GAME, writeSave } from './state/save.ts'
 import { createWorldMaterials, type WorldMaterials } from './world/materials.ts'
-import { nearestGroundRoad, nearGroundRoad, walkable } from './world/queries.ts'
+import { nearGroundRoad, walkable } from './world/queries.ts'
 import { WorldData } from './world/WorldData.ts'
 import { nameOf, tr } from '../i18n/core.ts'
 
@@ -185,18 +186,10 @@ export class Game {
   private cityAnchor: { x: number; z: number } | null = null
   /** 上车时自动从第三人称换成了第一人称，下车要换回来 */
   private carView = false
-  /** 正在坐的船 */
-  ride: Ride | null = null
   /** 观光巴士 */
   buses: BusSystem | null = null
-  /** 正在坐的观光巴士 */
-  busRide: BusRide | null = null
-  /** 坐在游乐设施上：哪个设施、座位、什么时候（现实毫秒）下来 */
-  attraction: { seat: Seat; until: number; name: string; view: 'first' | 'third' } | null = null
-  private readonly seatAt = new THREE.Vector3()
-  private readonly seatPrev = new THREE.Vector3()
-  /** 骑着的共享单车：开锁的游戏时间 */
-  bike: { since: number } | null = null
+  /** 乘坐：船、观光巴士、共享单车、出租车、游乐设施（transport/Rides.ts） */
+  readonly rides = new Rides(this)
   /** 下船时调用（界面提示到达） */
   onRideEnd: ((message: string) => void) | null = null
   photo: PhotoSystem | null = null
@@ -228,12 +221,13 @@ export class Game {
   /** 按 E / 点按钮触发交互时调用（界面打开地铁面板） */
   onInteract: ((p: InteractPoint) => void) | null = null
   /** 乘车中：加载焦点已经移到目的地，暂停玩家的物理和交互 */
-  private traveling = false
+  /** 正在淡出切换（快速到达、打车、跳过）：这时玩家不动 */
+  traveling = false
   private readonly ro: ResizeObserver
   private readonly materials: WorldMaterials
   private readonly ground: THREE.Mesh
-  private chunks: ChunkManager | null = null
-  private playerWorld: PlayerWorld | null = null
+  chunks: ChunkManager | null = null
+  playerWorld: PlayerWorld | null = null
   private disposed = false
   private last = 0
   private frames = 0
@@ -489,7 +483,7 @@ export class Game {
   rideElevator(p: InteractPoint): string {
     const t = p.target
     if (!t) return ''
-    this.returnBike()
+    this.rides.returnBike()
     this.player.pos.set(t.x, t.y, t.z)
     this.player.vy = 0
     this.player.model.position.copy(this.player.pos)
@@ -499,28 +493,6 @@ export class Game {
     if (t.y > 0 && p.landmark) this.lifeEvent({ type: 'auto', key: `deck:${p.landmark}` })
     this.saveNow()
     return p.arrive ?? ''
-  }
-
-  /**
-   * 坐船：在码头泊位 berth 坐下一班。下一班还要等一会儿就快进时钟（界面淡出“等船”），
-   * 然后站到船的顶层甲板上，船按时刻表开；到站自动下船
-   */
-  boardBoat(berth: Pier): TravelResult {
-    const boats = this.boats
-    if (!boats || this.ride) return { ok: false, message: tr('现在不能上船') }
-    const line = berth.line
-    if (this.money < line.fare) return { ok: false, message: tr('余额不足：船票 {fare} 元，钱包里只有 {money} 元', { fare: line.fare, money: this.money }) }
-    this.returnBike()
-    const ride = boats.board(berth, this.clock.seconds)
-    // 等船：快进到开船前半分钟
-    const wait = ride.dep - this.clock.seconds
-    if (wait > 60) this.clock.seconds = ride.dep - 30
-    this.money -= line.fare
-    this.ride = ride
-    this.prompt = null
-    this.saveNow()
-    const to = line.kind === 'ferry' ? tr('开往{to}', { to: ride.to.name }) : (line.route ?? tr('往返'))
-    return { ok: true, message: tr('{line} · {to} · {fare} 元', { line: line.name, to, fare: line.fare }) + (wait > 60 ? tr(' · 等了 {m} 分钟', { m: Math.round(wait / 60) }) : '') }
   }
 
   // 天气：每秒按日期和游戏时间算一次该是什么天气；画面参数约 8 秒过渡过去
@@ -660,8 +632,8 @@ export class Game {
   /** 从街上的地铁口进站：切到站厅场景，站在对应出口的楼梯下 */
   enterStation(station: number, entrance: number) {
     const it = this.interior
-    if (!it || this.ride) return
-    this.returnBike()
+    if (!it || this.rides.ride) return
+    this.rides.returnBike()
     const e = this.metro!.data.entrances[entrance]
     this.cityAnchor = e ? { x: e.pos[0], z: e.pos[1] } : { x: this.player.pos.x, z: this.player.pos.z }
     this.placeInside(it.enter(station, entrance))
@@ -799,233 +771,6 @@ export class Game {
     return dailyTasks(metro.data, today(), this.exitTargets)
   }
 
-  /** 坐船、坐巴士时跳过：时钟直接到靠岸 / 到站（巴士先把下车的地方建好） */
-  async skipRide(onProgress?: (text: string) => void) {
-    if (this.ride) this.clock.seconds = Math.max(this.clock.seconds, this.ride.arrive)
-    const bus = this.busRide
-    if (bus && this.chunks) {
-      const s = this.buses!.stop(bus.line, bus.to)
-      this.traveling = true
-      this.player.pos.set(s.x, 0, s.z)
-      try {
-        await this.chunks.prebuild(s.x, s.z, (d, t) => onProgress?.(tr('前往 {station}站 {d}/{t}', { station: s.name, d, t })))
-      } finally {
-        this.traveling = false
-      }
-      this.clock.seconds = Math.max(this.clock.seconds, bus.arrive)
-    }
-  }
-
-  /** 坐观光巴士：从站 from 去站 to；车还要等一会儿就快进到车来之前 */
-  boardBus(lineId: string, from: number, to: number): TravelResult {
-    const buses = this.buses
-    const line = buses?.line(lineId)
-    if (!buses || !line || this.ride || this.busRide || this.attraction) return { ok: false, message: tr('现在不能上车') }
-    if (this.money < line.fare) return { ok: false, message: tr('余额不足：车票 {fare} 元，钱包里只有 {money} 元', { fare: line.fare, money: this.money }) }
-    this.returnBike()
-    const ride = buses.board(line, from, to, this.clock.seconds)
-    const wait = ride.board - this.clock.seconds
-    if (wait > 60) this.clock.seconds = ride.board - 20
-    this.money -= line.fare
-    this.busRide = ride
-    this.prompt = null
-    this.saveNow()
-    return { ok: true, message: tr('{line} · 开往{to} · {fare} 元', { line: line.name, to: line.stops[to]!.name, fare: line.fare }) + (wait > 60 ? tr(' · 等了 {m} 分钟', { m: Math.round(wait / 60) }) : '') }
-  }
-
-  // 坐巴士：车到之前站在站牌下，上车后站在二层敞篷上跟着走，到站下车
-  private updateBusRide(ride: BusRide) {
-    const t = this.clock.seconds
-    const buses = this.buses!
-    if (t >= ride.arrive + 3) {
-      this.busRide = null
-      const s = buses.stop(ride.line, ride.to)
-      this.player.spawn(s.x, s.z, this.playerWorld!)
-      this.player.model.position.copy(this.player.pos)
-      this.lifeEvent({ type: 'stat', key: 'bus' })
-      this.saveNow()
-      this.onRideEnd?.(tr('{line} · 到达 {stop}', { line: ride.line.name, stop: s.name }))
-      return
-    }
-    const seat = t >= ride.board ? buses.seat(ride, t) : null
-    if (!seat) {
-      const s = buses.stop(ride.line, ride.from)
-      this.player.pos.set(s.x, 0, s.z)
-    } else {
-      this.player.pos.set(seat.x, seat.y, seat.z)
-      this.player.facing = this.rig.selfie ? this.rig.yaw : -seat.angle - Math.PI / 2
-      this.player.model.rotation.y = this.player.facing
-    }
-    this.player.vy = 0
-    this.player.model.position.copy(this.player.pos)
-  }
-
-  /** 扫一辆共享单车 / 还车。只能在马路边开锁；还车按骑行时间收钱（每 15 分钟 1.5 元） */
-  toggleBike(): TravelResult {
-    if (this.bike) return { ok: true, message: this.returnBike() }
-    const p = this.player.pos
-    if (this.interior?.active || this.ride || this.busRide || this.attraction || this.traveling || p.y > 1) return { ok: false, message: tr('这里扫不了共享单车') }
-    if (!this.world || !nearGroundRoad(this.world, p.x, p.z, 2.5)) return { ok: false, message: tr('共享单车要在马路边扫码，只能在马路上骑') }
-    if (this.money < 1.5) return { ok: false, message: tr('余额不足：钱包里只有 {money} 元', { money: this.money }) }
-    this.bike = { since: this.clock.seconds }
-    this.player.setRiding(true)
-    return { ok: true, message: tr('扫码开锁 · 每 15 分钟 1.5 元，只能在马路上骑（B 还车）') }
-  }
-
-  /** 还车，返回提示；没骑车返回空串 */
-  private returnBike(): string {
-    if (!this.bike) return ''
-    const minutes = Math.max(0, (this.clock.seconds - this.bike.since) / 60)
-    const fare = this.bikeFare(minutes)
-    this.money = Math.round((this.money - fare) * 10) / 10
-    this.bike = null
-    this.player.setRiding(false)
-    this.lifeEvent({ type: 'stat', key: 'bike' })
-    this.saveNow()
-    return tr('还车 · 骑了 {m} 分钟 · {fare} 元', { m: Math.max(1, Math.round(minutes)), fare })
-  }
-
-  private bikeFare(minutes: number) {
-    return 1.5 * Math.max(1, Math.ceil(minutes / 15))
-  }
-
-  /** 打车的报价：真实距离按两点经纬度算（绕路系数 1.3），起步价 14 元含 3 公里，之后每公里 2.5 元、15 公里以上 3.6 元，夜里（23–5 点）加三成 */
-  taxiQuote(x: number, z: number) {
-    const a = this.proj.unproject(this.mapPos.x, this.mapPos.z)
-    const b = this.proj.unproject(x, z)
-    const R = 6371
-    const dLat = ((b.lat - a.lat) * Math.PI) / 180
-    const dLon = ((b.lon - a.lon) * Math.PI) / 180
-    const h = Math.sin(dLat / 2) ** 2 + Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * Math.sin(dLon / 2) ** 2
-    const km = 2 * R * Math.asin(Math.sqrt(h)) * 1.3
-    let fare = 14 + Math.max(0, Math.min(km, 15) - 3) * 2.5 + Math.max(0, km - 15) * 3.6
-    const hour = this.clock.daySeconds / 3600
-    if (hour >= 23 || hour < 5) fare *= 1.3
-    return { km: Math.round(km * 10) / 10, fare: Math.round(fare), minutes: Math.round((km / 25) * 60 + 3) }
-  }
-
-  /** 能不能在这里打车：城市里、离马路不远 */
-/** 游乐设施开放时间（游戏时间，和设施转动的营业时间一致） */
-  get ridesOpen() {
-    const h = this.clock.daySeconds / 3600
-    return h >= 9 && h < 21.5
-  }
-
-  /** 坐上游乐设施：付票钱，人挂到座位上，跟着设施动 seconds 秒（现实时间） */
-  startAttraction(p: InteractPoint): TravelResult {
-    if (!p.landmark || !p.ride || this.attraction || this.ride || this.busRide || this.bike) return { ok: false, message: tr('现在不能坐') }
-    if (!this.ridesOpen) return { ok: false, message: tr('设施 9:00–21:30 开放，现在不能坐') }
-    const seat = this.landmarks?.seat(p.landmark, p.ride)
-    if (!seat) return { ok: false, message: tr('现在不能坐') }
-    const { fare } = seat.ride
-    if (this.money < fare) return { ok: false, message: tr('余额不足：{price} 元，钱包里只有 {money} 元', { price: fare, money: this.money }) }
-    this.money -= fare
-    const name = tr(seat.ride.name)
-    this.attraction = { seat, until: performance.now() + seat.ride.seconds * 1000, name, view: this.rig.mode }
-    if (seat.ride.firstPerson) this.rig.mode = 'first'
-    seat.where(this.seatPrev)
-    this.prompt = null
-    this.lifeEvent({ type: 'stat', key: 'ride' })
-    this.lifeEvent({ type: 'stat', key: `ride:${seat.ride.id}` })
-    this.saveNow()
-    return { ok: true, message: tr('坐上{name} · {fare} 元', { name, fare }) }
-  }
-
-  /** 从设施上下来，回到入口 */
-  endAttraction() {
-    const a = this.attraction
-    if (!a) return
-    this.attraction = null
-    this.rig.mode = a.view
-    const [x, z] = a.seat.gate
-    this.player.spawn(x, z, this.playerWorld!)
-    this.player.model.position.copy(this.player.pos)
-    this.saveNow()
-    this.onRideEnd?.(tr('{name}坐完了', { name: a.name }))
-  }
-
-  private updateAttraction(now: number) {
-    const a = this.attraction!
-    if (now >= a.until || !this.ridesOpen) return this.endAttraction()
-    const p = a.seat.where(this.seatAt)
-    // 没设定朝向就朝运动方向（过山车看前方，木马顺着转）
-    const dx = p.x - this.seatPrev.x
-    const dz = p.z - this.seatPrev.z
-    if (a.seat.facing !== null) this.player.facing = a.seat.facing
-    else if (Math.hypot(dx, dz) > 0.01) this.player.facing = Math.atan2(-dx, -dz)
-    if (this.rig.selfie) this.player.facing = this.rig.yaw
-    this.seatPrev.copy(p)
-    this.player.pos.copy(p)
-    this.player.vy = 0
-    this.player.model.position.copy(p)
-    this.player.model.rotation.y = this.player.facing
-  }
-
-  get canHailTaxi() {
-    const p = this.player.pos
-    return !!this.world && !this.interior?.active && !this.ride && !this.busRide && !this.attraction && p.y < 1 && nearGroundRoad(this.world, p.x, p.z, 12)
-  }
-
-  /** 打车去某个景点：扣车费、按车程推进时钟，在景点旁边的马路上下车 */
-  async taxi(landmarkId: string, onProgress?: (text: string) => void): Promise<TravelResult> {
-    const dest = this.landmarks?.byId(landmarkId)
-    if (!dest || !this.chunks || !this.playerWorld || !this.world) return { ok: false, message: tr('找不到这个地方') }
-    if (!this.canHailTaxi) return { ok: false, message: tr('要走到马路边才能打到车') }
-    const q = this.taxiQuote(dest.x, dest.z)
-    if (this.money < q.fare) return { ok: false, message: tr('余额不足：车费约 {fare} 元，钱包里只有 {money} 元', { fare: q.fare, money: this.money }) }
-    this.returnBike()
-    // 在离景点最近的马路边下车
-    const road = nearestGroundRoad(this.world, dest.x, dest.z, 120)
-    let [x, z] = [dest.x, dest.z]
-    if (road) {
-      const d = Math.hypot(dest.x - road.x, dest.z - road.z) || 1
-      const off = road.width / 2 + 1.5
-      x = road.x + ((dest.x - road.x) / d) * off
-      z = road.z + ((dest.z - road.z) / d) * off
-    }
-    this.money -= q.fare
-    this.clock.addMinutes(q.minutes)
-    this.traveling = true
-    this.player.pos.set(x, 0, z)
-    this.landmarks?.update(x, z)
-    try {
-      await this.chunks.prebuild(x, z, (d, t) => onProgress?.(tr('打车去{place} {d}/{t}', { place: dest.def.name, d, t })))
-      this.player.spawn(x, z, this.playerWorld)
-      this.player.model.position.copy(this.player.pos)
-      // 面朝景点
-      this.player.facing = this.player.model.rotation.y = this.rig.yaw = Math.atan2(-(dest.x - x), -(dest.z - z))
-    } finally {
-      this.traveling = false
-    }
-    this.lifeEvent({ type: 'stat', key: 'taxi' })
-    this.saveNow()
-    return { ok: true, message: tr('到达{place} · {km} 公里 · {m} 分钟 · {fare} 元', { place: dest.def.name, km: q.km, m: q.minutes, fare: q.fare }) }
-  }
-
-  // 坐船：玩家跟着船走，到站下船
-  private updateRide(ride: Ride) {
-    const t = this.clock.seconds
-    if (t >= ride.arrive + 5) {
-      this.ride = null
-      const [x, z] = ride.to.land
-      this.player.spawn(x, z, this.playerWorld!)
-      this.player.model.position.copy(this.player.pos)
-      if (ride.line.kind === 'cruise') this.lifeEvent({ type: 'auto', key: 'cruise' })
-      this.lifeEvent({ type: 'stat', key: `boat:${ride.line.id}` })
-      this.lifeEvent({ type: 'stat', key: `boat:${ride.line.kind}` })
-      this.saveNow()
-      this.onRideEnd?.(ride.line.kind === 'ferry' ? tr('到达 {to}', { to: ride.to.name }) : tr('{line}结束，回到{to}', { line: ride.line.name, to: ride.to.name }))
-      return
-    }
-    const s = this.boats!.seat(ride, t)
-    this.player.pos.set(s.x, s.y, s.z)
-    this.player.vy = 0
-    this.player.model.position.copy(this.player.pos)
-    // 面朝船头；自拍时转向镜头
-    this.player.facing = this.rig.selfie ? this.rig.yaw : -s.angle - Math.PI / 2
-    this.player.model.rotation.y = this.player.facing
-  }
-
   /** 景点或子景点的名字 */
   landmarkName(id: string): string {
     for (const p of this.landmarks?.placed ?? []) {
@@ -1113,12 +858,8 @@ export class Game {
   /** 立即存档（玩家模式且不是测试参数时） */
   saveNow() {
     if (!this.persist || this.devCamera || !this.world) return
-    // 坐船时存下船的码头，读档不会掉进江里
-    // 在地铁站里存出入口的位置
-    const busStop = this.busRide ? this.buses!.stop(this.busRide.line, this.busRide.to) : null
-    // 坐船、坐车、坐游乐设施时存下车的地方，不存半空中的位置
-    const gate = this.attraction?.seat.gate
-    const p = gate ? { x: gate[0], y: 0, z: gate[1] } : this.ride ? { x: this.ride.to.land[0], y: 0, z: this.ride.to.land[1] } : busStop ? { x: busStop.x, y: 0, z: busStop.z } : this.cityAnchor ? { ...this.cityAnchor, y: 0 } : this.player.pos
+    // 坐船、坐车、坐游乐设施时存下车的地方（读档不会掉进江里、卡在半空）；在地铁站里存出入口的位置
+    const p = this.rides.savePosition() ?? (this.cityAnchor ? { ...this.cityAnchor, y: 0 } : this.player.pos)
     const r = this.rig
     writeSave(localStorage, {
       city: this.city.config.id,
@@ -1234,10 +975,7 @@ export class Game {
     const inside = this.interior?.active ? this.interior : null
     const world = inside ? inside.world : this.playerWorld
     if (!world || this.traveling) return this.player.pos
-    if (this.ride || this.busRide || this.attraction) {
-      if (this.attraction) this.updateAttraction(now)
-      else if (this.ride) this.updateRide(this.ride)
-      else this.updateBusRide(this.busRide!)
+    if (this.rides.update(now)) {
       this.input.consumeJump()
       this.input.consumeInteract()
       this.rig.update(this.camera, this.player, this.input, world)
@@ -1339,23 +1077,7 @@ export class Game {
       walk: this.walkStats(),
       quest: this.questStats(),
       announce: this.interior?.announcement ?? null,
-      bike: this.bike ? { minutes: Math.round((this.clock.seconds - this.bike.since) / 60), fare: this.bikeFare((this.clock.seconds - this.bike.since) / 60) } : null,
-      attraction: this.attraction ? { name: this.attraction.name, seconds: Math.max(0, Math.ceil((this.attraction.until - now) / 1000)) } : null,
-      ride: this.ride
-        ? {
-            name: this.ride.line.name,
-            to: this.ride.line.kind === 'ferry' ? tr('开往{to}', { to: this.ride.to.name }) : tr('回到{to}', { to: this.ride.to.name }),
-            minutes: Math.max(0, Math.ceil((this.ride.arrive - this.clock.seconds) / 60)),
-            sailing: this.clock.seconds >= this.ride.dep
-          }
-        : this.busRide
-          ? {
-              name: this.busRide.line.name,
-              to: tr('开往{to}', { to: this.busRide.line.stops[this.busRide.to]!.name }),
-              minutes: Math.max(0, Math.ceil((this.busRide.arrive - this.clock.seconds) / 60)),
-              sailing: this.clock.seconds >= this.busRide.board
-            }
-          : null
+      ...this.rides.stats(now)
     })
     this.frames = 0
     this.statsAt = now
