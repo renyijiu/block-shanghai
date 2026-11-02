@@ -543,5 +543,23 @@ export const en: Record<string, string> = {
   徐汇西岸: 'Xuhui West Bund',
   虹桥商务区: 'Hongqiao Business District',
   朱家角: 'Zhujiajiao',
-  七宝: 'Qibao'
+  七宝: 'Qibao',
+  // ---------------------------------------------------------------- 星愿游乐园（原创）
+  星愿游乐园: 'Wishing Star Park',
+  '度假区湖边的原创游乐园：中间是红白相间的星愿塔，周围有云霄摩天轮、沙船秋千、海派旋转木马、云霄过山车、跳楼机和石库门弄堂迷宫。（游戏里原创的乐园，不对应现实中的任何主题乐园）':
+    'An original amusement park by the resort lake: the red-and-white Wish Tower stands in the middle, surrounded by the Sky Wheel, the Junk Ship Swing, the Haipai Carousel, the Sky Coaster, a drop tower and a shikumen lane maze. (A park invented for the game; it does not represent any real theme park.)',
+  '坐电梯上星愿塔观景廊能看全园；设施 9:00–21:30 运转，每晚 20:30 星愿湖上空有烟火。':
+    'Take the elevator up to the Wish Tower gallery to see the whole park. Rides run 9:00–21:30, and there are fireworks over Wishing Star Lake every evening at 20:30.',
+  星愿塔观景廊: 'Wish Tower gallery',
+  棉花糖: 'Cotton candy',
+  '一大团粉色的糖丝，边走边吃': 'A big pink cloud of spun sugar to eat on the go',
+  爆米花: 'Popcorn',
+  '焦糖味，装在纸桶里': 'Caramel-flavoured, in a paper bucket',
+  星愿塔纪念徽章: 'Wish Tower pin',
+  登上星愿塔观景廊: 'Go up to the Wish Tower gallery',
+  游乐园小吃车: 'Park snack cart',
+  游乐园一日: 'A day at the park',
+  逛逛星愿游乐园: 'Explore Wishing Star Park',
+  吃一团棉花糖: 'Eat some cotton candy',
+  '晚上拍一张星愿游乐园（20:30 起湖上有烟火）': 'Photograph Wishing Star Park at night (fireworks over the lake from 20:30)'
 }

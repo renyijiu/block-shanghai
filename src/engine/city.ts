@@ -97,7 +97,30 @@ export interface LandmarkContext {
   elevator(x: number, z: number, tx: number, ty: number, tz: number, deck: string): void
   /** 经纬度 → 本景点的局部坐标（用 OSM 坐标摆放附属建筑） */
   local(lat: number, lon: number): [number, number]
+  /**
+   * 会动的部件（游乐设施）：build 里照常用局部坐标建模，建出来的部件按 motion 动。
+   * 不登记碰撞、没有交互点，只在近景出现；营业时间外停在初始姿态
+   */
+  moving(motion: Motion, build: (c: LandmarkContext) => void): void
 }
+
+/** 局部坐标的一点 [x, y, z] */
+export type Vec3 = [x: number, y: number, z: number]
+
+/**
+ * 会动的部件怎么动（局部坐标，时间是现实秒）：
+ * - spin：绕 at、沿 axis 一直转（旋转木马、摩天轮的轮子）
+ * - swing：绕 at、沿 axis 来回摆，最大 amp 弧度（秋千船）
+ * - orbit：整个部件不转，沿以 at 为圆心、axis 为轴的圆平移（摩天轮的吊舱一直朝上）；anchor 是建模时部件所在的点
+ * - path：沿闭合折线 points 跑，车头对着前进方向（过山车）；部件在 anchor 处、车头朝局部 +x 建模，offset 是在折线上错开的距离
+ * - drop：慢慢升高 height 再一下子落回来（跳楼机），一个来回 period 秒
+ */
+export type Motion =
+  | { kind: 'spin'; at: Vec3; axis: 'x' | 'y' | 'z'; rpm: number }
+  | { kind: 'swing'; at: Vec3; axis: 'x' | 'y' | 'z'; amp: number; period: number }
+  | { kind: 'orbit'; at: Vec3; axis: 'x' | 'y' | 'z'; rpm: number; anchor: Vec3 }
+  | { kind: 'path'; points: Vec3[]; speed: number; offset?: number; anchor: Vec3 }
+  | { kind: 'drop'; height: number; period: number }
 
 export interface LandmarkSub {
   id: string

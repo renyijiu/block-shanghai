@@ -3,6 +3,7 @@
 import type { LandmarkContext, LandmarkDef, PartOptions } from '../../engine/city.ts'
 import { aLandmarks } from './landmarks-a.ts'
 import { bLandmarks } from './landmarks-b.ts'
+import { starpark } from './park.ts'
 import { chineseRoof, hall, LIGHT, TILE, WARM } from './parts.ts'
 
 const STONE = 0xd8cdb4
@@ -599,4 +600,4 @@ const peoplesSquare: LandmarkDef = {
   tip: '地铁 1、2、8 号线人民广场站，出站就到。'
 }
 
-export const landmarks: LandmarkDef[] = [bund, orientalPearl, shanghaiTower, yuyuan, swfc, jinmao, ljzBridge, nanjingRoad, peoplesSquare, waibaidu, ...aLandmarks, ...bLandmarks]
+export const landmarks: LandmarkDef[] = [bund, orientalPearl, shanghaiTower, yuyuan, swfc, jinmao, ljzBridge, nanjingRoad, peoplesSquare, waibaidu, ...aLandmarks, ...bLandmarks, starpark]

@@ -16,6 +16,8 @@ export const content: LifeContent = {
     { id: 'qingtuan', name: '青团', price: 6, desc: '艾草糯米皮，豆沙或咸蛋黄肉松馅', months: [3, 4] },
     { id: 'yanduxian', name: '腌笃鲜', price: 58, desc: '咸肉、鲜肉、春笋同炖', months: [3, 4, 5] },
     { id: 'hairycrab', name: '大闸蟹', price: 88, desc: '秋风起，蟹脚痒', months: [9, 10, 11] },
+    { id: 'cottoncandy', name: '棉花糖', price: 10, desc: '一大团粉色的糖丝，边走边吃' },
+    { id: 'popcorn', name: '爆米花', price: 12, desc: '焦糖味，装在纸桶里' },
     { id: 'mooncake', name: '鲜肉月饼', price: 5, desc: '现烤现卖，排队也要买', months: [9, 10] },
     { id: 'chestnut', name: '糖炒栗子', price: 15, desc: '街边飘香', months: [10, 11, 12, 1, 2] }
   ],
@@ -24,6 +26,7 @@ export const content: LifeContent = {
     { id: 'maglevticket', name: '磁浮车票', desc: '第一次坐磁浮的车票', auto: 'maglev' },
     { id: 'cruiseticket', name: '浦江游船票', desc: '完成一次浦江游览', auto: 'cruise' },
     { id: 'pearlmodel', name: '东方明珠模型', desc: '登上东方明珠观光层', auto: 'deck:orientalpearl' },
+    { id: 'starparkpin', name: '星愿塔纪念徽章', desc: '登上星愿塔观景廊', auto: 'deck:starpark' },
     { id: 'towerbadge', name: '“上海之巅”纪念章', desc: '登上上海中心顶层观光厅', auto: 'deck:shanghaitower' },
     { id: 'postcards', name: '外滩明信片套装', desc: '一套十张，外滩的白天和夜晚', price: 20 },
     { id: 'shikumen', name: '石库门门头摆件', desc: '乌漆木门配石门框的小摆件', price: 68 },
@@ -36,6 +39,8 @@ export const content: LifeContent = {
     { id: 'njgift', name: '外滩手信店', kind: 'gift', at: { landmark: 'nanjingroad', x: 14, z: 0 }, items: ['postcards', 'qipaobookmark', 'shikumen'] },
     { id: 'njseason', name: '季节点心铺', kind: 'food', at: { landmark: 'nanjingroad', x: 26, z: 0 }, items: ['qingtuan', 'mooncake', 'chestnut', 'youdunzi'] },
     { id: 'njdept', name: '南京路百货', kind: 'gift', at: { landmark: 'nanjingroad', x: 38, z: 0 }, items: ['candybox', 'qipaobookmark'] },
+    // 星愿游乐园中轴大道边的小吃车
+    { id: 'parksnack', name: '游乐园小吃车', kind: 'food', at: { landmark: 'starpark', x: 7.5, z: 30, face: Math.PI / 2 }, items: ['cottoncandy', 'popcorn'] },
     // 豫园九曲桥广场、城隍庙门口
     { id: 'yysnack', name: '城隍庙小吃', kind: 'food', at: { landmark: 'yuyuan', x: -14, z: 14.5 }, items: ['xiaolongbao', 'shengjian', 'xiekehuang', 'youdunzi'] },
     { id: 'yybenbang', name: '本帮菜馆', kind: 'food', at: { landmark: 'yuyuan', x: -3, z: 14 }, items: ['hongshaorou', 'baizhanji', 'yanduxian', 'hairycrab'] },
@@ -318,6 +323,19 @@ export const content: LifeContent = {
     },
     { id: 'theme-food', kind: 'theme', name: '食在上海', reward: 50, badge: '食在上海', steps: [{ text: '吃过 6 种上海美食', goal: { count: 'foods', n: 6 } }] },
     { id: 'theme-culture', kind: 'theme', name: '海派文化达人', reward: 50, badge: '海派文化达人', steps: [{ text: '解锁 6 项文化图鉴', goal: { count: 'culture', n: 6 } }] },
+    {
+      id: 'theme-park',
+      kind: 'theme',
+      name: '游乐园一日',
+      reward: 40,
+      badge: '星愿游乐园',
+      steps: [
+        { text: '逛逛星愿游乐园', goal: { found: ['starpark'] } },
+        { text: '吃一团棉花糖', goal: { stat: 'eat:cottoncandy' } },
+        { text: '登上星愿塔观景廊', goal: { item: 'starparkpin' } },
+        { text: '晚上拍一张星愿游乐园（20:30 起湖上有烟火）', goal: { stat: 'shot:starpark:night' } }
+      ]
+    },
     { id: 'theme-coffee', kind: 'theme', name: '咖啡漫游', reward: 30, badge: '咖啡地图', steps: [{ text: '去过 5 家咖啡馆', goal: { count: 'coffee', n: 5 } }] },
     {
       id: 'theme-suburbs',

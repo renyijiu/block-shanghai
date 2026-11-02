@@ -2,7 +2,7 @@
 import * as THREE from 'three/webgpu'
 import { Builder } from '../build/Builder.ts'
 import { GeoBuilder, rgb, type GeometryData } from '../build/geometry.ts'
-import type { LandmarkContext, LandmarkDef, PartOptions } from '../city.ts'
+import type { LandmarkContext, LandmarkDef, Motion, PartOptions, Vec3 } from '../city.ts'
 import { orientedBox, type Box, type CollisionWorld } from '../geo/CollisionWorld.ts'
 import type { Projection } from '../geo/projection.ts'
 import type { InteractPoint, InteractRegistry } from '../world/interact.ts'
@@ -62,12 +62,17 @@ export class LandmarkBuilder implements LandmarkContext {
   readonly farLights = new GeoBuilder()
   readonly points: InteractPoint[] = []
   readonly decks: Box[] = []
+  /** 会动的部件：每个部件单独建一份（不进碰撞、不进远景） */
+  readonly movers: { motion: Motion; sub: LandmarkBuilder }[] = []
   readonly p: PlacedLandmark
   private readonly proj: Projection
+  /** 会动的部件四面八方都看得到（转起来能看见底），所有构件都画底面 */
+  private readonly allSides: boolean
 
-  constructor(p: PlacedLandmark, proj: Projection) {
+  constructor(p: PlacedLandmark, proj: Projection, allSides = false) {
     this.p = p
     this.proj = proj
+    this.allSides = allSides
   }
 
   private part(cx: number, cz: number, len: number, wid: number, y0: number, y1: number, color: number, twist: number, o: PartOptions) {
@@ -82,7 +87,7 @@ export class LandmarkBuilder implements LandmarkContext {
       if (o.collide ?? y0 < 1) this.b.colliders.push(orientedBox(wx, wz, angle, len, wid, y0, y1))
       return
     }
-    const opts = { ...o, windows: o.windows ?? 0.6 }
+    const opts = { ...o, windows: o.windows ?? 0.6, bottom: o.bottom ?? this.allSides }
     this.b.orientedBox(wx, wz, angle, len, wid, y0, y1, color, opts)
     if (big) this.far.orientedBox(wx, wz, angle, len, wid, y0, y1, color, { ...opts, collide: false })
   }
@@ -151,6 +156,12 @@ export class LandmarkBuilder implements LandmarkContext {
     return this.p.toWorld(x, z)
   }
 
+  moving(motion: Motion, build: (c: LandmarkContext) => void) {
+    const sub = new LandmarkBuilder(this.p, this.proj, true)
+    build(sub)
+    this.movers.push({ motion, sub })
+  }
+
   local(lat: number, lon: number): [number, number] {
     const { x, z } = this.proj.project(lat, lon)
     const dx = x - this.p.x
@@ -158,6 +169,94 @@ export class LandmarkBuilder implements LandmarkContext {
     const c = Math.cos(this.p.def.rot)
     const s = Math.sin(this.p.def.rot)
     return [dx * c + dz * s, -dx * s + dz * c]
+  }
+}
+
+/** 一个会动的部件在场景里的样子：外层 group 摆位置和朝向，里面的网格挪到以参考点为原点 */
+interface Mover {
+  group: THREE.Group
+  pose(t: number): void
+}
+
+const smooth = (x: number) => x * x * (3 - 2 * x)
+
+/** 按 motion 把部件摆到 t 秒（现实时间）时的位置 */
+function makeMover(p: PlacedLandmark, motion: Motion, content: THREE.Group): Mover {
+  const w = ([x, y, z]: Vec3) => {
+    const [wx, wz] = p.toWorld(x, z)
+    return new THREE.Vector3(wx, y, wz)
+  }
+  const c = Math.cos(p.def.rot)
+  const s = Math.sin(p.def.rot)
+  const axisOf = (a: 'x' | 'y' | 'z') => (a === 'y' ? new THREE.Vector3(0, 1, 0) : a === 'x' ? new THREE.Vector3(c, 0, s) : new THREE.Vector3(-s, 0, c))
+  const group = new THREE.Group()
+  group.add(content)
+  const q = new THREE.Quaternion()
+  switch (motion.kind) {
+    case 'spin':
+    case 'swing': {
+      const at = w(motion.at)
+      const axis = axisOf(motion.axis)
+      content.position.copy(at).negate()
+      group.position.copy(at)
+      return {
+        group,
+        pose: (t) => {
+          const angle = motion.kind === 'spin' ? (t * motion.rpm * Math.PI) / 30 : motion.amp * Math.sin((2 * Math.PI * t) / motion.period)
+          group.quaternion.setFromAxisAngle(axis, angle)
+        }
+      }
+    }
+    case 'orbit': {
+      const at = w(motion.at)
+      const anchor = w(motion.anchor)
+      const axis = axisOf(motion.axis)
+      const arm = anchor.clone().sub(at)
+      content.position.copy(anchor).negate()
+      const v = new THREE.Vector3()
+      return {
+        group,
+        pose: (t) => {
+          v.copy(arm).applyQuaternion(q.setFromAxisAngle(axis, (t * motion.rpm * Math.PI) / 30))
+          group.position.copy(at).add(v)
+        }
+      }
+    }
+    case 'path': {
+      const pts = motion.points.map(w)
+      const cum = [0]
+      for (let i = 1; i <= pts.length; i++) cum.push(cum[i - 1]! + pts[i % pts.length]!.distanceTo(pts[i - 1]!))
+      const total = cum[pts.length]!
+      const anchor = w(motion.anchor)
+      const forward = axisOf('x')
+      content.position.copy(anchor).negate()
+      const dir = new THREE.Vector3()
+      return {
+        group,
+        pose: (t) => {
+          const d = (((t * motion.speed + (motion.offset ?? 0)) % total) + total) % total
+          let i = 0
+          while (cum[i + 1]! < d) i++
+          const a = pts[i]!
+          const b = pts[(i + 1) % pts.length]!
+          const f = (d - cum[i]!) / Math.max(1e-6, cum[i + 1]! - cum[i]!)
+          group.position.copy(a).lerp(b, f)
+          dir.copy(b).sub(a).normalize()
+          group.quaternion.setFromUnitVectors(forward, dir)
+        }
+      }
+    }
+    case 'drop': {
+      return {
+        group,
+        pose: (t) => {
+          // 前 60% 慢慢升，顶上停一会儿，一下子落下，底下再停一会儿
+          const ph = (t % motion.period) / motion.period
+          const k = ph < 0.6 ? smooth(ph / 0.6) : ph < 0.75 ? 1 : ph < 0.82 ? 1 - ((ph - 0.75) / 0.07) ** 2 : 0
+          group.position.y = motion.height * k
+        }
+      }
+    }
   }
 }
 
@@ -179,7 +278,7 @@ export function toMesh(d: GeometryData | null, material: THREE.Material, name: s
 export class LandmarkManager {
   readonly root = new THREE.Group()
   readonly placed: PlacedLandmark[]
-  private readonly loaded = new Map<string, { near: THREE.Group; far: THREE.Group; group: THREE.Group }>()
+  private readonly loaded = new Map<string, { near: THREE.Group; far: THREE.Group; group: THREE.Group; movers: Mover[] }>()
   /** 已发现的景点 → 发现时的游戏时间（秒） */
   readonly found = new Map<string, number>()
   private readonly proj: Projection
@@ -287,11 +386,29 @@ export class LandmarkManager {
     const near = lod('near', built.solid, built.glass, lb.lights.build())
     const farGroup = lod('far', far.solid, far.glass, lb.farLights.build())
     farGroup.visible = false
+    // 会动的部件挂在近景下面，跟近景一起显示 / 隐藏
+    const movers = lb.movers.map(({ motion, sub }) => {
+      const part = sub.b.build()
+      const content = new THREE.Group()
+      for (const m of [toMesh(part.solid, this.materials.buildings, 'solid'), toMesh(part.glass, this.materials.glass, 'glass'), toMesh(sub.lights.build(), this.materials.lights, 'lights')]) if (m) content.add(m)
+      const mover = makeMover(p, motion, content)
+      mover.pose(0)
+      near.add(mover.group)
+      return mover
+    })
     this.root.add(group)
-    this.loaded.set(p.def.id, { near, far: farGroup, group })
+    this.loaded.set(p.def.id, { near, far: farGroup, group, movers })
     const owner = `landmark:${p.def.id}`
     this.collision.add(owner, [...built.colliders, ...lb.decks])
     this.interact.add(owner, lb.points)
+  }
+
+  /** 每帧：近景里的游乐设施按现实时间 t（秒）动；running 为假时停在初始姿态 */
+  animate(t: number, running: boolean) {
+    for (const l of this.loaded.values()) {
+      if (!l.movers.length || !l.near.visible) continue
+      for (const m of l.movers) m.pose(running ? t : 0)
+    }
   }
 
   private unload(id: string) {

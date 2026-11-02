@@ -1113,6 +1113,9 @@ export class Game {
     this.chunks?.update(f.x, f.z)
     this.landmarks?.update(f.x, f.z, this.camera.position.x, this.camera.position.z)
     this.entranceSigns?.update(f.x, f.z, now)
+    // 游乐设施按现实时间动，营业时间 9:00–21:30（游戏时间）
+    const h = this.clock.daySeconds / 3600
+    this.landmarks?.animate(now / 1000, h >= 9 && h < 21.5)
     // 烟火：下雨、下雪、台风天取消
     const show = this.fireworks?.update(this.clock.daySeconds, !['rain', 'plum', 'typhoon', 'snow'].includes(this.weather), f.x, f.z) ?? null
     if (show && show !== this.showing && !this.devCamera) this.onShow?.(show)
