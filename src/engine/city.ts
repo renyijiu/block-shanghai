@@ -153,6 +153,8 @@ export interface CityPackage {
   boats: BoatLineDef[]
   /** 观光巴士（P6） */
   buses: BusLineDef[]
+  /** 烟火秀（P6 之后）：每天固定时间在某处放 */
+  fireworks?: FireworksDef[]
   /** 英文（P6）：中文原文 → 英文。英文模式下开局时把城市包里查得到的文字整体换掉，没有就显示中文 */
   en?: Record<string, string>
   /** 路人：类型、穿着、对白（P5） */
@@ -321,6 +323,16 @@ export interface NpcContent {
 
 /** 一条船线：渡轮在两个码头之间来回，游船从码头出发开到折返点再开回来 */
 /** 观光巴士（docs/05 第 4 节）：沿地面道路开，到头掉头往回开；路线是游戏里设计的，不是真实线路 */
+/** 一场烟火秀：在 (lat, lon) 一带，每天 start（“20:30”）开始放 minutes 分钟（游戏时间），发射点分散在 spread 格内 */
+export interface FireworksDef {
+  name: string
+  lat: number
+  lon: number
+  start: string
+  minutes: number
+  spread: number
+}
+
 export interface BusLineDef {
   id: string
   name: string

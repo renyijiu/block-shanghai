@@ -24,6 +24,8 @@ export default {
   landmarks,
   boats,
   buses,
+  // 星愿湖烟火：湖面中心（按烘焙的水面数据取），每晚 20:30 起半小时（游戏时间，现实约一分半）
+  fireworks: [{ name: '星愿湖烟火', lat: 31.1415, lon: 121.6607, start: '20:30', minutes: 30, spread: 40 }],
   people,
   content,
   en

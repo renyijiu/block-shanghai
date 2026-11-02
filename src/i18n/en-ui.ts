@@ -407,5 +407,7 @@ export const EN_UI: Record<string, string> = {
   '（坐过一条线的所有区间就点亮）': '(ride every section of a line to light it up)',
   '集站图鉴 · 到访 {n}/{total} 站': 'Station collection · {n}/{total} visited',
   未到访: 'not visited',
-  市外: 'Outside Shanghai'
+  市外: 'Outside Shanghai',
+  // 烟火
+  '🎆 {name}开始了，抬头看': '🎆 {name} has started — look up!'
 }

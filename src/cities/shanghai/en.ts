@@ -166,7 +166,9 @@ export const en: Record<string, string> = {
   '上海国际旅游度假区 · 星愿湖': 'Shanghai Resort & Wishing Star Lake',
   '上海国际旅游度假区的湖边小镇：彩色小楼围着步行街，沿着星愿湖是一圈步道，晚上沿湖亮起灯。（乐园本身不在游戏里）':
     'The lakeside town of the Shanghai International Resort: colourful little buildings around a pedestrian street and a path around Wishing Star Lake, lit up at night. (The theme park itself is not in the game.)',
-  '地铁 11 号线的终点站就在度假区。': 'The terminus of Line 11 is in the resort.',
+  '地铁 11 号线的终点站就在度假区。每晚 20:30 起，星愿湖上空放半小时烟火（下雨、下雪、台风天取消）。':
+    'The terminus of Line 11 is in the resort. Every evening from 20:30 there are half an hour of fireworks over Wishing Star Lake (cancelled in rain, snow or typhoons).',
+  星愿湖烟火: 'Wishing Star Lake fireworks',
   '佘山 · 圣母大殿': 'Sheshan Basilica',
   '松江的佘山是上海陆地上少有的山。西佘山顶上是罗马式的佘山圣母大殿，旁边是一百多年历史的佘山天文台。':
     "Sheshan in Songjiang is one of the few hills on Shanghai's mainland. The Romanesque basilica crowns West Sheshan, next to the century-old Sheshan Observatory.",

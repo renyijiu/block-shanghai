@@ -20,6 +20,7 @@ Built with **Vue 3 + Three.js (WebGPU, falling back to WebGL 2) + TypeScript**, 
 - 📷 **Photograph and collect**: 47 landmarks — the Bund, the Oriental Pearl, Shanghai Tower, Yu Garden, Wukang Mansion, Jing'an Temple, the Lupu Bridge and more. Photos recognise what's in the frame and unlock collection entries; six filters, a selfie view and group photos with passers-by
 - 🌿 **Shanghai life**: shikumen lanes and plane-tree streets, passers-by who speak Shanghainese (shown in the original with an English gloss), snack shops and cafés with seasonal food, culture plaques, three Citywalk routes, starter, area, theme and daily quests
 - 🚌 **Getting around**: Huangpu ferries and the river cruise, an open-top sightseeing bus, shared bikes (roads only) and metered taxis
+- 🎆 **Fireworks**: every evening from 20:30 there are half an hour of fireworks over Wishing Star Lake at the resort (about a minute and a half in real time), ending in a finale; cancelled in rain, snow or typhoons
 - 🌦️ **Time and weather**: a day–night cycle with the Bund and Lujiazui lit up in the evening; weather and seasons follow the real date (plum rain, typhoons, snow, autumn leaves)
 - 👤 **Your character**: colours, hair, hats and glasses, or upload a 64×64 block-character skin
 

@@ -403,6 +403,7 @@ onMounted(async () => {
       }
     }
     g.onRideEnd = (message) => showNotice(message)
+    g.onShow = (name) => showNotice(t('🎆 {name}开始了，抬头看', { name }))
     g.onQualityAuto = (level) => {
       quality.value = level
       showNotice(t('画质自动调到“{q}”（帧率太低）', { q: t(QUALITY_PRESETS[level].label) }))
