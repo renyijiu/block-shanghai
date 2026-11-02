@@ -2,7 +2,7 @@
 
 > A blocky open-world Shanghai: stroll through a city with the real shape of Shanghai, photograph and collect its landmarks, and ride the real metro network.
 
-[中文](./README.md) · Play online: <https://block-shanghai.lanyuejin1108.workers.dev/> (desktop or mobile browser; turn your phone sideways)
+[中文](./README.md) · Play online: <https://shanghai.renyijiu.com/> (desktop or mobile browser; turn your phone sideways)
 
 Built with **Vue 3 + Three.js (WebGPU, falling back to WebGL 2) + TypeScript**, running entirely in the browser. Geography and metro data come from OpenStreetMap and are baked offline into game coordinates. The game has a full English mode: open **☰ Menu → Language**.
 

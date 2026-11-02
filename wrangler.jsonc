@@ -1,6 +1,10 @@
-// Cloudflare 部署（docs/07 第 9 节）：npm run deploy:cloudflare 打包后把 dist/ 当静态文件发布到 Workers
+// Cloudflare 部署（docs/07 第 9 节）：npm run deploy:cloudflare 打包后把 dist/ 当静态文件发布到 Workers，
+// 绑定自定义域名 shanghai.renyijiu.com（部署时 Cloudflare 自动建 DNS 记录和证书）
 {
   "name": "block-shanghai",
   "compatibility_date": "2026-11-01",
-  "assets": { "directory": "./dist" }
+  "assets": { "directory": "./dist" },
+  // 原来的 workers.dev 地址也保留，之前分享出去的链接还能用
+  "workers_dev": true,
+  "routes": [{ "pattern": "shanghai.renyijiu.com", "custom_domain": true }]
 }

@@ -155,10 +155,10 @@ npm 活跃度为过去 12 个月的发版次数（2026-10-30 查询）。
 
 静态托管即可。但**主要玩家在国内**：GitHub Pages、Vercel、Cloudflare Pages 在大陆的访问速度和稳定性都没有保障；国内对象存储 + CDN（阿里云 OSS、腾讯云 COS）速度好，但绑定自定义域名需要 ICP 备案。
 
-**现状（2026-11-01）**：线上用 Cloudflare Workers 的静态托管（<https://block-shanghai.lanyuejin1108.workers.dev/>），`npm run deploy:cloudflare` 打包后用 `wrangler deploy` 发布，配置在 `wrangler.jsonc`；`public/_headers` 让 `assets/` 下带哈希的文件缓存一年，首页每次校验。新版 wrangler 把 Pages 项目创建转给了 Workers，所以直接用 Workers 静态托管。GitHub Pages 作备用（仓库公开后自动发布）；国内访问慢的话再加国内对象存储。
+**现状（2026-11-01）**：线上用 Cloudflare Workers 的静态托管（<https://shanghai.renyijiu.com/>），`npm run deploy:cloudflare` 打包后用 `wrangler deploy` 发布，配置在 `wrangler.jsonc`，绑定自定义域名 `shanghai.renyijiu.com`（原来的 `block-shanghai.lanyuejin1108.workers.dev` 也保留；`workers.dev` 在国内网络下偶尔连不上，对外用自定义域名）；`public/_headers` 让 `assets/` 下带哈希的文件缓存一年，首页每次校验。新版 wrangler 把 Pages 项目创建转给了 Workers，所以直接用 Workers 静态托管。GitHub Pages 作备用（仓库公开后自动发布）；国内访问慢的话再加国内对象存储。
 
 - `npm run build` 的产物 `dist/` 约 8 MB（最大的是道路数据 4.9 MB，开 gzip 后小很多），全部用相对路径，放在任意静态托管的根目录或子路径下都能用（已在本地静态服务器的子路径下验证）。
-- GitHub Pages：`.github/workflows/pages.yml` 在推送到 `main` 时自动测试、打包、发布，也能在 Actions 页面手动运行；仓库是私有的时候跳过。第一次发布前在仓库 Settings → Pages 把 Source 选成“GitHub Actions”。地址是 <https://block-shanghai.lanyuejin1108.workers.dev/>。
+- GitHub Pages：`.github/workflows/pages.yml` 在推送到 `main` 时自动测试、打包、发布，也能在 Actions 页面手动运行；仓库是私有的时候跳过。第一次发布前在仓库 Settings → Pages 把 Source 选成“GitHub Actions”。地址是 <https://shanghai.renyijiu.com/>。
 - 国内对象存储：把 `dist/` 整个上传到存储桶，首页设成 `index.html`，开启 gzip / Brotli；`assets/` 下的文件名带内容哈希，可以设长缓存，`index.html` 和 `manifest.webmanifest` 设不缓存。绑定自定义域名需要 ICP 备案。
 
 ## 10. 迁移记录

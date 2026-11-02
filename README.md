@@ -2,7 +2,7 @@
 
 > 方块风格的上海城市漫游：在真实形状的上海里散步、拍照收集景点、坐遍真实的地铁网络。
 
-[English](./README.en.md) · 在线试玩：<https://block-shanghai.lanyuejin1108.workers.dev/>（电脑或手机浏览器打开即可，手机建议横屏）
+[English](./README.en.md) · 在线试玩：<https://shanghai.renyijiu.com/>（电脑或手机浏览器打开即可，手机建议横屏）
 
 基于 **Vue 3 + Three.js（WebGPU，自动回退 WebGL 2）+ TypeScript**，纯前端运行。地理和地铁数据来自 OpenStreetMap，离线烘焙成游戏坐标。
 
