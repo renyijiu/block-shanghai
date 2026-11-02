@@ -101,7 +101,24 @@ export interface LandmarkContext {
    * 会动的部件（游乐设施）：build 里照常用局部坐标建模，建出来的部件按 motion 动。
    * 不登记碰撞、没有交互点，只在近景出现；营业时间外停在初始姿态
    */
-  moving(motion: Motion, build: (c: LandmarkContext) => void): void
+  moving(motion: Motion, build: (c: LandmarkContext) => void, ride?: RideDef): void
+}
+
+/**
+ * 能坐的游乐设施（挂在会动的部件上）：在 gate（局部 x, z）按 E 付 fare 元坐上去，人跟着部件动 seconds 秒（现实时间）后回到 gate。
+ * seat 是部件建模时座位所在的点（局部坐标）；同一个 id 挂在几个部件上（摩天轮的吊舱）时，挑当时最低的那个坐。
+ * face 是人朝的方向（局部 [dx, dz]），不写就朝运动方向（过山车、旋转木马）
+ */
+export interface RideDef {
+  id: string
+  name: string
+  gate: [x: number, z: number]
+  seat: Vec3
+  seconds: number
+  fare: number
+  face?: [dx: number, dz: number]
+  /** 坐的时候用第一人称（第三人称的镜头会钻进顶棚、吊舱）；下来后恢复原来的视角 */
+  firstPerson?: boolean
 }
 
 /** 局部坐标的一点 [x, y, z] */

@@ -409,5 +409,14 @@ export const EN_UI: Record<string, string> = {
   未到访: 'not visited',
   市外: 'Outside Shanghai',
   // 烟火
-  '🎆 {name}开始了，抬头看': '🎆 {name} has started — look up!'
+  '🎆 {name}开始了，抬头看': '🎆 {name} has started — look up!',
+  // 游乐设施
+  '{name} · {fare} 元': '{name} · ¥{fare}',
+  乘坐: 'Ride',
+  现在不能坐: "You can't ride now",
+  '设施 9:00–21:30 开放，现在不能坐': 'Rides are open 9:00–21:30',
+  '坐上{name} · {fare} 元': 'On the {name} · ¥{fare}',
+  '{name}坐完了': 'Off the {name}',
+  '{name} · 还剩 {s} 秒': '{name} · {s} s left',
+  下来: 'Get off'
 }

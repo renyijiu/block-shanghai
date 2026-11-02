@@ -2,7 +2,7 @@
 import * as THREE from 'three/webgpu'
 import { Builder } from '../build/Builder.ts'
 import { GeoBuilder, rgb, type GeometryData } from '../build/geometry.ts'
-import type { LandmarkContext, LandmarkDef, Motion, PartOptions, Vec3 } from '../city.ts'
+import type { LandmarkContext, LandmarkDef, Motion, PartOptions, RideDef, Vec3 } from '../city.ts'
 import { orientedBox, type Box, type CollisionWorld } from '../geo/CollisionWorld.ts'
 import type { Projection } from '../geo/projection.ts'
 import type { InteractPoint, InteractRegistry } from '../world/interact.ts'
@@ -63,7 +63,7 @@ export class LandmarkBuilder implements LandmarkContext {
   readonly points: InteractPoint[] = []
   readonly decks: Box[] = []
   /** 会动的部件：每个部件单独建一份（不进碰撞、不进远景） */
-  readonly movers: { motion: Motion; sub: LandmarkBuilder }[] = []
+  readonly movers: { motion: Motion; sub: LandmarkBuilder; ride?: RideDef }[] = []
   readonly p: PlacedLandmark
   private readonly proj: Projection
   /** 会动的部件四面八方都看得到（转起来能看见底），所有构件都画底面 */
@@ -156,10 +156,16 @@ export class LandmarkBuilder implements LandmarkContext {
     return this.p.toWorld(x, z)
   }
 
-  moving(motion: Motion, build: (c: LandmarkContext) => void) {
+  moving(motion: Motion, build: (c: LandmarkContext) => void, ride?: RideDef) {
     const sub = new LandmarkBuilder(this.p, this.proj, true)
     build(sub)
-    this.movers.push({ motion, sub })
+    this.movers.push({ motion, sub, ride })
+    // 能坐的设施：入口的交互点（同一个设施挂在几个部件上时只登记一次）
+    if (ride && !this.points.some((q) => q.ride === ride.id)) {
+      const [x, z] = this.p.toWorld(ride.gate[0], ride.gate[1])
+      const name = tr(ride.name)
+      this.points.push({ x, z, r: 3, label: tr('{name} · {fare} 元', { name, fare: ride.fare }), action: '乘坐', kind: 'ride', landmark: this.p.def.id, ride: ride.id })
+    }
   }
 
   local(lat: number, lon: number): [number, number] {
@@ -176,6 +182,21 @@ export class LandmarkBuilder implements LandmarkContext {
 interface Mover {
   group: THREE.Group
   pose(t: number): void
+  /** 能坐的设施：设施定义和座位（建模时的世界坐标，跟着部件动） */
+  ride?: RideDef
+  seat?: THREE.Vector3
+  content?: THREE.Group
+}
+
+/** 坐在设施上：每帧问座位在哪（世界坐标）、人朝哪 */
+export interface Seat {
+  ride: RideDef
+  /** 入口（世界坐标），坐完回到这里 */
+  gate: [number, number]
+  /** 座位现在的世界坐标 */
+  where(out: THREE.Vector3): THREE.Vector3
+  /** 设定了朝向时人朝哪（玩家的 facing），没设定返回 null（朝运动方向） */
+  facing: number | null
 }
 
 const smooth = (x: number) => x * x * (3 - 2 * x)
@@ -387,11 +408,15 @@ export class LandmarkManager {
     const farGroup = lod('far', far.solid, far.glass, lb.farLights.build())
     farGroup.visible = false
     // 会动的部件挂在近景下面，跟近景一起显示 / 隐藏
-    const movers = lb.movers.map(({ motion, sub }) => {
+    const movers = lb.movers.map(({ motion, sub, ride }) => {
       const part = sub.b.build()
       const content = new THREE.Group()
       for (const m of [toMesh(part.solid, this.materials.buildings, 'solid'), toMesh(part.glass, this.materials.glass, 'glass'), toMesh(sub.lights.build(), this.materials.lights, 'lights')]) if (m) content.add(m)
-      const mover = makeMover(p, motion, content)
+      const mover: Mover = makeMover(p, motion, content)
+      if (ride) {
+        const [sx, sz] = p.toWorld(ride.seat[0], ride.seat[2])
+        Object.assign(mover, { ride, seat: new THREE.Vector3(sx, ride.seat[1], sz), content })
+      }
       mover.pose(0)
       near.add(mover.group)
       return mover
@@ -409,6 +434,29 @@ export class LandmarkManager {
       if (!l.movers.length || !l.near.visible) continue
       for (const m of l.movers) m.pose(running ? t : 0)
     }
+  }
+
+  /** 坐上景点里的设施：同一个设施有几个座位（摩天轮的吊舱）时挑现在最低的那个；景点没加载返回 null */
+  seat(landmark: string, rideId: string): Seat | null {
+    const l = this.loaded.get(landmark)
+    const p = this.byId(landmark)
+    if (!l || !p) return null
+    const v = new THREE.Vector3()
+    const at = (m: Mover, out: THREE.Vector3) => {
+      m.group.updateMatrixWorld(true)
+      return m.content!.localToWorld(out.copy(m.seat!))
+    }
+    const candidates = l.movers.filter((m) => m.ride?.id === rideId)
+    if (!candidates.length) return null
+    const m = candidates.reduce((a, b) => (at(a, v).y <= at(b, new THREE.Vector3()).y ? a : b))
+    const ride = m.ride!
+    let facing: number | null = null
+    if (ride.face) {
+      const [ax, az] = p.toWorld(0, 0)
+      const [bx, bz] = p.toWorld(ride.face[0], ride.face[1])
+      facing = Math.atan2(-(bx - ax), -(bz - az))
+    }
+    return { ride, gate: p.toWorld(ride.gate[0], ride.gate[1]), where: (out) => at(m, out), facing }
   }
 
   private unload(id: string) {

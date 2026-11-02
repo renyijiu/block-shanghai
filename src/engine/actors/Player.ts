@@ -83,8 +83,10 @@ export class Player {
         const a = (k / Math.max(1, r * 6)) * Math.PI * 2
         const px = x + Math.cos(a) * r
         const pz = z + Math.sin(a) * r
-        if (world.walkable(px, pz) && !this.blocked(px, pz, 0, world)) {
-          this.pos.set(px, 0, pz)
+        // 迈得上去的矮台子（铺装、平台）也能站：站到台面上
+        const b = world.walkable(px, pz) ? this.blocked(px, pz, 0, world) : true
+        if (b !== true) {
+          this.pos.set(px, typeof b === 'number' ? b : 0, pz)
           this.vy = 0
           return
         }

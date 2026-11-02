@@ -28,7 +28,11 @@
           <button v-if="!stats.station" :title="t('打车（T）')" @click="openTaxi">{{ t('🚕 打车') }}</button>
           <button :title="t('菜单：形象、画质…')" @click="menuOpen = true">{{ t('☰ 菜单') }}</button>
         </div>
-        <div v-if="stats.ride" class="prompt ride">
+        <div v-if="stats.attraction" class="prompt ride">
+          🎢 {{ t('{name} · 还剩 {s} 秒', { name: stats.attraction.name, s: stats.attraction.seconds }) }}
+          <button @click="skipRide">{{ t('下来') }}</button>
+        </div>
+        <div v-else-if="stats.ride" class="prompt ride">
           {{ game.busRide ? '🚌' : '⛴' }} {{ stats.ride.name }} · {{ stats.ride.to }} · {{ stats.ride.sailing ? t('还有 {m} 分钟', { m: stats.ride.minutes }) : t(game.busRide ? '车马上到' : '马上开船') }}
           <button @click="skipRide">{{ t('跳过') }}</button>
         </div>
@@ -256,6 +260,8 @@ async function board(berth: Pier) {
 
 async function skipRide() {
   const g = game.value
+  // 游乐设施：直接下来，回到入口
+  if (g?.attraction) return g.endAttraction()
   if (!g?.ride && !g?.busRide) return
   travelText.value = t(g.busRide ? '巴士到站了…' : '船靠岸了…')
   try {
@@ -395,6 +401,7 @@ onMounted(async () => {
       else if (p.kind === 'elevator') void rideElevator(p)
       else if (p.kind === 'boat' && p.pier) boatPanel.value = p.pier
       else if (p.kind === 'bus' && p.bus && p.stop !== undefined) busPanel.value = { line: p.bus, stop: p.stop }
+      else if (p.kind === 'ride') showNotice(g.startAttraction(p).message)
       else if (p.kind === 'shop' && p.shop) shopPanel.value = p.shop
       else if (p.kind === 'culture' && p.culture) cultureCard.value = g.readPlaque(p.culture)
       else if (p.kind === 'npc' && p.npc !== undefined) {

@@ -1,7 +1,7 @@
 // 星愿游乐园：度假区星愿湖北边的原创游乐园（docs/05 第 2 节）。名字、标志、园区布局和设施造型都是游戏里原创的，
 // 不用任何主题乐园的名字、标志、城堡和卡通角色。设施用“会动的部件”（LandmarkContext.moving）按现实时间转动，
 // 营业时间 9:00–21:30（游戏时间）。局部坐标：x 朝东、z 朝南，大门在南边（z = 56），对着星愿湖和湖边小镇
-import type { LandmarkContext, LandmarkDef, Vec3 } from '../../engine/city.ts'
+import type { LandmarkContext, LandmarkDef, RideDef, Vec3 } from '../../engine/city.ts'
 import { mulberry32 } from '../../engine/build/random.ts'
 import { FLAT, GOLD, LIGHT, stepRoof, tree } from './parts.ts'
 
@@ -86,11 +86,33 @@ function ferrisWheel(c: LandmarkContext) {
   for (let k = 0; k < 12; k++) {
     const [x, y] = at(k * 2)
     const anchor: Vec3 = [x, y, cz]
-    c.moving({ kind: 'orbit', at: [cx, cy, cz], axis: 'z', rpm: RPM, anchor }, (m) => {
-      m.beam(x, y, cz, x, y - 0.6, cz, 0.15, 0.15, 0x555555)
-      m.box(x - 1, y - 2.6, cz - 1, x + 1, y - 0.6, cz + 1, PASTEL[k % PASTEL.length]!, { windows: 0.5 })
-      m.box(x - 1.1, y - 0.7, cz - 1.1, x + 1.1, y - 0.5, cz + 1.1, 0xffffff, W)
-    })
+    // 坐进当时最低的吊舱，转一整圈（50 秒），面朝南边的园区和湖
+    const ride: RideDef = { id: 'wheel', name: '云霄摩天轮', gate: [cx, cz + 5.5], seat: [x, y - 2.5, cz], seconds: 60 / RPM, fare: 20, face: [-0.3, 1], firstPerson: true }
+    c.moving(
+      { kind: 'orbit', at: [cx, cy, cz], axis: 'z', rpm: RPM, anchor },
+      (m) => {
+        // 敞开的吊舱：地板、齐腰的围栏、四根柱子、顶棚，坐在里面看得到外面
+        const col = PASTEL[k % PASTEL.length]!
+        m.beam(x, y, cz, x, y - 0.5, cz, 0.15, 0.15, 0x555555)
+        m.box(x - 1.1, y - 2.7, cz - 1.1, x + 1.1, y - 2.5, cz + 1.1, col, W)
+        for (const [a0, b0, a1, b1] of [
+          [-1.1, -1.1, 1.1, -0.95],
+          [-1.1, 0.95, 1.1, 1.1],
+          [-1.1, -1.1, -0.95, 1.1],
+          [0.95, -1.1, 1.1, 1.1]
+        ] as const)
+          m.box(x + a0, y - 2.5, cz + b0, x + a1, y - 1.7, cz + b1, col, W)
+        for (const [dx, dz] of [
+          [-1, -1],
+          [1, -1],
+          [-1, 1],
+          [1, 1]
+        ] as const)
+          m.box(x + dx * 1.02 - 0.08, y - 2.5, cz + dz * 1.02 - 0.08, x + dx * 1.02 + 0.08, y - 0.6, cz + dz * 1.02 + 0.08, 0xffffff, W)
+        m.box(x - 1.2, y - 0.6, cz - 1.2, x + 1.2, y - 0.4, cz + 1.2, col, W)
+      },
+      ride
+    )
   }
 }
 const NEON_RIM = [0xff3d6e, 0xffd23a, 0x37c8ff, 0x7cff6b]
@@ -120,7 +142,7 @@ function carousel(c: LandmarkContext) {
       m.slab(hx + Math.cos(tw) * 1.1, hz + Math.sin(tw) * 1.1, 0.6, 0.5, y + 0.6, y + 1.5, k % 3 ? CREAM : 0x8a5a3a, tw, W)
       m.slab(hx - Math.cos(tw) * 0.2, hz - Math.sin(tw) * 0.2, 0.8, 0.8, y + 0.8, y + 0.9, PASTEL[k % PASTEL.length]!, tw, W)
     }
-  })
+  }, { id: 'carousel', name: '海派旋转木马', gate: [cx, cz + 9.5], seat: [cx + 6, 3.2, cz], seconds: 30, fare: 10, firstPerson: true })
 }
 
 /** 沙船秋千：上海市徽上的沙船，平底、三根桅杆挂着棕红色的篾篷帆，绕东西向的横梁南北来回荡（从中轴大道看是侧面） */
@@ -151,7 +173,7 @@ function junkSwing(c: LandmarkContext) {
       m.box(px - 0.08, 6, mz - 1.5, px + 0.08, top - 0.4, mz + 1.5, 0xa0442c, W)
       for (let y = 6.8; y < top - 0.5; y += 1.1) m.box(px - 0.12, y, mz - 1.55, px + 0.12, y + 0.14, mz + 1.55, 0x3a2a1a, W)
     }
-  })
+  }, { id: 'swing', name: '沙船秋千', gate: [px - 8.5, pz], seat: [px - 1.2, 5.3, pz + 2.5], seconds: 28, fare: 15, face: [-1, 0] })
 }
 
 /** 跳楼机：高 32 格的塔，座椅环慢慢升到顶上，一下子落下来 */
@@ -179,7 +201,7 @@ function dropTower(c: LandmarkContext) {
     ] as const)
       m.box(cx + sx - 0.35, y0 + 0.5, cz + sz - 0.35, cx + sx + 0.35, y0 + 1.6, cz + sz + 0.35, PASTEL[(sx + sz + 6) % PASTEL.length]!, W)
     m.box(cx - 2.9, y0 + 1.6, cz - 2.9, cx + 2.9, y0 + 1.8, cz + 2.9, 0xfff1c9, GLOW)
-  })
+  }, { id: 'drop', name: '跳楼机', gate: [cx, cz + 5.5], seat: [cx - 2.2, 1.9, cz], seconds: 28, fare: 20, face: [-1, -1] })
 }
 
 /** 云霄过山车的轨道（闭合）：沿西边一圈，北头掉头，有爬坡和几个起伏 */
@@ -241,7 +263,7 @@ function coaster(c: LandmarkContext) {
       m.box(ax - 1.1, ay + 1, az - 0.7, ax - 0.7, ay + 1.6, az + 0.7, 0x2a2a2a, W)
       m.box(ax + 0.1, ay + 1, az - 0.7, ax + 0.5, ay + 1.6, az + 0.7, 0x2a2a2a, W)
       if (k === 0) m.box(ax + 1.3, ay + 0.1, az - 0.6, ax + 1.8, ay + 0.8, az + 0.6, 0xffd23a, W)
-    })
+    }, k === 0 ? { id: 'coaster', name: '云霄过山车', gate: [-35.5, 40], seat: [ax + 0.3, ay + 0.5, az], seconds: 20, fare: 30 } : undefined)
   }
 }
 

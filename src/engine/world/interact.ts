@@ -10,7 +10,7 @@ export interface InteractPoint {
   label: string
   /** 按钮上的短文字，如“进站” */
   action: string
-  kind: 'metro' | 'elevator' | 'boat' | 'interior' | 'npc' | 'shop' | 'culture' | 'bus'
+  kind: 'metro' | 'elevator' | 'boat' | 'interior' | 'npc' | 'shop' | 'culture' | 'bus' | 'ride'
   /** 地铁口：车站序号、出入口序号 */
   station?: number
   entrance?: number
@@ -26,6 +26,8 @@ export interface InteractPoint {
   /** 观光巴士：线路 id、站序号 */
   bus?: string
   stop?: number
+  /** 游乐设施：景点里的设施 id（landmark 是哪个景点） */
+  ride?: string
   /** 小店 id、文化牌对应的文化图鉴 id */
   shop?: string
   culture?: string

@@ -333,6 +333,7 @@ export const content: LifeContent = {
         { text: '逛逛星愿游乐园', goal: { found: ['starpark'] } },
         { text: '吃一团棉花糖', goal: { stat: 'eat:cottoncandy' } },
         { text: '登上星愿塔观景廊', goal: { item: 'starparkpin' } },
+        { text: '坐一次云霄过山车', goal: { stat: 'ride:coaster' } },
         { text: '晚上拍一张星愿游乐园（20:30 起湖上有烟火）', goal: { stat: 'shot:starpark:night' } }
       ]
     },

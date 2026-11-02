@@ -8,7 +8,7 @@ import type { CityPackage, CultureDef } from './city.ts'
 import { DevCamera } from './DevCamera.ts'
 import { CollisionWorld } from './geo/CollisionWorld.ts'
 import { createProjection, type Projection } from './geo/projection.ts'
-import { distToRect, LandmarkManager, type PlacedLandmark } from './landmarks/LandmarkManager.ts'
+import { distToRect, LandmarkManager, type PlacedLandmark, type Seat } from './landmarks/LandmarkManager.ts'
 import { goalProgress, updateQuests, type QuestGain, type QuestWorld } from './life/quests.ts'
 import { anchorWorld, buildLife, isGeo, lifeFootprints } from './life/kiosks.ts'
 import { foodAvailable, newLife, recordLife, walkStep, type LifeEvent, type LifeGain, type LifeProgress } from './life/progress.ts'
@@ -85,6 +85,8 @@ export interface GameStats {
   landmarks: number
   /** 坐船中：线名、开往哪里、还有几分钟（游戏时间）、开没开 */
   ride: { name: string; to: string; minutes: number; sailing: boolean } | null
+  /** 坐在游乐设施上：设施名、还剩几秒 */
+  attraction: { name: string; seconds: number } | null
   /** 在地铁站里：位置、站台两侧、车厢里的下一站 */
   station: StationStatus | null
   /** 最新报站（id 变了界面就弹出） */
@@ -116,7 +118,7 @@ export interface PhotoResult {
 }
 
 /** 统计和界面状态的初始值 */
-export const emptyStats = (): GameStats => ({ fps: 0, drawCalls: 0, triangles: 0, chunks: 0, pending: 0, buildAvg: 0, buildMax: 0, x: 0, z: 0, mode: 'player', view: 'third', district: null, time: '', money: 0, prompt: null, found: 0, landmarks: 0, ride: null, station: null, announce: null, weather: '', npcs: 0, walk: null, quest: null, bike: null })
+export const emptyStats = (): GameStats => ({ fps: 0, drawCalls: 0, triangles: 0, chunks: 0, pending: 0, buildAvg: 0, buildMax: 0, x: 0, z: 0, mode: 'player', view: 'third', district: null, time: '', money: 0, prompt: null, found: 0, landmarks: 0, ride: null, attraction: null, station: null, announce: null, weather: '', npcs: 0, walk: null, quest: null, bike: null })
 
 /** 快速到达的结果，给界面提示用 */
 export interface TravelResult {
@@ -189,6 +191,10 @@ export class Game {
   buses: BusSystem | null = null
   /** 正在坐的观光巴士 */
   busRide: BusRide | null = null
+  /** 坐在游乐设施上：哪个设施、座位、什么时候（现实毫秒）下来 */
+  attraction: { seat: Seat; until: number; name: string; view: 'first' | 'third' } | null = null
+  private readonly seatAt = new THREE.Vector3()
+  private readonly seatPrev = new THREE.Vector3()
   /** 骑着的共享单车：开锁的游戏时间 */
   bike: { since: number } | null = null
   /** 下船时调用（界面提示到达） */
@@ -814,7 +820,7 @@ export class Game {
   boardBus(lineId: string, from: number, to: number): TravelResult {
     const buses = this.buses
     const line = buses?.line(lineId)
-    if (!buses || !line || this.ride || this.busRide) return { ok: false, message: tr('现在不能上车') }
+    if (!buses || !line || this.ride || this.busRide || this.attraction) return { ok: false, message: tr('现在不能上车') }
     if (this.money < line.fare) return { ok: false, message: tr('余额不足：车票 {fare} 元，钱包里只有 {money} 元', { fare: line.fare, money: this.money }) }
     this.returnBike()
     const ride = buses.board(line, from, to, this.clock.seconds)
@@ -858,7 +864,7 @@ export class Game {
   toggleBike(): TravelResult {
     if (this.bike) return { ok: true, message: this.returnBike() }
     const p = this.player.pos
-    if (this.interior?.active || this.ride || this.busRide || this.traveling || p.y > 1) return { ok: false, message: tr('这里扫不了共享单车') }
+    if (this.interior?.active || this.ride || this.busRide || this.attraction || this.traveling || p.y > 1) return { ok: false, message: tr('这里扫不了共享单车') }
     if (!this.world || !nearGroundRoad(this.world, p.x, p.z, 2.5)) return { ok: false, message: tr('共享单车要在马路边扫码，只能在马路上骑') }
     if (this.money < 1.5) return { ok: false, message: tr('余额不足：钱包里只有 {money} 元', { money: this.money }) }
     this.bike = { since: this.clock.seconds }
@@ -899,9 +905,65 @@ export class Game {
   }
 
   /** 能不能在这里打车：城市里、离马路不远 */
+/** 游乐设施开放时间（游戏时间，和设施转动的营业时间一致） */
+  get ridesOpen() {
+    const h = this.clock.daySeconds / 3600
+    return h >= 9 && h < 21.5
+  }
+
+  /** 坐上游乐设施：付票钱，人挂到座位上，跟着设施动 seconds 秒（现实时间） */
+  startAttraction(p: InteractPoint): TravelResult {
+    if (!p.landmark || !p.ride || this.attraction || this.ride || this.busRide || this.bike) return { ok: false, message: tr('现在不能坐') }
+    if (!this.ridesOpen) return { ok: false, message: tr('设施 9:00–21:30 开放，现在不能坐') }
+    const seat = this.landmarks?.seat(p.landmark, p.ride)
+    if (!seat) return { ok: false, message: tr('现在不能坐') }
+    const { fare } = seat.ride
+    if (this.money < fare) return { ok: false, message: tr('余额不足：{price} 元，钱包里只有 {money} 元', { price: fare, money: this.money }) }
+    this.money -= fare
+    const name = tr(seat.ride.name)
+    this.attraction = { seat, until: performance.now() + seat.ride.seconds * 1000, name, view: this.rig.mode }
+    if (seat.ride.firstPerson) this.rig.mode = 'first'
+    seat.where(this.seatPrev)
+    this.prompt = null
+    this.lifeEvent({ type: 'stat', key: 'ride' })
+    this.lifeEvent({ type: 'stat', key: `ride:${seat.ride.id}` })
+    this.saveNow()
+    return { ok: true, message: tr('坐上{name} · {fare} 元', { name, fare }) }
+  }
+
+  /** 从设施上下来，回到入口 */
+  endAttraction() {
+    const a = this.attraction
+    if (!a) return
+    this.attraction = null
+    this.rig.mode = a.view
+    const [x, z] = a.seat.gate
+    this.player.spawn(x, z, this.playerWorld!)
+    this.player.model.position.copy(this.player.pos)
+    this.saveNow()
+    this.onRideEnd?.(tr('{name}坐完了', { name: a.name }))
+  }
+
+  private updateAttraction(now: number) {
+    const a = this.attraction!
+    if (now >= a.until || !this.ridesOpen) return this.endAttraction()
+    const p = a.seat.where(this.seatAt)
+    // 没设定朝向就朝运动方向（过山车看前方，木马顺着转）
+    const dx = p.x - this.seatPrev.x
+    const dz = p.z - this.seatPrev.z
+    if (a.seat.facing !== null) this.player.facing = a.seat.facing
+    else if (Math.hypot(dx, dz) > 0.01) this.player.facing = Math.atan2(-dx, -dz)
+    if (this.rig.selfie) this.player.facing = this.rig.yaw
+    this.seatPrev.copy(p)
+    this.player.pos.copy(p)
+    this.player.vy = 0
+    this.player.model.position.copy(p)
+    this.player.model.rotation.y = this.player.facing
+  }
+
   get canHailTaxi() {
     const p = this.player.pos
-    return !!this.world && !this.interior?.active && !this.ride && !this.busRide && p.y < 1 && nearGroundRoad(this.world, p.x, p.z, 12)
+    return !!this.world && !this.interior?.active && !this.ride && !this.busRide && !this.attraction && p.y < 1 && nearGroundRoad(this.world, p.x, p.z, 12)
   }
 
   /** 打车去某个景点：扣车费、按车程推进时钟，在景点旁边的马路上下车 */
@@ -1054,7 +1116,9 @@ export class Game {
     // 坐船时存下船的码头，读档不会掉进江里
     // 在地铁站里存出入口的位置
     const busStop = this.busRide ? this.buses!.stop(this.busRide.line, this.busRide.to) : null
-    const p = this.ride ? { x: this.ride.to.land[0], y: 0, z: this.ride.to.land[1] } : busStop ? { x: busStop.x, y: 0, z: busStop.z } : this.cityAnchor ? { ...this.cityAnchor, y: 0 } : this.player.pos
+    // 坐船、坐车、坐游乐设施时存下车的地方，不存半空中的位置
+    const gate = this.attraction?.seat.gate
+    const p = gate ? { x: gate[0], y: 0, z: gate[1] } : this.ride ? { x: this.ride.to.land[0], y: 0, z: this.ride.to.land[1] } : busStop ? { x: busStop.x, y: 0, z: busStop.z } : this.cityAnchor ? { ...this.cityAnchor, y: 0 } : this.player.pos
     const r = this.rig
     writeSave(localStorage, {
       city: this.city.config.id,
@@ -1170,8 +1234,9 @@ export class Game {
     const inside = this.interior?.active ? this.interior : null
     const world = inside ? inside.world : this.playerWorld
     if (!world || this.traveling) return this.player.pos
-    if (this.ride || this.busRide) {
-      if (this.ride) this.updateRide(this.ride)
+    if (this.ride || this.busRide || this.attraction) {
+      if (this.attraction) this.updateAttraction(now)
+      else if (this.ride) this.updateRide(this.ride)
       else this.updateBusRide(this.busRide!)
       this.input.consumeJump()
       this.input.consumeInteract()
@@ -1275,6 +1340,7 @@ export class Game {
       quest: this.questStats(),
       announce: this.interior?.announcement ?? null,
       bike: this.bike ? { minutes: Math.round((this.clock.seconds - this.bike.since) / 60), fare: this.bikeFare((this.clock.seconds - this.bike.since) / 60) } : null,
+      attraction: this.attraction ? { name: this.attraction.name, seconds: Math.max(0, Math.ceil((this.attraction.until - now) / 1000)) } : null,
       ride: this.ride
         ? {
             name: this.ride.line.name,

@@ -561,5 +561,11 @@ export const en: Record<string, string> = {
   游乐园一日: 'A day at the park',
   逛逛星愿游乐园: 'Explore Wishing Star Park',
   吃一团棉花糖: 'Eat some cotton candy',
-  '晚上拍一张星愿游乐园（20:30 起湖上有烟火）': 'Photograph Wishing Star Park at night (fireworks over the lake from 20:30)'
+  '晚上拍一张星愿游乐园（20:30 起湖上有烟火）': 'Photograph Wishing Star Park at night (fireworks over the lake from 20:30)',
+  云霄摩天轮: 'Sky Wheel',
+  海派旋转木马: 'Haipai Carousel',
+  沙船秋千: 'Junk Ship Swing',
+  跳楼机: 'Drop Tower',
+  云霄过山车: 'Sky Coaster',
+  坐一次云霄过山车: 'Ride the Sky Coaster'
 }
