@@ -28,8 +28,38 @@ const ZONES: Zone[] = [
   { name: '徐汇西岸', lat: 31.168, lon: 121.46, radiusKm: 0.9, mix: { industrial: 0.55, office: 0.45 } },
   { name: '虹桥商务区', lat: 31.196, lon: 121.317, radiusKm: 1.4, mix: { office: 0.7, highrise: 0.3 } },
   { name: '朱家角', lat: 31.109, lon: 121.054, radiusKm: 0.9, mix: { jiangnan: 1 } },
-  { name: '七宝', lat: 31.156, lon: 121.349, radiusKm: 0.5, mix: { jiangnan: 0.8, highrise: 0.2 } }
+  { name: '七宝', lat: 31.156, lon: 121.349, radiusKm: 0.5, mix: { jiangnan: 0.8, highrise: 0.2 } },
+  // 度假区外面一圈以低层为主（停车场、公路、村镇），高层住宅离得远一些
+  { name: '度假区周边', lat: 31.143, lon: 121.661, radiusKm: 2.8, mix: { suburban: 0.75, highrise: 0.1, industrial: 0.15 } }
 ]
+
+/**
+ * 上海国际旅游度假区：外面那圈环形河道围起来的范围（按烘焙的水面数据描的，[纬度, 经度]）。
+ * 里面不盖住宅楼，大部分地块是园林绿地，零星几栋低层的度假酒店；湖、湖边小镇和星愿游乐园是景点
+ */
+export const RESORT: [number, number][] = [
+  [31.15273, 121.64267],
+  [31.15347, 121.65902],
+  [31.1561, 121.66999],
+  [31.15725, 121.67223],
+  [31.13892, 121.67945],
+  [31.13791, 121.678],
+  [31.13435, 121.66711],
+  [31.1295, 121.65137],
+  [31.14535, 121.64433],
+  [31.15288, 121.64201]
+]
+
+/** 点在多边形里（射线法，经纬度直接当平面坐标用，范围很小） */
+export function inPolygon(lat: number, lon: number, poly: [number, number][]) {
+  let inside = false
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [ai, bi] = poly[i]!
+    const [aj, bj] = poly[j]!
+    if (bi > lon !== bj > lon && lat < ((aj - ai) * (lon - bi)) / (bj - bi) + ai) inside = !inside
+  }
+  return inside
+}
 
 const CORE_KM = 12 // 约到中环
 const kmBetween = (a: { lat: number; lon: number }, b: { lat: number; lon: number }) =>
@@ -39,6 +69,7 @@ const PUXI_CORE = ['huangpu', 'jingan', 'xuhui', 'changning', 'putuo', 'hongkou'
 
 function mixAt(p: Place): Record<string, number> | null {
   if (!p.district) return null
+  if (inPolygon(p.lat, p.lon, RESORT)) return { resortgarden: 0.75, resorthotel: 0.25 }
   for (const z of ZONES) if (kmBetween(p, z) < z.radiusKm) return z.mix
   if (p.distKm < CORE_KM) {
     if (['huangpu', 'jingan', 'hongkou'].includes(p.district)) return { shikumen: 0.55, xincun: 0.15, office: 0.15, highrise: 0.15 }
@@ -219,6 +250,52 @@ const suburban: BuildingStyle = (b, l, rng) => {
   }
 }
 
+// 度假区的园林：草坪、弯弯的步道、花坛和几丛树（不盖楼）
+const resortgarden: BuildingStyle = (b, l, rng) => {
+  const flat = { windows: 0, collide: false } as const
+  b.box(l.x0, 0, l.z0, l.x1, 0.04, l.z1, choose(rng, [0x7fb069, 0x86b56e, 0x78a862]), flat)
+  // 一条斜穿地块的步道
+  const alongX = rng() < 0.5
+  const t = range(rng, 0.3, 0.7)
+  if (alongX) b.box(l.x0, 0, l.z0 + (l.z1 - l.z0) * t - 1, l.x1, 0.06, l.z0 + (l.z1 - l.z0) * t + 1, 0xd9cdb4, flat)
+  else b.box(l.x0 + (l.x1 - l.x0) * t - 1, 0, l.z0, l.x0 + (l.x1 - l.x0) * t + 1, 0.06, l.z1, 0xd9cdb4, flat)
+  const n = Math.floor(((l.x1 - l.x0) * (l.z1 - l.z0)) / 60)
+  for (let i = 0; i < n; i++) {
+    const x = range(rng, l.x0 + 1.5, l.x1 - 1.5)
+    const z = range(rng, l.z0 + 1.5, l.z1 - 1.5)
+    if (rng() < 0.25) {
+      // 花坛
+      boxAt(b, x, z, range(rng, 2, 3.5), range(rng, 2, 3.5), 0, 0.4, choose(rng, [0xf2a0b8, 0xf7d36a, 0xe07a5a, 0xc8a0f0]), flat)
+      continue
+    }
+    const h = range(rng, 3.5, 6)
+    trunk(b, x, z, 0.4, h * 0.5, 0x6b4a32)
+    crown(b, x, z, range(rng, 2.4, 3.4), h * 0.45, h, choose(rng, [0x3f7d3a, 0x4f8f3a, 0x5b9a46]))
+  }
+}
+
+// 度假酒店：三四层的彩色长楼，坡屋顶，一头有座小塔，门前一片草坪
+const resorthotel: BuildingStyle = (b, l, rng) => {
+  const flat = { windows: 0, collide: false } as const
+  b.box(l.x0, 0, l.z0, l.x1, 0.04, l.z1, 0x86b56e, flat)
+  const [cx, cz] = center(l)
+  const alongX = l.x1 - l.x0 >= l.z1 - l.z0
+  const len = Math.min(26, (alongX ? l.x1 - l.x0 : l.z1 - l.z0) - 3)
+  const dep = Math.min(9, (alongX ? l.z1 - l.z0 : l.x1 - l.x0) - 4)
+  if (len < 10 || dep < 5) return resortgarden(b, l, rng, 'summer')
+  const h = range(rng, 8, 11)
+  const wall = choose(rng, [0xf4e6d0, 0xf2d6c8, 0xe8eef4, 0xf3e7b8])
+  const roof = choose(rng, [0x3f7fbf, 0x2f7a6a, 0xa04a3a])
+  const [w, d] = alongX ? [len, dep] : [dep, len]
+  boxAt(b, cx, cz, w, d, 0, h, wall, { windows: 0.7 })
+  b.gable(cx - w / 2 - 0.3, cz - d / 2 - 0.3, cx + w / 2 + 0.3, cz + d / 2 + 0.3, h, 2.4, alongX ? 'x' : 'z', roof, wall)
+  // 一头的小塔，尖顶
+  const [tx, tz] = alongX ? [cx + w / 2 - 2.5, cz] : [cx, cz + d / 2 - 2.5]
+  boxAt(b, tx, tz, 4, 4, 0, h + 4, wall, { windows: 0.5 })
+  boxAt(b, tx, tz, 3, 3, h + 4, h + 6, roof, { windows: 0 })
+  boxAt(b, tx, tz, 1.4, 1.4, h + 6, h + 7.5, roof, { windows: 0 })
+}
+
 // ---------------------------------------------------------------- 行道树（人物尺度）
 
 const trunk = (b: Builder, x: number, z: number, w: number, h: number, color: number) =>
@@ -291,7 +368,7 @@ const magnolia: TreeStyle = (b, x, z, rng, season) => {
 
 export const buildings: CityBuildings = {
   mixAt,
-  styles: { supertall, office, shikumen, villa, xincun, highrise, industrial, jiangnan, suburban },
+  styles: { supertall, office, shikumen, villa, xincun, highrise, industrial, jiangnan, suburban, resortgarden, resorthotel },
   treeMixAt,
   trees: { plane, camphor, ginkgo, magnolia },
   treeSpacing: 6

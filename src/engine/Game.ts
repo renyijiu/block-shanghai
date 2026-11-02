@@ -24,6 +24,7 @@ import type { MetroData } from './metro/data.ts'
 import { TrainRenderer } from './metro/trains.ts'
 import { EntranceSigns } from './metro/EntranceSigns.ts'
 import { FireworksSystem } from './sky/FireworksSystem.ts'
+import { buildLandscapes } from './world/Landscapes.ts'
 import type { Route } from './metro/network.ts'
 import { Sky } from './sky/Sky.ts'
 import { Precipitation } from './sky/Precipitation.ts'
@@ -333,6 +334,9 @@ export class Game {
     this.entranceSigns = new EntranceSigns(metro.data)
     this.scene.add(this.entranceSigns.root)
     this.fireworks = new FireworksSystem(this.city.fireworks ?? [], this.proj)
+    // 成片园林：避开景点、码头、小店和地铁口
+    const avoid = [...this.landmarks.footprints, ...this.boats.footprints, ...lifeFootprints(this.city.content, this.landmarks.placed, this.proj), ...metro.data.entrances.map((_, i) => entranceFootprint(metro.data, i))]
+    this.scene.add(buildLandscapes(this.city.landscapes ?? [], this.proj, world, avoid, this.materials, this.collision))
     this.scene.add(this.fireworks.root)
     this.scene.add(this.trains.root)
     this.playerWorld = {

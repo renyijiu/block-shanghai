@@ -1,7 +1,7 @@
 // 上海城市包。数据文件按地址引用（?url），由引擎在运行时加载，不打进 JS 包
 import type { CityPackage } from '../../engine/city.ts'
 import { boats } from './boats.ts'
-import { buildings } from './buildings.ts'
+import { buildings, RESORT } from './buildings.ts'
 import config from './config.ts'
 import { buses } from './buses.ts'
 import { content } from './content.ts'
@@ -25,6 +25,8 @@ export default {
   boats,
   buses,
   // 星愿湖烟火：湖面中心（按烘焙的水面数据取），每晚 20:30 起半小时（游戏时间，现实约一分半）
+  // 度假区：环形河道里整片铺草坪、成片种树（住宅楼在 buildings.ts 里已经去掉）
+  landscapes: [{ name: '上海国际旅游度假区', polygon: RESORT, lawn: 0x86b56e, treeSpacing: 12, treeDensity: 0.55 }],
   fireworks: [{ name: '星愿湖烟火', lat: 31.1415, lon: 121.6607, start: '20:30', minutes: 30, spread: 40 }],
   people,
   content,
