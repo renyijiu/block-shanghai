@@ -13,6 +13,10 @@ const MAX = 90
 const SKIN = [0xf0c8a0, 0xe0b48c, 0xc99a74, 0xf5d5b5]
 /** 离玩家多远之外回收（格） */
 const FAR = 95
+/** 比这短的路段（多半是道路被分块边界切下的一小截）不生成路人：走两步就到头，只能来回折返（格） */
+const MIN_ROUTE = 20
+/** 骑手掉头后并到对面车道的横向速度（格/秒） */
+const LANE_SPEED = 2
 
 type Kind = 'walk' | 'ride' | 'dog' | 'dance' | 'stand' | 'photo'
 
@@ -24,7 +28,8 @@ interface Npc {
   z: number
   facing: number
   speed: number
-  route: { pts: number[]; seg: number; t: number; dir: 1 | -1; off: number } | null
+  /** 沿路段走：off 是离路中线的横向偏移（前进方向右侧为正），lane 是要并过去的偏移 */
+  route: { pts: number[]; seg: number; t: number; dir: 1 | -1; off: number; lane: number } | null
   phase: number
   shirt: number
   pants: number
@@ -54,6 +59,35 @@ function part(w: number, h: number, d: number, cy: number) {
   const g = new THREE.BoxGeometry(w, h, d)
   g.translate(0, cy, 0)
   return g
+}
+
+// 路段（每个点 x, z, y 三个数）的水平长度
+function pieceLength(pts: number[]) {
+  let s = 0
+  for (let i = 3; i < pts.length; i += 3) s += Math.hypot(pts[i]! - pts[i - 3]!, pts[i + 1]! - pts[i - 2]!)
+  return s
+}
+
+// 第 k 段的右手法线（x 东、z 南时前进方向右侧是 (-dz, dx)）
+function segNormal(pts: number[], k: number): [number, number] {
+  const dx = pts[k * 3 + 3]! - pts[k * 3]!
+  const dz = pts[k * 3 + 4]! - pts[k * 3 + 1]!
+  const len = Math.hypot(dx, dz) || 1
+  return [-dz / len, dx / len]
+}
+
+// 第 i 个点处的偏移方向：两头的点用所在段的法线；拐角用两段法线的角平分线，
+// 拉长到离两段的距离都是 1（斜接），急弯最多拉长到 2 倍
+function vertexNormal(pts: number[], i: number): [number, number] {
+  const last = pts.length / 3 - 1
+  const a = segNormal(pts, Math.max(0, i - 1))
+  const b = segNormal(pts, Math.min(last - 1, i))
+  const x = a[0] + b[0]
+  const z = a[1] + b[1]
+  const len = Math.hypot(x, z)
+  if (len < 1e-6) return a
+  const k = 1 / Math.max(0.5, (x * a[0] + z * a[1]) / len) / len
+  return [x * k, z * k]
 }
 
 export class NPCManager {
@@ -107,6 +141,8 @@ export class NPCManager {
       dog: mk(part(0.32, 0.32, 0.65, 0)),
       phone: mk(part(0.08, 0.16, 0.04, 0), 0x15181c)
     }
+    // 部件按名字可查（调试、测试用）
+    for (const [k, im] of Object.entries(this.parts)) im.name = k
   }
 
   /** 景点中心：附近多生成游客和拍照的人 */
@@ -165,7 +201,7 @@ export class NPCManager {
     for (let attempt = 0; attempt < 16; attempt++) {
       const [idx, pts] = pick(pieces)
       const info = this.world.roads.roads[idx]!
-      if (info.level > 0 || info.bridge || info.class === 'motorway' || info.class.endsWith('_link') || pts.length < 6) continue
+      if (info.level > 0 || info.bridge || info.class === 'motorway' || info.class.endsWith('_link') || pts.length < 6 || pieceLength(pts) < MIN_ROUTE) continue
       const seg = Math.floor(Math.random() * (pts.length / 3 - 1))
       const t = Math.random()
       const type = this.typeWeights(px, pz, h)
@@ -179,7 +215,7 @@ export class NPCManager {
       const dir: 1 | -1 = ride ? (side > 0 ? 1 : -1) : Math.random() < 0.5 ? 1 : -1
       const kind: Kind = type.kind === 'dog' ? 'dog' : ride ? 'ride' : 'walk'
       const speed = ride ? 6 + Math.random() * 1.5 : (type.old ? 1 : 1.3) + Math.random() * 0.35
-      const n: Npc = { id: this.nextId++, type, kind, x: p[0], z: p[1], facing: 0, speed, route: { pts, seg, t, dir, off }, phase: Math.random() * 6, ...this.dress({ type }), umbrella: rain && !ride && Math.random() < 0.85, hold: 0, face: 0, group: null }
+      const n: Npc = { id: this.nextId++, type, kind, x: p[0], z: p[1], facing: 0, speed, route: { pts, seg, t, dir, off, lane: off }, phase: Math.random() * 6, ...this.dress({ type }), umbrella: rain && !ride && Math.random() < 0.85, hold: 0, face: 0, group: null }
       this.npcs.push(n)
       return
     }
@@ -236,16 +272,16 @@ export class NPCManager {
     return null
   }
 
+  // 路段上第 seg 段、比例 t 处往右偏 off 的点。偏移方向在段的两个端点之间插值，
+  // 拐角处两段共用同一个方向，人走过拐弯不会跳一下
   private at(pts: number[], seg: number, t: number, off: number): [number, number] {
     const ax = pts[seg * 3]!
     const az = pts[seg * 3 + 1]!
     const bx = pts[seg * 3 + 3]!
     const bz = pts[seg * 3 + 4]!
-    const len = Math.hypot(bx - ax, bz - az) || 1
-    // 右手法线（x 东、z 南时前进方向右侧是 (-dz, dx)）
-    const nx = -(bz - az) / len
-    const nz = (bx - ax) / len
-    return [ax + (bx - ax) * t + nx * off, az + (bz - az) * t + nz * off]
+    const [nax, naz] = vertexNormal(pts, seg)
+    const [nbx, nbz] = vertexNormal(pts, seg + 1)
+    return [ax + (bx - ax) * t + (nax + (nbx - nax) * t) * off, az + (bz - az) * t + (naz + (nbz - naz) * t) * off]
   }
 
   // ---------------------------------------------------------------- 每帧
@@ -326,11 +362,11 @@ export class NPCManager {
         left -= (r.dir > 0 ? 1 - r.t : r.t) * len
         const next = r.seg + r.dir
         if (next < 0 || next >= pts.length / 3 - 1) {
-          // 走到路的尽头掉头（换到马路另一边）
+          // 走到路的尽头掉头：行人顺着原来的人行道往回走；骑手要靠右，掉头后慢慢并到对面车道。
+          // 不能直接把人挪到马路另一边，短路段上会每隔一两秒在两边来回闪
           r.dir = r.dir > 0 ? -1 : 1
-          r.off = -r.off
           r.t = r.dir > 0 ? 0 : 1
-          if (n.kind === 'ride') r.t = r.dir > 0 ? 0 : 1
+          if (n.kind === 'ride') r.lane = -r.lane
           left = 0
         } else {
           r.seg = next
@@ -338,13 +374,17 @@ export class NPCManager {
         }
       }
     }
+    // 并道：横向每秒最多挪 LANE_SPEED 格
+    const shift = Math.max(-LANE_SPEED * dt, Math.min(LANE_SPEED * dt, r.lane - r.off))
+    r.off += shift
     const [x, z] = this.at(r.pts, r.seg, r.t, r.off)
     const dx = r.pts[r.seg * 3 + 3]! - r.pts[r.seg * 3]!
     const dz = r.pts[r.seg * 3 + 4]! - r.pts[r.seg * 3 + 1]!
     n.x = x
     n.z = z
-    // 朝向：前进方向（Player.facing 约定：朝向 f 对应方向 (-sin f, -cos f)）
-    n.facing = Math.atan2(-dx * r.dir, -dz * r.dir)
+    // 朝向：前进方向加上并道的横向分量（右手法线 (-dz, dx)）。Player.facing 约定：朝向 f 对应方向 (-sin f, -cos f)
+    const side = dt > 0 ? shift / (dt * n.speed) : 0
+    n.facing = Math.atan2(-(dx * r.dir - dz * side), -(dz * r.dir + dx * side))
   }
 
   // ---------------------------------------------------------------- 渲染
